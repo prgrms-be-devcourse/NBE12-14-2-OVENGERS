@@ -1,0 +1,1 @@
+# Slot Key API 명세서

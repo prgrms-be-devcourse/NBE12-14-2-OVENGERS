@@ -1,0 +1,118 @@
+### Secrets / Environment ###
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+secrets/
+
+### Java / Gradle (backend) ###
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+.gradle/
+out/
+bin/
+*.class
+*.jar
+!gradle-wrapper.jar
+*.war
+*.ear
+*.log
+hs_err_pid*
+replay_pid*
+
+### Node / React (frontend) ###
+node_modules/
+dist/
+dist-ssr/
+build/
+.vite/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+coverage/
+.eslintcache
+
+### Vercel ###
+.vercel/
+
+### IDE ###
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+!.vscode/extensions.json
+.settings/
+.project
+.classpath
+.apt_generated/
+.factorypath
+nbproject/private/
+.nb-gradle/
+
+### OS ###
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+### DB / 로컬 데이터 ###
+# 주의: schema.sql / data.sql 은 소스이므로 *.sql 은 통째로 무시하지 않습니다.
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.mv.db
+*.trace.db
+*.lock.db
+*.dump
+*.bak
+dump.rdb
+data/
+db-data/
+mysql-data/
+docker/data/
+
+### Logs / Temp / Uploads ###
+logs/
+*.log.*
+tmp/
+temp/
+uploads/
+*.pid
+
+### Gradle 추가 ###
+.gradletasknamecache
+HELP.md
+
+### Node 추가 ###
+.yarn/
+.pnp.*
+*.tsbuildinfo
+.parcel-cache/
+.turbo/
+.nyc_output/
+
+### 편집기 임시 / 머지 잔여물 ###
+*.swp
+*.swo
+*~
+*.orig
+*.rej
+
+### 로컬 도구 설정 ###
+.claude/settings.local.json
+.cursor/
