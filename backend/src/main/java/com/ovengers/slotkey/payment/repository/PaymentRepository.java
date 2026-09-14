@@ -1,4 +1,7 @@
 package com.ovengers.slotkey.payment.repository;
 
-public interface PaymentRepository {
+import com.ovengers.slotkey.payment.entity.Payment;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface PaymentRepository extends JpaRepository<Payment, Long> {
 }
