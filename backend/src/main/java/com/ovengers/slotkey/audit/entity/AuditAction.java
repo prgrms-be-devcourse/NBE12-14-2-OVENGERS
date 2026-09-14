@@ -1,4 +1,8 @@
 package com.ovengers.slotkey.audit.entity;
 
 public enum AuditAction {
+    REGISTER_SPACE,      // 공간 등록
+    MODIFY_SPACE,        // 공간 수정
+    SUSPEND_MEMBER,      // 계정 정지
+    REACTIVATE_MEMBER    // 계정 복구
 }
