@@ -20,4 +20,23 @@ public interface CreditService {
      * @throws com.ovengers.slotkey.global.error.BusinessException INSUFFICIENT_BALANCE(422) — 잔액 부족
      */
     int charge(Long memberId, Long reservationId, int amount);
+
+    /**
+     * 예약 취소에 따른 크레딧 환급을 원장에 기록한다(REFUND, +amount).
+     * 취소와 같은 트랜잭션에서 호출되어야 한다 — "취소는 됐는데 환불은 실패"하는
+     * 중간 상태를 구조적으로 만들지 않기 위함(§9).
+     *
+     * @param amount 양수로 전달한다(원장에는 +amount로 기록된다)
+     * @return 환급 후 잔액(balance_after)
+     */
+    int refund(Long memberId, Long reservationId, int amount);
+
+    /**
+     * 취소 위약금을 원장에 기록한다(PENALTY, -amount). 환불 등급이 100%가 아닌 취소에서만
+     * 호출한다(§9) — REFUND(+전액)와 PENALTY(-위약금)를 한 줄로 합치지 않고 분리 기록한다.
+     *
+     * @param amount 양수로 전달한다(원장에는 -amount로 기록된다)
+     * @return 위약금 차감 후 잔액(balance_after)
+     */
+    int penalize(Long memberId, Long reservationId, int amount);
 }

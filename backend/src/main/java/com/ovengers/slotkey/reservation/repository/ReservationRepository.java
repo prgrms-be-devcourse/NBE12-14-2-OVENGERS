@@ -42,6 +42,20 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("expired") ReservationStatus expired
     );
 
+    /**
+     * 취소의 문지기(§9). CONFIRMED이고 아직 시작 전일 때만 CANCELLED로 전이한다.
+     * 영향 행이 0이면 이미 취소/완료되었거나 이미 시작된 예약이다(체크아웃으로만 종료 가능).
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Reservation r SET r.status = :cancelled, r.cancelledAt = :now " +
+            "WHERE r.id = :id AND r.status = :confirmed AND :now < r.startTime")
+    int cancelIfConfirmedAndBeforeStart(
+            @Param("id") Long id,
+            @Param("now") LocalDateTime now,
+            @Param("confirmed") ReservationStatus confirmed,
+            @Param("cancelled") ReservationStatus cancelled
+    );
+
     /** 체크아웃/자동 퇴실의 문지기(§8-4). IN_USE일 때만 COMPLETED로 전이한다. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Reservation r SET r.status = :completed, r.checkedOutAt = :checkedOutAt " +
