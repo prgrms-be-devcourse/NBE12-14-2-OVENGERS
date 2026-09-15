@@ -1,7 +1,9 @@
 package com.ovengers.slotkey.global.error;
 
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
+@Getter
 public enum ErrorCode {
 
     // ── 공통 ──────────────────────────────────────────
@@ -21,17 +23,5 @@ public enum ErrorCode {
         this.httpStatus = httpStatus;
         this.code = code;
         this.message = message;
-    }
-
-    public HttpStatus getHttpStatus() {
-        return httpStatus;
-    }
-
-    public String getCode() {
-        return code;
-    }
-
-    public String getMessage() {
-        return message;
     }
 }
