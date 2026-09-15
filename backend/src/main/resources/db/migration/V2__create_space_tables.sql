@@ -1,5 +1,11 @@
 # 김재철님
-CREATE TABLE spaces (
+# 2026-09-15 수정(이태호, core-domain-decisions.md §11 반영):
+#   - [모순 수정] 테이블명 spaces → space
+#     V3(reservation, reservation_slot)의 FK가 이미 `space (id)`를 참조하고 있어
+#     기존 `spaces`(복수)로는 마이그레이션이 실패하는 상태였음.
+#   - version 컬럼 추가 (INT, 낙관적 잠금/비교용, §5-2)
+#   - CHECK(opening_time < closing_time) 추가 (§11)
+CREATE TABLE space (
     id BIGINT NOT NULL AUTO_INCREMENT,
     name VARCHAR(100) NOT NULL,
     location VARCHAR(255) NOT NULL,
@@ -10,8 +16,10 @@ CREATE TABLE spaces (
     opening_time TIME NOT NULL,
     closing_time TIME NOT NULL,
     status VARCHAR(20) NOT NULL,
+    version INT NOT NULL DEFAULT 0,
 
-    PRIMARY KEY (id)
+    PRIMARY KEY (id),
+    CONSTRAINT chk_space_operating_hours CHECK (opening_time < closing_time)
 );
 
 CREATE TABLE audit_logs (
