@@ -160,30 +160,34 @@ flowchart TD
 ```
 erDiagram
     member ||--o{ reservation : owns
+    member ||--o{ refresh_token : owns
     space ||--o{ reservation : receives
 
     reservation ||--o{ reservation_status_history : records
-    reservation ||--o{ access_key : issues
-    reservation o|--o{ access_log : identifies
+    reservation ||--o{ reservation_slot : occupies
+    reservation ||--|| payment : settles
+    reservation ||--o{ door_access_token : issues
+    reservation o|--o{ door_access_log : identifies
 
-    member ||--o{ access_log : attempts
-    space ||--o{ access_log : receives
+    member ||--o{ reservation_status_history : changes
+    member ||--o{ door_access_log : attempts
+    space ||--o{ door_access_log : receives
     member ||--o{ audit_log : performs
 ```
 
-출입 키가 유효하지 않아 예약을 식별할 수 없는 경우를 고려해 `access_log.reservation_id`는 `NULL`을 허용합니다.
+출입 토큰이 유효하지 않아 예약을 식별할 수 없는 경우를 고려해 `door_access_log.reservation_id`는 `NULL`을 허용합니다. `door_access_token`은 `active_reservation_id`(폐기되지 않은 토큰만 값을 가지는 생성 컬럼)에 `UNIQUE` 제약을 적용해, 예약당 활성 토큰이 최대 1개가 되도록 DB 레벨에서 강제합니다.
 
 ### 예약 시점 정보 보존
 
 | 필드 | 목적 |
 | --- | --- |
-| `price_per_hour_snapshot` | 예약 확정 당시의 시간당 요금 보존 |
+| `price_per_slot_snapshot` | 예약 확정 당시의 30분당 요금 보존 |
 | `total_amount` | 확정된 총 결제 금액 보존 |
 | `terms_version` | 예약 시 동의한 약관 버전 기록 |
 | `created_at` | 예약 확정 시각 및 약관 동의 시점 기록 |
 | `idempotency_key` | 동일한 예약 생성 요청의 중복 처리 방지 |
 
-공간 요금이 변경되더라도 기존 예약의 `price_per_hour_snapshot`과 `amount`는 변경하지 않습니다.
+공간 요금이 변경되더라도 기존 예약의 `price_per_slot_snapshot`과 `total_amount`는 변경하지 않습니다.
 
 > 상세 컬럼과 제약 조건은 최종 ERD 확정 후 문서 링크를 추가할 예정입니다.
 >
@@ -200,10 +204,10 @@ erDiagram
 - 최종 결제 금액은 클라이언트가 아닌 서버에서 계산합니다.
 
 ```
-총 결제 금액 = 예약 당시 시간당 요금 × 이용 시간(분) ÷ 60
+총 결제 금액 = 예약 당시 30분당 요금(price_per_slot_snapshot) × 점유 슬롯 수
 
 예시
-시간당 요금 10,000원 × 90분 ÷ 60 = 15,000원
+30분당 요금 5,000원 × 슬롯 2개(60분 이용) = 10,000원
 ```
 
 ### 예약 생성
@@ -474,6 +478,23 @@ docs(readme): add local setup instructions
 chore(ci): add PR build and test workflow
 ```
 
+### 데이터베이스 마이그레이션 (Flyway)
+
+DDL은 Flyway로 관리합니다. `backend/src/main/resources/db/migration/`에 `V{버전}__{설명}.sql` 형식(버전과 설명 사이는 더블 언더스코어)으로 파일을 추가합니다.
+
+버전 번호는 담당 엔터티 순서로 고정하며, FK 의존 순서(회원/공간 → 예약 → 결제/출입)와 일치합니다.
+
+| 버전 | 담당자 | 테이블 |
+| --- | --- | --- |
+| `V1` | 천종원 | `member`, `refresh_token` |
+| `V2` | 김재철 | `space`, `audit_log` |
+| `V3` | 이태호 | `reservation`, `reservation_slot`, `reservation_status_history` |
+| `V4` | 백한비 | `payment` |
+| `V5` | 박창현 | `door_access_token`, `door_access_log` |
+
+- 한번 `dev`에 병합된 `V` 파일은 수정하지 않습니다. 변경이 필요하면 새 버전 파일을 추가합니다.
+- 로컬 실행은 `application-local.yml`의 MySQL 접속 정보를 사용하고, `spring.jpa.hibernate.ddl-auto`는 `none`으로 고정해 Hibernate가 스키마를 건드리지 않게 합니다.
+
 ### 이슈 및 PR
 
 - 이슈에는 작업 배경, 범위, 완료 조건을 작성합니다.
@@ -512,15 +533,13 @@ chore(ci): add PR build and test workflow
 
 ## 👥 팀원 및 역할
 
-| 담당 영역 | 담당자                                                                    | 주요 책임 |
-| --- |------------------------------------------------------------------------| --- |
-| - | 김재철[@Lemnoideae](https://github.com/Lemnoideae)                        | - |
-| - | 박창현[@pch112233456-a11y](https://github.com/pch112233456-a11y)          | - |
-| - | 백한비[@jkidse14](https://github.com/jkidse14)                            | - |
-| - | 이태호[@anton061311](https://github.com/anton061311)                      | - |
-| - | 천종원[@vvipia](https://github.com/vvipia)                                      | - |
-
-최종 역할 분담 후 담당자 이름과 GitHub 프로필 링크를 갱신합니다.
+| 담당 엔터티(CRUD) | 담당자 | GitHub                               |
+| --- |-----|--------------------------------------|
+| `space`, `audit_log` | 김재철 | [@Lemnoideae](https://github.com/Lemnoideae) |
+| `door_access_token`, `door_access_log` | 박창현 | [@pch112233456-a11y](https://github.com/pch112233456-a11y) |
+| `payment`, `reservation_status_history` | 백한비 | [@jkidse14](https://github.com/jkidse14) |
+| `reservation`, `reservation_slot` | 이태호 | [@anton061311](https://github.com/anton061311) |
+| `member`, `refresh_token` | 천종원 | [@vvipia](https://github.com/vvipia) |
 
 ## 🗓️ 개발 일정
 
