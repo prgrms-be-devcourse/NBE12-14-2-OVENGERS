@@ -12,7 +12,10 @@ import lombok.NoArgsConstructor;
 import java.time.LocalTime;
 
 @Entity
-@Table(name = "spaces")
+// 2026-09-15 수정(이태호): 테이블명이 V2 마이그레이션에서 spaces(복수) -> space(단수)로
+// 정정됐는데 엔티티 매핑은 그대로 남아 있어 실제 스키마와 어긋나 있었다(연결된 채로는 부팅 시 테이블을
+// 찾지 못한다). DDL(V2)과 맞춰 단수로 정정.
+@Table(name = "space")
 @Builder
 @Getter
 @NoArgsConstructor
@@ -50,6 +53,14 @@ public class Space {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private SpaceStatus status; // 신규 예약 접수 가능 여부
+
+    // 2026-09-15 추가(이태호, core-domain-decisions.md §5-2/§11): DDL(V2)에는 이미 있었으나
+    // 엔티티 매핑이 빠져 있던 낙관적 비교용 버전. HOLD 응답에 실어 보냈다가 결제 확인(pay) 시
+    // 되돌려받아 비교한다 — 가격 값이 아니라 이 값으로 비교해야 ABA 문제를 피할 수 있다.
+    // int(참조형 아님)로 둔 이유: 이미 있는 Space.builder() 호출부(SpaceCreateRequest.toEntity() 등)가
+    // version을 명시적으로 채우지 않아도 NULL이 아니라 0이 들어가 NOT NULL 제약을 통과한다.
+    @Column(nullable = false)
+    private int version;
 
     public static void validateOperatingHours(LocalTime openingTime, LocalTime closingTime) {
         if (openingTime == null || closingTime == null || !openingTime.isBefore(closingTime)) {
