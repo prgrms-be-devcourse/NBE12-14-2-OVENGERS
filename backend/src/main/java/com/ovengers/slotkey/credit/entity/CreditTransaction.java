@@ -10,52 +10,54 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(
-        name = "credit_transaction",
-        indexes = {
-                @Index(
-                        name = "idx_credit_transaction_member_created_at",
-                        columnList = "member_id, created_at"
-                )
-        }
-)
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Table(name = "credit_transaction")
 @Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CreditTransaction {
 
+
+    // 크래딧 거래 이력 PK
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // 크레딧 거래가 발생한 회원
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "member_id", nullable = false)
     private Member member;
 
+    // 거래에서 지급, 차감되는 크레딧 금액
     @Column(nullable = false)
-    private Integer amount;
+    private int amount;
 
+    // 크레딧 거래 유형
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private CreditTransactionType type;
 
+    // 크레딧 거래와 관련된 예약
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reservation_id")
     private Reservation reservation;
 
+    // 해당 거래 처리 후 회원의 크레딧 잔액
     @Column(name = "balance_after", nullable = false)
-    private Integer balanceAfter;
+    private int balanceAfter;
 
+    // 크레딧 거래 사유
     private String reason;
 
+    // 크레딧 거래가 발생한 시각
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    // 크레딧 거래 이력 생성
     public CreditTransaction(
             Member member,
-            Integer amount,
+            int amount,
             CreditTransactionType type,
             Reservation reservation,
-            Integer balanceAfter,
+            int balanceAfter,
             String reason,
             LocalDateTime createdAt
     ) {
