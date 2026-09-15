@@ -9,6 +9,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ovengers.slotkey.auth.dto.internal.LoginResult;
+import com.ovengers.slotkey.global.error.BusinessException;
+import com.ovengers.slotkey.global.error.ErrorCode;
 
 @Service
 @RequiredArgsConstructor
@@ -24,23 +26,17 @@ public class AuthService {
     public LoginResult login(String email, String password) {
         // 이메일로 회원 조회
         Member member = memberRepository.findByEmail(email).orElseThrow(
-                () -> new IllegalArgumentException(
-                        "이메일 또는 비밀번호가 올바르지 않습니다."
-                )
-        );
+                () -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
 
         // 입력한 비밀번호와 저장된 해시 비교
         if (!passwordEncoder.matches(password, member.getPasswordHash())) {
-            throw new IllegalArgumentException(
-                    "이메일 또는 비밀번호가 올바르지 않습니다."
-            );
+            throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
 
         // ACTIVE 회원만 로그인 허용
         if (member.getStatus() != MemberStatus.ACTIVE) {
-            throw new IllegalArgumentException("이용이 제한된 계정입니다.");
+            throw new BusinessException(ErrorCode.ACCOUNT_INACTIVE);
         }
-
         // 액세스 토큰 생성
         String accessToken = jwtProvider.genAccessToken(member);
 

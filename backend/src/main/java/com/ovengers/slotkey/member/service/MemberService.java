@@ -1,5 +1,7 @@
 package com.ovengers.slotkey.member.service;
 
+import com.ovengers.slotkey.global.error.BusinessException;
+import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,20 +17,27 @@ public class MemberService {
     private final PasswordEncoder passwordEncoder;
 
     @Transactional
-    public Member signup(String email, String password, String passwordConfirm, String nickname) {
-        // 비밀번호와 비밀번호 확인이 일치하는 지 검증하기
+    public Member signup(
+            String email,
+            String password,
+            String passwordConfirm,
+            String nickname
+    ) {
+        // 비밀번호와 확인값 일치 여부 검사
         if (!password.equals(passwordConfirm)) {
-            throw new IllegalArgumentException(
-                    "비밀번호가 일치하지 않습니다."
+            throw new BusinessException(
+                    ErrorCode.PASSWORD_CONFIRM_MISMATCH
             );
         }
-        // 이미 가입된 이메일인지 확인하기
+
+        // 이메일 중복 검사
         if (memberRepository.existsByEmail(email)) {
-            throw new IllegalArgumentException(
-                    "이미 사용 중인 이메일입니다."
+            throw new BusinessException(
+                    ErrorCode.EMAIL_ALREADY_EXISTS
             );
         }
-        // 비밀번호 원문 대신 해시를 저장하기
+
+        // 비밀번호 해시 생성 후 회원 저장
         String passwordHash = passwordEncoder.encode(password);
 
         Member member = new Member(email, passwordHash, nickname);

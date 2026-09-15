@@ -13,6 +13,8 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.UUID;
+import com.ovengers.slotkey.global.error.BusinessException;
+import com.ovengers.slotkey.global.error.ErrorCode;
 
 @Service
 @RequiredArgsConstructor
@@ -70,7 +72,7 @@ public class RefreshTokenService {
     public Member validateRefreshToken(String rawToken) {
         // 1. 쿠키에 토큰이 있는지 확인
         if (rawToken == null || rawToken.isBlank()) {
-            throw new IllegalArgumentException("리프레시 토큰이 없습니다.");
+            throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
 
         // 2. 받은 원문을 해시해서 DB 기록 조회
@@ -79,25 +81,20 @@ public class RefreshTokenService {
         RefreshToken refreshToken = refreshTokenRepository
                 .findByTokenHash(tokenHash)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "유효하지 않은 리프레시 토큰입니다."
-                        )
+                        new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN)
                 );
 
         // 3. 만료·폐기 여부 확인
         LocalDateTime now = LocalDateTime.now();
 
         if (refreshToken.isExpired(now) || refreshToken.isRevoked()) {
-            throw new IllegalArgumentException(
-                    "만료되었거나 폐기된 리프레시 토큰입니다."
-            );
+            throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
-
         // 4. 현재 계정 상태 확인
         Member member = refreshToken.getMember();
 
         if (member.getStatus() != MemberStatus.ACTIVE) {
-            throw new IllegalArgumentException("이용이 제한된 계정입니다.");
+            throw new BusinessException(ErrorCode.ACCOUNT_INACTIVE);
         }
 
         return member;

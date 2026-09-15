@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import com.ovengers.slotkey.auth.dto.internal.LoginResult;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
+import com.ovengers.slotkey.global.common.response.ApiResponse;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -26,7 +27,9 @@ public class AuthController {
 
     // 공통 ApiResponse 형식이 정해지면 추후 반환 형태 수정
     @PostMapping("/signup")
-    public ResponseEntity<SignupResponse> signup(@RequestBody @Valid SignupRequest request) {
+    public ResponseEntity<ApiResponse<SignupResponse>> signup(
+            @RequestBody @Valid SignupRequest request
+    ) {
         Member member = memberService.signup(
                 request.email(),
                 request.password(),
@@ -35,13 +38,13 @@ public class AuthController {
         );
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(new SignupResponse(member));
+                .body(ApiResponse.success(new SignupResponse(member)));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(
+    public ResponseEntity<ApiResponse<LoginResponse>> login(
             @RequestBody @Valid LoginRequest request
-    ) {
+    ){
         // 1. 로그인 처리 후 액세스·리프레시 토큰을 받음
         LoginResult result = authService.login(
                 request.email(),
@@ -61,19 +64,24 @@ public class AuthController {
         // 3. 리프레시는 쿠키로, 액세스는 응답 본문으로 전달
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
-                .body(new LoginResponse(result.accessToken()));
+                .body(ApiResponse.success(
+                        new LoginResponse(result.accessToken())
+                ));
     }
 
 
     // 엑세스 토큰 갱신 api
     @PostMapping("/refresh")
-    public ResponseEntity<LoginResponse> refresh(
+    public ResponseEntity<ApiResponse<LoginResponse>> refresh(
             @CookieValue(name = "refreshToken", required = false)
             String rawRefreshToken
     ) {
         String accessToken = authService.refresh(rawRefreshToken);
 
-        return ResponseEntity.ok(new LoginResponse(accessToken));
+        return ResponseEntity.ok()
+                .body(ApiResponse.success(
+                        new LoginResponse(accessToken)
+                ));
     }
 
     // 로그아웃 메서드
