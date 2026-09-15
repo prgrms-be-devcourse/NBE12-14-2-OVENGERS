@@ -12,6 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.ovengers.slotkey.auth.dto.internal.LoginResult;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -36,9 +39,28 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody @Valid LoginRequest request) {
-        String accessToken = authService.login(request.email(), request.password());
+    public ResponseEntity<LoginResponse> login(
+            @RequestBody @Valid LoginRequest request
+    ) {
+        // 1. 로그인 처리 후 액세스·리프레시 토큰을 받음
+        LoginResult result = authService.login(
+                request.email(),
+                request.password()
+        );
 
-        return ResponseEntity.ok(new LoginResponse(accessToken));
+        // 2. 리프레시 토큰을 담은 쿠키 구성
+        ResponseCookie refreshCookie = ResponseCookie
+                .from("refreshToken", result.refreshToken())
+                .httpOnly(true)
+                .secure(false) // 로컬 HTTP 개발용. HTTPS 배포에서는 true로 변경
+                .sameSite("Lax")
+                .path("/api/v1/auth")
+                .maxAge(60L * 60 * 24 * 7) // 7일, 초 단위
+                .build();
+
+        // 3. 리프레시는 쿠키로, 액세스는 응답 본문으로 전달
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .body(new LoginResponse(result.accessToken()));
     }
 }
