@@ -1,4 +1,4 @@
 package com.ovengers.slotkey.auth.dto.response;
 
-public class LoginResponse {
+public record LoginResponse(String accessToken) {
 }
