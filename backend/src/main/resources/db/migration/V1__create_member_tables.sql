@@ -6,6 +6,7 @@ CREATE TABLE member (
                         nickname VARCHAR(50) NOT NULL,
                         role VARCHAR(20) NOT NULL,
                         status VARCHAR(20) NOT NULL,
+                        balance INT NOT NULL DEFAULT 0,
                         created_at DATETIME(6) NOT NULL,
 
                         PRIMARY KEY (id),
