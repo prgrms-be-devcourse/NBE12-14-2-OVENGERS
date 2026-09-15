@@ -18,6 +18,7 @@ public class AdminSpaceController {
 
     private final AdminSpaceService adminSpaceService;
 
+    // 헤더 부분은 나중에 인증 및 인가 기능이 추가될 시 수정할 예정입니다.
     @PostMapping("/spaces")
     public ResponseEntity<ApiResponse<SpaceDetailResponse>> createSpace(
             @Valid @RequestBody SpaceCreateRequest request,
