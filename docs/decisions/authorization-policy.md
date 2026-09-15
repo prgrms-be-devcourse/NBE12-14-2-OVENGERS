@@ -25,7 +25,7 @@
 
 ## 담당 간 협업
 
-공통 인증(AUTHN/AUTHZ 필터)은 천종원이 제공하고, 각 도메인 담당자(space: 김재철, reservation: 이태호, payment/history: 백한비, door_access: 박창현)가 자신의 `AuthorizationService`와 관련 테스트를 구현한다(기획서 13장, 리스크 4).
+공통 인증(AUTHN/AUTHZ 필터)은 천종원이 제공하고, 각 도메인 담당자(space: 김재철, reservation: 이태호, credit_transaction/history: 백한비, door_access: 박창현)가 자신의 `AuthorizationService`와 관련 테스트를 구현한다(기획서 13장, 리스크 4). *(2026-09-15: `payment` → `credit_transaction`, `core-domain-decisions.md` §1/§11)*
 
 ## 검증 방법
 
