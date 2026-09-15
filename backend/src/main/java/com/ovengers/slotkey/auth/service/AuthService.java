@@ -50,4 +50,21 @@ public class AuthService {
         // 두 토큰을 컨트롤러에 전달
         return new LoginResult(accessToken, refreshToken);
     }
+
+    //리프레시 토큰을 이용해 엑세스 토큰을 갱신하기
+    @Transactional(readOnly = true)
+    public String refresh(String rawRefreshToken) {
+        // 리프레시가 유효한지 확인하고 회원을 받음
+        Member member = refreshTokenService
+                .validateRefreshToken(rawRefreshToken);
+
+        // 검증된 회원의 새 액세스 토큰 발급
+        return jwtProvider.genAccessToken(member);
+    }
+    
+    //로그아웃 메서드, 리프레시 토큰에 값을 넣어 로그아웃
+    @Transactional
+    public void logout(String rawRefreshToken) {
+        refreshTokenService.revokeRefreshToken(rawRefreshToken);
+    }
 }

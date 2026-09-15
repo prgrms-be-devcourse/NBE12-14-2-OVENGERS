@@ -63,4 +63,41 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
                 .body(new LoginResponse(result.accessToken()));
     }
+
+
+    // 엑세스 토큰 갱신 api
+    @PostMapping("/refresh")
+    public ResponseEntity<LoginResponse> refresh(
+            @CookieValue(name = "refreshToken", required = false)
+            String rawRefreshToken
+    ) {
+        String accessToken = authService.refresh(rawRefreshToken);
+
+        return ResponseEntity.ok(new LoginResponse(accessToken));
+    }
+
+    // 로그아웃 메서드
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+            @CookieValue(name = "refreshToken", required = false)
+            String rawRefreshToken
+    ) {
+        // 1. DB의 리프레시 토큰 폐기
+        authService.logout(rawRefreshToken);
+
+        // 2. 기존 쿠키를 삭제하기 위한 쿠키 설정
+        ResponseCookie deleteCookie = ResponseCookie
+                .from("refreshToken", "")
+                .httpOnly(true)
+                .secure(false) // 로컬 HTTP용. HTTPS 배포에서는 true
+                .sameSite("Lax")
+                .path("/api/v1/auth")
+                .maxAge(0)
+                .build();
+
+        // 3. 쿠키 삭제 헤더와 본문 없는 성공 응답
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, deleteCookie.toString())
+                .build();
+    }
 }

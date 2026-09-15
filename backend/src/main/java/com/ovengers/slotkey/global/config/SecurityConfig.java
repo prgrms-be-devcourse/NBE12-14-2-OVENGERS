@@ -19,10 +19,12 @@ public class SecurityConfig {
                         authorizeHttpRequests
                                 .requestMatchers("/favicon.ico").permitAll()
 
-                                // 회원가입은 인증 없이 접근 가능
+                                // 인증 없이 접근가능한 api 모음
                                 .requestMatchers(
                                         HttpMethod.POST,
-                                        "/api/v1/auth/signup"
+                                        "/api/v1/auth/signup",
+                                        "/api/v1/auth/login",
+                                        "/api/v1/auth/refresh"
                                 ).permitAll()
 
                                 // 관리자 API는 관리자 권한 필요
