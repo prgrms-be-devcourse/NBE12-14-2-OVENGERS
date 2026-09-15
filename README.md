@@ -591,7 +591,7 @@ DDL은 Flyway로 관리합니다. `backend/src/main/resources/db/migration/`에 
 - [ ]  일반 회원과 관리자 모두 예약 소유권 정책을 준수한다.
 - [ ]  실제 MySQL 환경에서 통합·동시성 테스트가 통과한다.
 - [ ]  README·API 명세·ERD·실제 구현이 일치한다.
-- [ ]  실행 방법, 공개 URL, API 문서와 시연 영상이 제공된다.t pu
+- [ ]  실행 방법, 공개 URL, API 문서와 시연 영상이 제공된다.
 
 ## 📝 기술적 의사결정
 

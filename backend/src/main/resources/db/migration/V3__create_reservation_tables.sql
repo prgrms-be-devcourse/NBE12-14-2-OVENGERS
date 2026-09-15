@@ -1,7 +1,7 @@
 # 일시: 2026-09-14
 # 담당: 이태호 (reservation, reservation_slot)
 # 테이블: reservation, reservation_slot, reservation_status_history
-# 선행 의존(FK 대상): member, space
+# 선행 의존(FK 대상): member, spaces
 # 참고: docs/erd.md, docs/decisions/reservation-concurrency.md, docs/core-domain-decisions.md
 # 비고: reservation_status_history는 백한비님 대신 이태호가 작성
 #
@@ -27,7 +27,7 @@ CREATE TABLE reservation (
     cancelled_at             DATETIME NULL,
     created_at               DATETIME NOT NULL,
     CONSTRAINT fk_reservation_member FOREIGN KEY (member_id) REFERENCES member (id),
-    CONSTRAINT fk_reservation_space FOREIGN KEY (space_id) REFERENCES space (id),
+    CONSTRAINT fk_reservation_space FOREIGN KEY (space_id) REFERENCES spaces (id),
     CONSTRAINT chk_reservation_time_range CHECK (start_time < end_time),
     CONSTRAINT chk_reservation_held_hold_expires CHECK (status <> 'HELD' OR hold_expires_at IS NOT NULL),
     CONSTRAINT chk_reservation_cancelled_at CHECK (status <> 'CANCELLED' OR cancelled_at IS NOT NULL),
@@ -42,7 +42,7 @@ CREATE TABLE reservation_slot (
     space_id       BIGINT NOT NULL,
     slot_start     DATETIME NOT NULL,
     CONSTRAINT fk_reservation_slot_reservation FOREIGN KEY (reservation_id) REFERENCES reservation (id),
-    CONSTRAINT fk_reservation_slot_space FOREIGN KEY (space_id) REFERENCES space (id),
+    CONSTRAINT fk_reservation_slot_space FOREIGN KEY (space_id) REFERENCES spaces (id),
     CONSTRAINT uq_reservation_slot_space_start UNIQUE (space_id, slot_start)
 ) ENGINE = InnoDB;
 

@@ -111,6 +111,7 @@ class AdminSpaceControllerTest {
 
                 // when & then
                 mockMvc.perform(post("/api/v1/admin/spaces")
+                                .header("X-Actor-Member-Id", 1L)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isCreated())
