@@ -1,4 +1,6 @@
 package com.ovengers.slotkey.payment.gateway.dto;
 
-public class PaymentCancelResult {
+public record PaymentCancelResult(
+
+) {
 }
