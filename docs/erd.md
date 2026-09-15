@@ -1,27 +1,31 @@
 # ERD 및 데이터 모델
 
 > 출처: 기획서 6-1, `데이터모델-아키텍처-결정.md`. 30분 슬롯 통일(항목 1), door_access_token 유니크 제약(항목 2), audit_log 복합 인덱스(항목 4) 반영본.
+> **2026-09-15 갱신**: `core-domain-decisions.md` §11(ERD/스키마 변경 목록)을 반영. `payment` 삭제, `credit_transaction` 추가, `reservation` 상태/시각 컬럼 변경, `member.balance`·`space.version` 추가. 상세는 아래 "2026-09-15 변경 이력" 참고.
 
 ## 엔터티 및 담당자
 
 | 엔터티 | 담당자 | 주요 필드 | 역할 |
 | --- |-----| --- | --- |
-| `member` | 천종원 | id, email, password_hash, nickname, role, status, created_at | 회원/관리자. role: MEMBER / PLATFORM_ADMIN. status: ACTIVE / SUSPENDED |
+| `member` | 천종원 | id, email, password_hash, nickname, role, status, **balance**, created_at | 회원/관리자. role: MEMBER / PLATFORM_ADMIN. status: ACTIVE / SUSPENDED. **balance**: 크레딧 잔액(int, NOT NULL, DEFAULT 0) — 이용 한도, 결제 수단 아님 |
 | `refresh_token` | 천종원 | id, member_id, token_hash, issued_at, expires_at, revoked_at | 로그인 재발급 토큰. 원문 대신 해시 저장, 재발급 시 회전 |
-| `space` | 김재철 | id, name, location, description, capacity, price_per_slot, image_path, opening_time, closing_time, status | 관리자가 등록하는 예약 대상 공간. `price_per_slot`은 100원 단위, 30분당 고정 요금 |
-| `audit_log` | 김재철 | id, actor_member_id, action, target_type, target_id, reason, before_value, after_value, created_at | 관리 작업(공간 등록/수정, 회원 정지/복구, 강제취소) 기록. `(target_type, target_id)` 복합 인덱스 |
-| `reservation` | 이태호 | id, member_id, space_id, start_time, end_time, status, price_per_slot_snapshot, total_amount, cancelled_at, completed_at, created_at | status: CONFIRMED / CANCELLED / COMPLETED. 슬롯 확보+Mock 결제 성공 시 대기 상태 없이 즉시 CONFIRMED |
-| `reservation_slot` | 이태호 | id, reservation_id, space_id, slot_start | 예약이 확보한 30분 단위 시간. `UNIQUE(space_id, slot_start)`로 중복 점유 방지 |
-| `payment` | 백한비 | id, reservation_id, amount, status, paid_at, cancelled_at | 예약당 결제 1건. `UNIQUE(reservation_id)`. status: SUCCESS / CANCELLED |
-| `reservation_status_history` | 백한비 | id, reservation_id, changed_by_member_id, from_status, to_status, reason, changed_at | 상태 변경 이력. 최초 생성의 from_status는 NULL, 시스템 작업은 changed_by_member_id NULL 허용 |
-| `door_access_token` | 박창현 | id, reservation_id, token_hash, issued_at, revoked_at, revoke_reason, active_reservation_id | `active_reservation_id`는 `revoked_at IS NULL`일 때만 값을 갖는 생성 컬럼 + `UNIQUE` → 예약당 활성 토큰 최대 1개를 DB 레벨로 강제 |
+| `space` | 김재철 | id, name, location, description, capacity, price_per_slot, image_path, opening_time, closing_time, status, **version** | 관리자가 등록하는 예약 대상 공간. `price_per_slot`은 100원 단위, 30분당 고정 요금. `opening_time`/`closing_time`은 `TIME`(LocalTime) — "매일 반복되는 규칙"이므로 날짜 없음. **version**: 가격 등 변경에 대한 낙관적 비교용(int) |
+| `audit_log` | 김재철 | id, actor_member_id, action, target_type, target_id, reason, before_value, after_value, created_at | 관리 작업(공간 등록/수정, 회원 정지/복구, 강제취소, 크레딧 지급) 기록. `(target_type, target_id)` 복합 인덱스 |
+| `reservation` | 이태호 | id, member_id, space_id, start_time, end_time, status, price_per_slot_snapshot, total_amount, **hold_expires_at**, **checked_in_at**, **checked_out_at**, cancelled_at, created_at | status: `HELD`/`EXPIRED`/`CONFIRMED`/`IN_USE`/`COMPLETED`/`CANCELLED`/`NO_SHOW` (7개). 슬롯 확보 시 `HELD` 생성(`hold_expires_at`=+10분) → Mock 결제 성공 시 `CONFIRMED` (2단계 플로우). ~~completed_at~~은 제거되어 `checked_out_at`으로 통합(체크아웃 시각 = 완료 시각) |
+| `reservation_slot` | 이태호 | id, reservation_id, space_id, slot_start | 예약이 확보한 30분 단위 시간. **살아있는 점유일 때만 존재**(취소/노쇼/만료 시 하드 삭제). `UNIQUE(space_id, slot_start)`로 중복 점유 방지 |
+| `credit_transaction` | 미정 (구 `payment` 담당 백한비) | id, member_id, amount, type, reservation_id, balance_after, reason, created_at | **크레딧 원장(단일 진실)** — `payment` 테이블을 대체. `amount`는 부호 있음(지급/환급 +, 차감/위약금 -)이며 `SUM(amount) = member.balance`. `type`: SIGNUP_GRANT / ADMIN_GRANT / RESERVATION_CHARGE / REFUND / PENALTY. `reservation_id`는 지급 건일 경우 NULL. `reason`은 ADMIN_GRANT만 필수. `INDEX(member_id, created_at)` |
+| `reservation_status_history` | 백한비 | id, reservation_id, changed_by_member_id, from_status, to_status, reason, changed_at | 상태 변경 이력. 최초 생성의 from_status는 NULL, 시스템 작업은 changed_by_member_id NULL 허용. 성공한 전이만 기록 |
+| `door_access_token` | 박창현 | id, reservation_id, token_hash, issued_at, revoked_at, revoke_reason, active_reservation_id | `active_reservation_id`는 `revoked_at IS NULL`일 때만 값을 갖는 생성 컬럼 + `UNIQUE` → 예약당 활성 토큰 최대 1개를 DB 레벨로 강제 (변경 없음, §11 "유지") |
 | `door_access_log` | 박창현 | id, actor_member_id, reservation_id, requested_space_id, result, reason_code, attempted_at | 출입 검증 결과. result: ALLOW / DENY. 식별 불가 대상은 NULL 허용 |
+
+> ~~`payment`~~ 테이블은 **삭제**되었다 (§1-1). Mock 결제는 크레딧 잔액을 직접 차감하며, 결제 내역은 `credit_transaction` 원장으로 단일화한다.
 
 ## 관계
 
 ```
 Member 1 --- N Reservation
 Member 1 --- N RefreshToken
+Member 1 --- N CreditTransaction
 Member 1 --- N ReservationStatusHistory : 변경 수행자
 Member 1 --- N DoorAccessLog : 출입 요청자
 Member 1 --- N AuditLog : 관리 작업 수행자
@@ -29,17 +33,18 @@ Member 1 --- N AuditLog : 관리 작업 수행자
 Space 1 --- N Reservation
 Space 1 --- N DoorAccessLog : 출입 요청 공간
 
-Reservation 1 --- 1 Payment
 Reservation 1 --- N ReservationSlot
 Reservation 1 --- N ReservationStatusHistory
 Reservation 1 --- N DoorAccessToken
 Reservation 1 --- N DoorAccessLog : 확인된 예약
+Reservation 0..1 --- N CreditTransaction : 지급 건은 예약과 무관(NULL)
 ```
 
 ```mermaid
 erDiagram
     member ||--o{ reservation : owns
     member ||--o{ refresh_token : owns
+    member ||--o{ credit_transaction : grants
     member ||--o{ reservation_status_history : changes
     member ||--o{ door_access_log : attempts
     member ||--o{ audit_log : performs
@@ -47,11 +52,11 @@ erDiagram
     space ||--o{ reservation : receives
     space ||--o{ door_access_log : receives
 
-    reservation ||--|| payment : settles
     reservation ||--o{ reservation_slot : occupies
     reservation ||--o{ reservation_status_history : records
     reservation ||--o{ door_access_token : issues
     reservation o|--o{ door_access_log : identifies
+    reservation o|--o{ credit_transaction : charges
 ```
 
 ## 가격/슬롯 규칙 (결정 항목 1)
@@ -59,9 +64,59 @@ erDiagram
 - 예약 최소 단위는 30분으로 통일. `space.price_per_slot`은 30분당 정액 요금(100원 단위).
 - `reservation.price_per_slot_snapshot`은 예약 확정 시점의 요금 스냅샷. `total_amount = price_per_slot_snapshot × 점유 슬롯 수`.
 - 공간 요금이 바뀌어도 이미 확정된 예약의 스냅샷/총액은 바뀌지 않는다.
+- **가격 확인(낙관적 검증)은 `space.version`으로 한다** (가격 값 자체가 아니라 버전 비교 — ABA 문제 방지, §5-2).
 
 ## 출입 토큰 유일성 (결정 항목 2)
 
 - `door_access_token`에 `active_reservation_id`(생성 컬럼)를 두고 `UNIQUE(active_reservation_id)` 적용.
 - MySQL 유니크 인덱스는 NULL을 여러 개 허용하므로, 폐기된 토큰 이력은 자유롭게 쌓이고 "현재 유효한 토큰은 예약당 1개"만 DB가 강제.
 - 재발급(재입장) 시나리오: 새 토큰 발급 전 기존 활성 토큰을 먼저 폐기(`revoked_at` 세팅)하는 트랜잭션으로 처리.
+
+## 크레딧 원장 규칙 (core-domain-decisions.md §1)
+
+- `payment` 테이블 삭제, `credit_transaction` 원장으로 단일화. 1크레딧 = 1원(`int`), `space.price_per_slot`과 동일 단위.
+- `amount`에 부호를 담아 `SUM(amount) = member.balance`가 성립해야 한다.
+- 차등 환불(취소 시 50%)은 `REFUND +전액`과 `PENALTY -위약금`을 **두 줄로 분리 기록**한다(한 줄로 합치지 않음).
+- 차감은 조건부 UPDATE(`WHERE balance >= :amount`)로 처리하며, 엔티티 dirty checking에 맡기지 않는다(갱신 유실 방지).
+
+## 무결성 제약 (CHECK) — core-domain-decisions.md §11
+
+```sql
+-- reservation
+CHECK (start_time < end_time)
+CHECK (status <> 'HELD'      OR hold_expires_at IS NOT NULL)
+CHECK (status <> 'CANCELLED' OR cancelled_at   IS NOT NULL)
+CHECK (status <> 'COMPLETED' OR checked_out_at IS NOT NULL)
+CHECK (status NOT IN ('IN_USE','COMPLETED') OR checked_in_at IS NOT NULL)
+
+-- space
+CHECK (opening_time < closing_time)          -- 자정 넘는 운영은 범위 밖
+```
+
+## 확인됨 — 변경 없음 (core-domain-decisions.md §11 "확인" 항목)
+
+- `space.opening_time` / `closing_time`은 이미 `TIME`(LocalTime)이며, 추가 변경 없음.
+- `reservation_slot`은 이미 "살아있는 점유일 때만 존재"하도록 설계되어 있으며(취소/노쇼/만료 시 하드 삭제), `UNIQUE(space_id, slot_start)`도 유지된다. 추가 변경 없음.
+- `door_access_token.active_reservation_id` UNIQUE 제약은 그대로 유지된다.
+
+## 2026-09-15 변경 이력 (core-domain-decisions.md §11 반영)
+
+| 구분 | 대상 | 상태 |
+| --- | --- | --- |
+| 삭제 | `payment` 테이블 전체 | 반영 완료 (ERD에서 제거). DDL상 `payment` 테이블이 원래 생성된 적이 없어(V4 스켈레톤 상태) DROP할 대상 자체가 없었음 |
+| 추가 | `member.balance` (int, NOT NULL, DEFAULT 0) | ERD 반영 완료. **DDL은 보류** — `member` 테이블 자체가 아직 생성되지 않음(V1 스켈레톤). V1에 TODO로 남겨둠 |
+| 추가 | `credit_transaction` 테이블 | ERD 반영 + `V6__create_credit_transaction_table.sql` 신규 작성 완료 |
+| 추가 | `reservation.hold_expires_at` (datetime, NULL 허용) | ERD + `V3` DDL 반영 완료 |
+| 추가 | `reservation.checked_in_at`, `checked_out_at` | ERD + `V3` DDL 반영 완료 |
+| 추가 | `space.version` (int) | ERD + `V2` DDL 반영 완료 |
+| 변경 | `reservation.status` enum → 7개 | ERD 반영 완료. 컬럼 타입(VARCHAR(20))은 기존과 동일, 허용 값만 애플리케이션에서 확장 |
+| 변경 | `reservation.completed_at` 제거 → `checked_out_at`으로 통합 | ERD + `V3` DDL 반영 완료 |
+| 확인 | `space.opening_time`/`closing_time` = TIME | 변경 없음 확인 |
+| 확인 | `reservation_slot` 존재 조건, UNIQUE 제약 | 변경 없음 확인 |
+| 유지 | `door_access_token.active_reservation_id` UNIQUE | 변경 없음 |
+
+### 이번 반영에서 함께 발견/수정한 모순
+
+- **[수정] 테이블명 불일치**: `V2__create_space_tables.sql`이 `spaces`(복수)로 테이블을 생성하고 있었는데, `V3__create_reservation_tables.sql`의 FK는 이미 `space`(단수)를 참조하고 있어 마이그레이션이 원천적으로 실패하는 상태였다. `V2`를 `space`로 수정했다.
+- **[미해결 — 확인 필요] `member`/`payment`/`access` 테이블 미작성**: `V1`(member), `V4`(payment), `V5`(access)가 전부 빈 스켈레톤 파일이다(엔티티 클래스도 패키지 선언만 있는 빈 클래스). `payment`는 삭제 대상이라 문제가 되지 않지만, `member`는 `reservation`·`credit_transaction`이 이미 FK로 참조하고 있어 **V1이 채워지지 않으면 어떤 마이그레이션도 끝까지 적용될 수 없다.** 사용자 결정에 따라 V1은 TODO 주석만 남기고 실제 `CREATE TABLE`은 천종원님 담당으로 남겨두었다.
+- **[관찰, 미수정] `audit_logs` 복수형**: `audit_log`(ERD 엔터티명)와 달리 실제 DDL 테이블명은 `audit_logs`(복수)다. 다만 이 테이블을 FK로 참조하는 곳이 없어 당장 마이그레이션이 깨지지는 않는다. §11 변경 목록과 무관하므로 이번 작업 범위에서는 손대지 않았다 — 필요 시 별도로 이름을 통일할 것.
