@@ -9,7 +9,7 @@ import java.util.Collections;
 import java.util.Set;
 
 @Component
-@ConditionalOnMissingBean(type = "ReservationOccupiedSlotAdapter")
+@ConditionalOnMissingBean(name = "ReservationOccupiedSlotAdapter")
 public class DefaultOccupiedSlotProvider implements OccupiedSlotProvider {
 
     @Override

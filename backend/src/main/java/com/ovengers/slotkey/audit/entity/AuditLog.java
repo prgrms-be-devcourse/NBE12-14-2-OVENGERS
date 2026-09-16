@@ -47,13 +47,6 @@ public class AuditLog {
     private String afterValue; // 변경 후 데이터 (JSON)
 
     @CreatedDate
-    @Column(nullable = false, name = "created_at")
+    @Column(nullable = false, name = "created_at", updatable = false)
     private LocalDateTime createdAt; // 관리자 작업이 수행된 시각
-
-    @PrePersist
-    public void prePersist() {
-        if (this.createdAt == null) {
-            this.createdAt = LocalDateTime.now();
-        }
-    }
 }

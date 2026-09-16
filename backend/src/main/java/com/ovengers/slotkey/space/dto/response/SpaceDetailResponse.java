@@ -18,7 +18,8 @@ public record SpaceDetailResponse(
         String imagePath,
         @JsonFormat(pattern = "HH:mm") LocalTime openingTime,
         @JsonFormat(pattern = "HH:mm") LocalTime closingTime,
-        SpaceStatus status) {
+        SpaceStatus status,
+        Integer version) {
     public static SpaceDetailResponse from(Space space) {
         return SpaceDetailResponse.builder()
                 .id(space.getId())
@@ -31,6 +32,7 @@ public record SpaceDetailResponse(
                 .openingTime(space.getOpeningTime())
                 .closingTime(space.getClosingTime())
                 .status(space.getStatus())
+                .version(space.getVersion())
                 .build();
     }
 }

@@ -89,6 +89,9 @@ public class Space {
         }
         if (request.pricePerSlot() != null) {
             validatePricePerSlot(request.pricePerSlot());
+            if (!request.pricePerSlot().equals(this.pricePerSlot)) {
+                this.version++;
+            }
             this.pricePerSlot = request.pricePerSlot();
         }
         if (request.imagePath() != null) {

@@ -52,6 +52,12 @@ public class SecurityConfig {
                                 "/api/v1/auth/logout"
                         ).permitAll()
 
+                                        // 공간 목록, 상세, 슬롯 가용성 비회원 조회 허용
+                                        .requestMatchers(
+                                                        HttpMethod.GET,
+                                                        "/api/v1/spaces/**")
+                                        .permitAll()
+
                         // 관리자 권한 필요
                         .requestMatchers("/api/v1/admin/**")
                         .hasRole("ADMIN")

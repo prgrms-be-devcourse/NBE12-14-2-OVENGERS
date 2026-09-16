@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.function.Predicate;
+import java.util.function.Consumer;
 
 /**
  * 시간 경과로 일어나는 예약 상태 전이 3종(core-domain-decisions 3-4).
@@ -55,16 +55,15 @@ public class ReservationCompletionScheduler {
         processEach("AUTO_CHECK_OUT", ids, id -> processor.autoCheckOut(id, now));
     }
 
-    private void processEach(String jobName, List<Long> reservationIds, Predicate<Long> transition) {
+    private void processEach(String jobName, List<Long> reservationIds, Consumer<Long> transition) {
         if (reservationIds.isEmpty()) {
             return;
         }
         int transitioned = 0;
         for (Long reservationId : reservationIds) {
             try {
-                if (transition.test(reservationId)) {
-                    transitioned++;
-                }
+                transition.accept(reservationId);
+                transitioned++;
             } catch (RuntimeException e) {
                 log.error("[{}] reservationId={} 처리 실패", jobName, reservationId, e);
             }
