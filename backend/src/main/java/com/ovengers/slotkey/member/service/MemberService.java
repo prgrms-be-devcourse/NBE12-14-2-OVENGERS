@@ -16,6 +16,15 @@ public class MemberService {
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
 
+    // 내 정보 조회
+    @Transactional(readOnly = true)
+    public Member getMyInfo(Long memberId) {
+        return memberRepository.findById(memberId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.AUTHENTICATION_REQUIRED)
+                );
+    }
+
     @Transactional
     public Member signup(
             String email,
