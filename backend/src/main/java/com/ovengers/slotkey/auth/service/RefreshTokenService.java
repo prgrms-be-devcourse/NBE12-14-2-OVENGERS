@@ -31,7 +31,7 @@ public class RefreshTokenService {
         String tokenHash = hashRefreshToken(rawToken);
 
         // 3. 만료 시각 설정: 발급 시점부터 7일
-        LocalDateTime expiresAt = LocalDateTime.now().plusDays(7);
+        LocalDateTime expiresAt = LocalDateTime.now().plusDays(1);
 
         // 4. 회원·해시·만료 시각으로 엔티티 생성
         RefreshToken refreshToken = new RefreshToken(

@@ -58,7 +58,7 @@ public class AuthController {
                 .secure(false) // 로컬 HTTP 개발용. HTTPS 배포에서는 true로 변경
                 .sameSite("Lax")
                 .path("/api/v1/auth")
-                .maxAge(60L * 60 * 24 * 7) // 7일, 초 단위
+                .maxAge(60L * 60 * 24) // 1일, 초 단위
                 .build();
 
         // 3. 리프레시는 쿠키로, 액세스는 응답 본문으로 전달
