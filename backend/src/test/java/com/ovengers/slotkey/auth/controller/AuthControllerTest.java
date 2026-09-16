@@ -22,14 +22,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
+import org.springframework.test.web.servlet.MvcResult;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 @SpringBootTest
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
 @Import(MySqlTestContainerConfig.class)
 @Transactional
 public class AuthControllerTest {
-
+    @Autowired
+    private ObjectMapper objectMapper;
     @Autowired
     private MockMvc mvc;
 
@@ -53,13 +58,13 @@ public class AuthControllerTest {
                         post("/api/v1/auth/signup")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
-                                        {
-                                            "email": "%s",
-                                            "password": "%s",
-                                            "passwordConfirm": "%s",
-                                            "nickname": "%s"
-                                        }
-                                        """.formatted(
+                                                {
+                                                    "email": "%s",
+                                                    "password": "%s",
+                                                    "passwordConfirm": "%s",
+                                                    "nickname": "%s"
+                                                }
+                                                """.formatted(
                                                 email,
                                                 password,
                                                 password,
@@ -97,6 +102,7 @@ public class AuthControllerTest {
                 )
         ).isTrue();
     }
+
     @Test
     @DisplayName("이미 가입된 이메일로 회원가입하면 409를 반환한다")
     void t2() throws Exception {
@@ -120,13 +126,13 @@ public class AuthControllerTest {
                         post("/api/v1/auth/signup")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
-                                    {
-                                        "email": "%s",
-                                        "password": "%s",
-                                        "passwordConfirm": "%s",
-                                        "nickname": "새회원"
-                                    }
-                                    """.formatted(
+                                                {
+                                                    "email": "%s",
+                                                    "password": "%s",
+                                                    "passwordConfirm": "%s",
+                                                    "nickname": "새회원"
+                                                }
+                                                """.formatted(
                                                 email,
                                                 password,
                                                 password
@@ -152,6 +158,7 @@ public class AuthControllerTest {
         assertThat(savedMember.getId()).isEqualTo(existingMember.getId());
         assertThat(savedMember.getNickname()).isEqualTo("기존회원");
     }
+
     @Test
     @DisplayName("비밀번호와 비밀번호 확인이 다르면 회원가입을 거절한다")
     void t3() throws Exception {
@@ -165,13 +172,13 @@ public class AuthControllerTest {
                         post("/api/v1/auth/signup")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
-                                    {
-                                        "email": "%s",
-                                        "password": "Test1234!",
-                                        "passwordConfirm": "Different1234!",
-                                        "nickname": "테스트회원"
-                                    }
-                                    """.formatted(email))
+                                        {
+                                            "email": "%s",
+                                            "password": "Test1234!",
+                                            "passwordConfirm": "Different1234!",
+                                            "nickname": "테스트회원"
+                                        }
+                                        """.formatted(email))
                 )
                 .andDo(print());
 
@@ -186,4 +193,239 @@ public class AuthControllerTest {
         assertThat(memberRepository.existsByEmail(email)).isFalse();
         assertThat(memberRepository.count()).isEqualTo(memberCountBefore);
     }
+
+    @Test
+    @DisplayName("로그인하면 액세스 토큰과 24시간 리프레시 쿠키를 발급한다")
+    void t4() throws Exception {
+        MvcResult result = loginForTest("login-success@example.com");
+
+        String accessToken = extractAccessToken(result);
+        assertThat(accessToken).isNotBlank();
+
+        Cookie refreshCookie = result.getResponse()
+                .getCookie("refreshToken");
+
+        assertThat(refreshCookie).isNotNull();
+        assertThat(refreshCookie.getValue()).isNotBlank();
+        assertThat(refreshCookie.isHttpOnly()).isTrue();
+        assertThat(refreshCookie.getPath()).isEqualTo("/api/v1/auth");
+        assertThat(refreshCookie.getMaxAge()).isEqualTo(86_400);
+    }
+
+    @Test
+    @DisplayName("비밀번호가 틀리면 로그인을 거절하고 쿠키를 발급하지 않는다")
+    void t5() throws Exception {
+        String email = "login-failure@example.com";
+
+        memberRepository.save(
+                new Member(
+                        email,
+                        passwordEncoder.encode("Correct1234!"),
+                        "테스트회원"
+                )
+        );
+
+        ResultActions resultActions = mvc
+                .perform(
+                        post("/api/v1/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "email": "%s",
+                                            "password": "Wrong1234!"
+                                        }
+                                        """.formatted(email))
+                )
+                .andDo(print());
+
+        resultActions
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
+                .andExpect(cookie().doesNotExist("refreshToken"))
+                .andExpect(jsonPath("$.data.accessToken").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("유효한 리프레시 쿠키로 갱신한 액세스 토큰을 사용할 수 있다")
+    void t6() throws Exception {
+        String email = "refresh-success@example.com";
+
+        MvcResult loginResult = loginForTest(email);
+
+        Cookie refreshCookie = loginResult.getResponse()
+                .getCookie("refreshToken");
+
+        assertThat(refreshCookie).isNotNull();
+
+        MvcResult refreshResult = mvc
+                .perform(
+                        post("/api/v1/auth/refresh")
+                                .cookie(refreshCookie)
+                )
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
+                .andReturn();
+
+        String accessToken = extractAccessToken(refreshResult);
+
+        // 발급된 문자열이 실제 인증에도 사용 가능한지 확인
+        mvc.perform(
+                        get("/api/v1/members/me")
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + accessToken
+                                )
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.email").value(email));
+    }
+
+    @Test
+    @DisplayName("리프레시 쿠키가 없으면 토큰 갱신을 거절한다")
+    void t7() throws Exception {
+        mvc.perform(
+                        post("/api/v1/auth/refresh")
+                )
+                .andDo(print())
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"));
+    }
+
+    @Test
+    @DisplayName("등록되지 않은 리프레시 토큰으로 갱신하면 거절한다")
+    void t8() throws Exception {
+        mvc.perform(
+                        post("/api/v1/auth/refresh")
+                                .cookie(
+                                        new Cookie(
+                                                "refreshToken",
+                                                "unknown-refresh-token"
+                                        )
+                                )
+                )
+                .andDo(print())
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"));
+    }
+
+    @Test
+    @DisplayName("로그아웃하면 쿠키를 삭제하고 기존 리프레시 토큰의 갱신을 차단한다")
+    void t9() throws Exception {
+        MvcResult loginResult =
+                loginForTest("logout-test@example.com");
+
+        Cookie refreshCookie = loginResult.getResponse()
+                .getCookie("refreshToken");
+
+        assertThat(refreshCookie).isNotNull();
+
+        // 로그아웃 전에 원문을 별도로 보관
+        String rawRefreshToken = refreshCookie.getValue();
+
+        mvc.perform(
+                        post("/api/v1/auth/logout")
+                                .cookie(refreshCookie)
+                )
+                .andDo(print())
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""))
+                .andExpect(cookie().value("refreshToken", ""))
+                .andExpect(cookie().maxAge("refreshToken", 0))
+                .andExpect(cookie().path("refreshToken", "/api/v1/auth"))
+                .andExpect(cookie().httpOnly("refreshToken", true));
+
+        // 브라우저의 쿠키 삭제만 확인하는 것이 아니라,
+        // 복사해둔 원문을 다시 보내도 서버가 거절하는지 확인
+        mvc.perform(
+                        post("/api/v1/auth/refresh")
+                                .cookie(
+                                        new Cookie(
+                                                "refreshToken",
+                                                rawRefreshToken
+                                        )
+                                )
+                )
+                .andDo(print())
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"));
+    }
+
+    @Test
+    @DisplayName("액세스 토큰으로 로그인한 회원 본인의 정보를 조회한다")
+    void t10() throws Exception {
+        String email = "my-info@example.com";
+
+        MvcResult loginResult = loginForTest(email);
+        String accessToken = extractAccessToken(loginResult);
+
+        mvc.perform(
+                        get("/api/v1/members/me")
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + accessToken
+                                )
+                )
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.email").value(email))
+                .andExpect(jsonPath("$.data.nickname").value("테스트회원"))
+                .andExpect(jsonPath("$.data.role").value("USER"))
+                .andExpect(jsonPath("$.data.createdAt").exists())
+                .andExpect(jsonPath("$.data.passwordHash").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("액세스 토큰 없이 내 정보를 조회하면 거절한다")
+    void t11() throws Exception {
+        mvc.perform(
+                        get("/api/v1/members/me")
+                )
+                .andDo(print())
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+    }
+
+    // 회원 저장 후 실제 로그인 API를 호출한다.
+    private MvcResult loginForTest(String email) throws Exception {
+        String password = "Test1234!";
+
+        memberRepository.save(
+                new Member(
+                        email,
+                        passwordEncoder.encode(password),
+                        "테스트회원"
+                )
+        );
+
+        return mvc.perform(
+                        post("/api/v1/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "email": "%s",
+                                            "password": "%s"
+                                        }
+                                        """.formatted(email, password))
+                )
+                .andExpect(status().isOk())
+                .andReturn();
+    }
+    // 로그인·갱신 응답에서 액세스 토큰을 꺼낸다.
+    private String extractAccessToken(MvcResult result) throws Exception {
+        String responseBody = result.getResponse()
+                .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        String accessToken = objectMapper.readTree(responseBody)
+                .path("data")
+                .path("accessToken")
+                .asText();
+
+        assertThat(accessToken).isNotBlank();
+
+        return accessToken;
+    }
 }
+
