@@ -2,9 +2,12 @@ package com.ovengers.slotkey.space.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.ovengers.slotkey.global.error.BusinessException;
+import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.global.error.GlobalExceptionHandler;
 import com.ovengers.slotkey.global.security.AuthPrincipal;
 import com.ovengers.slotkey.member.entity.MemberRole;
+import com.ovengers.slotkey.space.authorization.SpaceAuthorizationService;
 import com.ovengers.slotkey.space.dto.request.SpaceCreateRequest;
 import com.ovengers.slotkey.space.dto.response.SpaceDetailResponse;
 import com.ovengers.slotkey.space.entity.SpaceStatus;
@@ -29,6 +32,8 @@ import java.time.LocalTime;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -38,98 +43,142 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AdminSpaceControllerTest {
 
         private static final AuthPrincipal ADMIN_PRINCIPAL = new AuthPrincipal(1L, "admin@test.com", MemberRole.ADMIN);
+    private static final AuthPrincipal USER_PRINCIPAL = new AuthPrincipal(2L, "user@test.com", MemberRole.USER);
 
-        private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-        @Mock
-        private AdminSpaceService adminSpaceService;
+    @Mock
+    private AdminSpaceService adminSpaceService;
 
-        @InjectMocks
-        private AdminSpaceController adminSpaceController;
+    @Mock
+    private SpaceAuthorizationService spaceAuthorizationService;
 
-        private ObjectMapper objectMapper;
+    @InjectMocks
+    private AdminSpaceController adminSpaceController;
 
-        @BeforeEach
-        void setUp() {
-                objectMapper = new ObjectMapper();
-                objectMapper.registerModule(new JavaTimeModule());
+    private ObjectMapper objectMapper;
 
-                mockMvc = MockMvcBuilders.standaloneSetup(adminSpaceController)
-                                .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
-                                .setControllerAdvice(new GlobalExceptionHandler())
-                                .build();
+    @BeforeEach
+    void setUp() {
+            objectMapper = new ObjectMapper();
+            objectMapper.registerModule(new JavaTimeModule());
 
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                                ADMIN_PRINCIPAL, null, ADMIN_PRINCIPAL.getAuthorities());
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-        }
+        mockMvc = MockMvcBuilders.standaloneSetup(adminSpaceController)
+                        .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
+                        .setControllerAdvice(new GlobalExceptionHandler())
+                        .build();
+}
 
-        @AfterEach
-        void tearDown() {
-                SecurityContextHolder.clearContext();
-        }
+    @AfterEach
+    void tearDown() {
+            SecurityContextHolder.clearContext();
+    }
 
-        @Test
-        @DisplayName("공간 등록 요청 시 201 Created와 ApiResponse 규격 응답을 반환한다")
-        void createSpace_returnsCreated() throws Exception {
-                // given
-                SpaceCreateRequest request = new SpaceCreateRequest(
-                                "회의실 1",
-                                "서울시 강남구",
-                                "깔끔한 회의실",
-                                6,
-                                5000L,
-                                "/img.jpg",
-                                LocalTime.of(9, 0),
-                                LocalTime.of(18, 0));
+    private void setAuthentication(AuthPrincipal principal) {
+            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(principal,
+                            null, principal.getAuthorities());
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
 
-                SpaceDetailResponse response = SpaceDetailResponse.builder()
-                                .id(1L)
-                                .name(request.name())
-                                .location(request.location())
-                                .description(request.description())
-                                .capacity(request.capacity())
-                                .pricePerSlot(request.pricePerSlot())
-                                .imagePath(request.imagePath())
-                                .openingTime(request.openingTime())
-                                .closingTime(request.closingTime())
-                                .status(SpaceStatus.ACTIVE)
-                                .build();
+    private SpaceCreateRequest validRequest() {
+            return new SpaceCreateRequest(
+                            "회의실 1",
+                            "서울시 강남구",
+                            "깔끔한 회의실",
+                            6,
+                            5000L,
+                            "/img.jpg",
+                            LocalTime.of(9, 0),
+                            LocalTime.of(18, 0));
+}
 
-                given(adminSpaceService.createSpace(any(SpaceCreateRequest.class), eq(1L))).willReturn(response);
+@Test
+@DisplayName("관리자 principal일 때 createSpace는 201 Created와 ApiResponse 규격 응답을 반환한다")
+void createSpace_asAdmin_returnsCreated() throws Exception {
+        setAuthentication(ADMIN_PRINCIPAL);
+        SpaceCreateRequest request = validRequest();
 
-                // when & then
-                mockMvc.perform(post("/api/v1/admin/spaces")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isCreated())
-                                .andExpect(jsonPath("$.status").value("SUCCESS"))
-                                .andExpect(jsonPath("$.code").value("OK"))
-                                .andExpect(jsonPath("$.data.id").value(1L))
-                                .andExpect(jsonPath("$.data.name").value("회의실 1"));
+        SpaceDetailResponse response = SpaceDetailResponse.builder()
+                        .id(1L)
+                        .name(request.name())
+                        .location(request.location())
+                        .description(request.description())
+                        .capacity(request.capacity())
+                        .pricePerSlot(request.pricePerSlot())
+                        .imagePath(request.imagePath())
+                        .openingTime(request.openingTime())
+                        .closingTime(request.closingTime())
+                        .status(SpaceStatus.ACTIVE)
+                        .build();
 
-                verify(adminSpaceService).createSpace(any(SpaceCreateRequest.class), eq(ADMIN_PRINCIPAL.memberId()));
-        }
+        given(adminSpaceService.createSpace(any(SpaceCreateRequest.class), eq(1L))).willReturn(response);
 
-        @Test
-        @DisplayName("필수 필드(이름 누락 등) 유효성 검증 실패 시 400 Bad Request를 반환한다")
-        void createSpace_validationFailed() throws Exception {
-                // name이 빈 문자열인 요청
-                SpaceCreateRequest invalidRequest = new SpaceCreateRequest(
-                                "",
-                                "서울시 강남구",
-                                "설명",
-                                6,
-                                5000L,
-                                null,
-                                LocalTime.of(9, 0),
-                                LocalTime.of(18, 0));
+        mockMvc.perform(post("/api/v1/admin/spaces")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                        .andExpect(status().isCreated())
+                        .andExpect(jsonPath("$.status").value("SUCCESS"))
+                        .andExpect(jsonPath("$.code").value("OK"))
+                        .andExpect(jsonPath("$.data.id").value(1L))
+                        .andExpect(jsonPath("$.data.name").value("회의실 1"));
 
-                mockMvc.perform(post("/api/v1/admin/spaces")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(invalidRequest)))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.status").value("FAIL"))
-                                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
-        }
+        verify(spaceAuthorizationService).validateCanManageSpace(ADMIN_PRINCIPAL);
+        verify(adminSpaceService).createSpace(any(SpaceCreateRequest.class), eq(ADMIN_PRINCIPAL.memberId()));
+}
+
+    @Test
+    @DisplayName("일반 사용자 principal일 때 createSpace는 403을 반환하고 AdminSpaceService를 호출하지 않는다")
+    void createSpace_asUser_returns403() throws Exception {
+            setAuthentication(USER_PRINCIPAL);
+
+            willThrow(new BusinessException(ErrorCode.ACCESS_DENIED))
+                            .given(spaceAuthorizationService).validateCanManageSpace(USER_PRINCIPAL);
+
+            mockMvc.perform(post("/api/v1/admin/spaces")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(validRequest())))
+                            .andExpect(status().isForbidden())
+                            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+
+            verify(adminSpaceService, never()).createSpace(any(), any());
+    }
+
+    @Test
+    @DisplayName("principal이 없을 때 createSpace는 403을 반환하고 AdminSpaceService를 호출하지 않는다")
+    void createSpace_withNoPrincipal_returns403() throws Exception {
+            // SecurityContext 비어있음 → authPrincipal == null
+            willThrow(new BusinessException(ErrorCode.ACCESS_DENIED))
+                            .given(spaceAuthorizationService).validateCanManageSpace(null);
+
+            mockMvc.perform(post("/api/v1/admin/spaces")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(validRequest())))
+                            .andExpect(status().isForbidden())
+                            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+
+            verify(adminSpaceService, never()).createSpace(any(), any());
+    }
+
+    @Test
+    @DisplayName("필수 필드(이름 누락 등) 유효성 검증 실패 시 400 Bad Request를 반환한다")
+    void createSpace_validationFailed() throws Exception {
+            setAuthentication(ADMIN_PRINCIPAL);
+
+            SpaceCreateRequest invalidRequest = new SpaceCreateRequest(
+                            "",
+                            "서울시 강남구",
+                            "설명",
+                            6,
+                            5000L,
+                            null,
+                            LocalTime.of(9, 0),
+                            LocalTime.of(18, 0));
+
+        mockMvc.perform(post("/api/v1/admin/spaces")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.status").value("FAIL"))
+                        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+}
 }
