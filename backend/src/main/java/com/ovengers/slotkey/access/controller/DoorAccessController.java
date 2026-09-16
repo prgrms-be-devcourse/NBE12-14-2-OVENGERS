@@ -85,10 +85,12 @@ public class DoorAccessController {
     // 제출된 출입 토큰 검증
     @PostMapping("/door-access/verify")
     public ResponseEntity<ApiResponse<DoorAccessVerifyResponse>> verify(
+            @AuthenticationPrincipal AuthPrincipal authPrincipal,
             @Valid @RequestBody DoorAccessVerifyRequest request
     ) {
         DoorAccessVerifyResponse response =
                 doorAccessVerificationService.verify(
+                        authPrincipal.memberId(),
                         request
                 );
 
