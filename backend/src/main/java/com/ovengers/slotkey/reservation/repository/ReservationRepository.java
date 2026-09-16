@@ -90,4 +90,54 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     // ===== 조회 (ReservationQueryService) =====
     Page<Reservation> findAllByMemberId(Long memberId, Pageable pageable);
     Page<Reservation> findAllByMemberIdAndStatus(Long memberId, ReservationStatus status, Pageable pageable);
+
+    // ===== 배치 대상 조회 (ReservationCompletionScheduler) =====
+    // 후보 id만 뽑고, 실제 전이 여부는 건별 조건부 UPDATE가 최종 판정한다.
+
+    @Query("SELECT r.id FROM Reservation r WHERE r.status = :held AND r.holdExpiresAt < :now")
+    List<Long> findExpiredHoldIds(
+            @Param("now") LocalDateTime now,
+            @Param("held") ReservationStatus held
+    );
+
+    @Query("SELECT r.id FROM Reservation r WHERE r.status = :confirmed AND r.startTime < :startTimeBefore")
+    List<Long> findNoShowCandidateIds(
+            @Param("startTimeBefore") LocalDateTime startTimeBefore,
+            @Param("confirmed") ReservationStatus confirmed
+    );
+
+    @Query("SELECT r.id FROM Reservation r WHERE r.status = :inUse AND r.endTime <= :now")
+    List<Long> findAutoCheckOutCandidateIds(
+            @Param("now") LocalDateTime now,
+            @Param("inUse") ReservationStatus inUse
+    );
+
+    /**
+     * 노쇼 판정의 문지기(§6-3, §8-1). 체크인 마감(start + 15분)이 지났는데 아직 CONFIRMED일 때만
+     * NO_SHOW로 전이한다. 같은 순간 체크인(CONFIRMED -> IN_USE)이 먼저 성공했다면 영향 행 0.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Reservation r SET r.status = :noShow " +
+            "WHERE r.id = :id AND r.status = :confirmed AND r.startTime < :startTimeBefore")
+    int markNoShowIfNotCheckedIn(
+            @Param("id") Long id,
+            @Param("startTimeBefore") LocalDateTime startTimeBefore,
+            @Param("confirmed") ReservationStatus confirmed,
+            @Param("noShow") ReservationStatus noShow
+    );
+
+    /**
+     * 자동 퇴실의 문지기(§3-4). checked_out_at에는 배치 실행 시각이 아니라 end_time을 넣는다.
+     * end_time 조건을 UPDATE에도 다시 거는 이유: 후보 조회 이후 연장(end_time 변경)이 먼저
+     * 커밋됐다면, 늘어난 이용 시간을 배치가 잘라먹지 않도록 영향 행 0으로 끝내기 위함.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Reservation r SET r.status = :completed, r.checkedOutAt = r.endTime " +
+            "WHERE r.id = :id AND r.status = :inUse AND r.endTime <= :now")
+    int autoCheckOutIfEnded(
+            @Param("id") Long id,
+            @Param("now") LocalDateTime now,
+            @Param("inUse") ReservationStatus inUse,
+            @Param("completed") ReservationStatus completed
+    );
 }
