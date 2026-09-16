@@ -32,12 +32,4 @@ public interface CreditBalanceRepository extends Repository<Member, Long> {
             @Param("memberId") Long memberId,
             @Param("amount") int amount
     );
-
-    // 현재 잔액 조회
-    @Query("""
-            SELECT m.balance
-            FROM Member m
-            WHERE m.id = :memberId
-            """)
-    int findBalance(@Param("memberId") Long memberId);
 }

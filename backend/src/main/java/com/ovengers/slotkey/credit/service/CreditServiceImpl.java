@@ -7,8 +7,9 @@ import com.ovengers.slotkey.credit.repository.CreditBalanceRepository;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.member.entity.Member;
+import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.reservation.entity.Reservation;
-import jakarta.persistence.EntityManager;
+import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +25,8 @@ public class CreditServiceImpl implements CreditService {
 
     private final CreditTransactionRepository creditTransactionRepository;
     private final CreditBalanceRepository creditBalanceRepository;
-    private final EntityManager entityManager;
+    private final MemberRepository memberRepository;
+    private final ReservationRepository reservationRepository;
     private final Clock clock;
 
     // 예약 결제 크레딧 차감
@@ -37,6 +39,7 @@ public class CreditServiceImpl implements CreditService {
     ) {
         validateAmount(amount);
 
+        // 잔액이 충분한 경우에만 차감
         int updatedRows =
                 creditBalanceRepository.decreaseIfEnough(memberId, amount);
 
@@ -46,18 +49,21 @@ public class CreditServiceImpl implements CreditService {
             );
         }
 
-        int balanceAfter =
-                creditBalanceRepository.findBalance(memberId);
+        // ID로 회원 / 예약 조회
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow();
+
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow();
 
         saveTransaction(
-                memberId,
-                reservationId,
+                member,
                 -amount,
                 CreditTransactionType.RESERVATION_CHARGE,
-                balanceAfter
+                reservation
         );
 
-        return balanceAfter;
+        return member.getBalance();
     }
 
     // 예약 취소 크레딧 환급
@@ -70,20 +76,24 @@ public class CreditServiceImpl implements CreditService {
     ) {
         validateAmount(amount);
 
+        // 잔액 증가
         creditBalanceRepository.increase(memberId, amount);
 
-        int balanceAfter =
-                creditBalanceRepository.findBalance(memberId);
+        // ID로 회원 / 예약 조회
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow();
+
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow();
 
         saveTransaction(
-                memberId,
-                reservationId,
+                member,
                 amount,
                 CreditTransactionType.REFUND,
-                balanceAfter
+                reservation
         );
 
-        return balanceAfter;
+        return member.getBalance();
     }
 
     // 예약 취소 위약금 차감
@@ -96,6 +106,7 @@ public class CreditServiceImpl implements CreditService {
     ) {
         validateAmount(amount);
 
+        // 잔액이 충분한 경우에만 차감
         int updatedRows =
                 creditBalanceRepository.decreaseIfEnough(memberId, amount);
 
@@ -105,40 +116,36 @@ public class CreditServiceImpl implements CreditService {
             );
         }
 
-        int balanceAfter =
-                creditBalanceRepository.findBalance(memberId);
+        // ID로 회원 / 예약 조회
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow();
+
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow();
 
         saveTransaction(
-                memberId,
-                reservationId,
+                member,
                 -amount,
                 CreditTransactionType.PENALTY,
-                balanceAfter
+                reservation
         );
 
-        return balanceAfter;
+        return member.getBalance();
     }
 
     // 크레딧 거래 이력 저장
     private void saveTransaction(
-            Long memberId,
-            Long reservationId,
+            Member member,
             int amount,
             CreditTransactionType type,
-            int balanceAfter
+            Reservation reservation
     ) {
-        Member member =
-                entityManager.getReference(Member.class, memberId);
-
-        Reservation reservation =
-                entityManager.getReference(Reservation.class, reservationId);
-
         CreditTransaction transaction = new CreditTransaction(
                 member,
                 amount,
                 type,
                 reservation,
-                balanceAfter,
+                member.getBalance(),
                 null,
                 LocalDateTime.now(clock)
         );
