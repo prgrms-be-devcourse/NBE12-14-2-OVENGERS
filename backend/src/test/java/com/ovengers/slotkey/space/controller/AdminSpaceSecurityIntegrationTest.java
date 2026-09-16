@@ -7,13 +7,10 @@ import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.entity.MemberRole;
 import com.ovengers.slotkey.member.entity.MemberStatus;
 import com.ovengers.slotkey.member.repository.MemberRepository;
-import com.ovengers.slotkey.space.authorization.SpaceAuthorizationService;
 import com.ovengers.slotkey.space.dto.request.SpaceCreateRequest;
 import com.ovengers.slotkey.space.dto.response.SpaceDetailResponse;
 import com.ovengers.slotkey.space.entity.SpaceStatus;
 import com.ovengers.slotkey.space.service.AdminSpaceService;
-import com.ovengers.slotkey.space.service.SpaceQueryService;
-import com.ovengers.slotkey.space.service.SpaceSlotAvailabilityService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,13 +19,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.Clock;
 import java.time.LocalTime;
 import java.util.Map;
 import java.util.Optional;
@@ -58,23 +53,7 @@ class AdminSpaceSecurityIntegrationTest {
     private AdminSpaceService adminSpaceService;
 
     @MockBean
-    private SpaceAuthorizationService spaceAuthorizationService;
-
-    @MockBean
     private MemberRepository memberRepository;
-
-    // JPA 관련 빈들을 Mock으로 대체
-    @MockBean
-    private JpaMetamodelMappingContext jpaMetamodelMappingContext;
-
-    @MockBean
-    private SpaceQueryService spaceQueryService;
-
-    @MockBean
-    private SpaceSlotAvailabilityService spaceSlotAvailabilityService;
-
-    @MockBean
-    private Clock clock;
 
     @Value("${custom.jwt.secret-key}")
     private String secretKey;
