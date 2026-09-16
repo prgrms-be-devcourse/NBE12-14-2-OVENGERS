@@ -3,6 +3,7 @@ package com.ovengers.slotkey.credit.service;
 import com.ovengers.slotkey.credit.entity.CreditTransaction;
 import com.ovengers.slotkey.credit.entity.CreditTransactionType;
 import com.ovengers.slotkey.credit.repository.CreditTransactionRepository;
+import com.ovengers.slotkey.credit.repository.CreditBalanceRepository;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.member.entity.Member;
@@ -11,6 +12,7 @@ import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 
 import java.time.Clock;
 import java.time.LocalDateTime;

@@ -1,56 +1,43 @@
 package com.ovengers.slotkey.credit.repository;
 
-import jakarta.persistence.EntityManager;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Repository;
+import com.ovengers.slotkey.member.entity.Member;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.Repository;
+import org.springframework.data.repository.query.Param;
 
-@Repository
-@RequiredArgsConstructor
-public class CreditBalanceRepository {
+public interface CreditBalanceRepository extends Repository<Member, Long> {
 
-    private final EntityManager entityManager;
+    // 잔액이 충분한 경우에만 차감
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE Member m
+            SET m.balance = m.balance - :amount
+            WHERE m.id = :memberId
+              AND m.balance >= :amount
+            """)
+    int decreaseIfEnough(
+            @Param("memberId") Long memberId,
+            @Param("amount") int amount
+    );
 
-    // 잔액이 충분한 경우에만 크레딧 차감
-    public int decreaseIfEnough(
-            Long memberId,
-            int amount
-    ) {
-        return entityManager.createNativeQuery("""
-                UPDATE member
-                SET balance = balance - :amount
-                WHERE id = :memberId
-                  AND balance >= :amount
-                """)
-                .setParameter("amount", amount)
-                .setParameter("memberId", memberId)
-                .executeUpdate();
-    }
+    // 잔액 증가
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE Member m
+            SET m.balance = m.balance + :amount
+            WHERE m.id = :memberId
+            """)
+    int increase(
+            @Param("memberId") Long memberId,
+            @Param("amount") int amount
+    );
 
-    // 크레딧 증가
-    public int increase(
-            Long memberId,
-            int amount
-    ) {
-        return entityManager.createNativeQuery("""
-                UPDATE member
-                SET balance = balance + :amount
-                WHERE id = :memberId
-                """)
-                .setParameter("amount", amount)
-                .setParameter("memberId", memberId)
-                .executeUpdate();
-    }
-
-    // 현재 크레딧 잔액 조회
-    public int findBalance(Long memberId) {
-        Number balance = (Number) entityManager.createNativeQuery("""
-                SELECT balance
-                FROM member
-                WHERE id = :memberId
-                """)
-                .setParameter("memberId", memberId)
-                .getSingleResult();
-
-        return balance.intValue();
-    }
+    // 현재 잔액 조회
+    @Query("""
+            SELECT m.balance
+            FROM Member m
+            WHERE m.id = :memberId
+            """)
+    int findBalance(@Param("memberId") Long memberId);
 }
