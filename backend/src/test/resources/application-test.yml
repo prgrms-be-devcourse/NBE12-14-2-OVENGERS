@@ -1,0 +1,12 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: none
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+custom:
+  jwt:
+    secret-key: slotkey-test-only-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz
+    expire-millis: 300000
