@@ -117,3 +117,6 @@ HELP.md
 .claude/settings.local.json
 .cursor/
 CLAUDE.md
+
+### 배포 ###
+*.pem
