@@ -3,10 +3,13 @@ package com.ovengers.slotkey.space.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.ovengers.slotkey.global.error.GlobalExceptionHandler;
+import com.ovengers.slotkey.global.security.AuthPrincipal;
+import com.ovengers.slotkey.member.entity.MemberRole;
 import com.ovengers.slotkey.space.dto.request.SpaceCreateRequest;
 import com.ovengers.slotkey.space.dto.response.SpaceDetailResponse;
 import com.ovengers.slotkey.space.entity.SpaceStatus;
 import com.ovengers.slotkey.space.service.AdminSpaceService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +18,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -23,12 +29,15 @@ import java.time.LocalTime;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
 class AdminSpaceControllerTest {
+
+        private static final AuthPrincipal ADMIN_PRINCIPAL = new AuthPrincipal(1L, "admin@test.com", MemberRole.ADMIN);
 
         private MockMvc mockMvc;
 
@@ -46,8 +55,18 @@ class AdminSpaceControllerTest {
                 objectMapper.registerModule(new JavaTimeModule());
 
                 mockMvc = MockMvcBuilders.standaloneSetup(adminSpaceController)
+                                .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                                 .setControllerAdvice(new GlobalExceptionHandler())
                                 .build();
+
+                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                                ADMIN_PRINCIPAL, null, ADMIN_PRINCIPAL.getAuthorities());
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        @AfterEach
+        void tearDown() {
+                SecurityContextHolder.clearContext();
         }
 
         @Test
@@ -80,8 +99,7 @@ class AdminSpaceControllerTest {
                 given(adminSpaceService.createSpace(any(SpaceCreateRequest.class), eq(1L))).willReturn(response);
 
                 // when & then
-                mockMvc.perform(post("/api/admin/spaces")
-                                .header("X-Actor-Member-Id", 1L)
+                mockMvc.perform(post("/api/v1/admin/spaces")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isCreated())
@@ -89,6 +107,8 @@ class AdminSpaceControllerTest {
                                 .andExpect(jsonPath("$.code").value("OK"))
                                 .andExpect(jsonPath("$.data.id").value(1L))
                                 .andExpect(jsonPath("$.data.name").value("회의실 1"));
+
+                verify(adminSpaceService).createSpace(any(SpaceCreateRequest.class), eq(ADMIN_PRINCIPAL.memberId()));
         }
 
         @Test
@@ -105,7 +125,7 @@ class AdminSpaceControllerTest {
                                 LocalTime.of(9, 0),
                                 LocalTime.of(18, 0));
 
-                mockMvc.perform(post("/api/admin/spaces")
+                mockMvc.perform(post("/api/v1/admin/spaces")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(invalidRequest)))
                                 .andExpect(status().isBadRequest())
