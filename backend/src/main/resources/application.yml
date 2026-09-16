@@ -19,3 +19,7 @@ custom:
   jwt:
     secret-key: ${JWT_SECRET_KEY}
     expire-millis: 900000
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
