@@ -1,0 +1,14 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: slotkey
+  # 1단계 배포(hello world) 임시 설정 — DB 연동 전이라 JPA/DataSource/Flyway 자동 구성을 꺼둔다.
+  # 2단계(실제 기능 연동)에서 datasource 설정을 채우면서 이 exclude 목록을 제거해야 한다.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
