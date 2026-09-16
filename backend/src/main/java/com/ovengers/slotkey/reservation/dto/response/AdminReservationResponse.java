@@ -16,16 +16,16 @@ public record AdminReservationResponse(
         LocalDateTime startTime,
         LocalDateTime endTime,
         ReservationStatus status,
-        Long totalAmount,
+        Integer totalAmount,
         LocalDateTime createdAt
 ) {
-    public static AdminReservationResponse from(Reservation reservation) {
+    public static AdminReservationResponse from(Reservation reservation, String memberEmail, String spaceName) {
         return new AdminReservationResponse(
                 reservation.getId(),
                 reservation.getMemberId(),
-                reservation.getMember().getEmail(),
+                memberEmail,
                 reservation.getSpaceId(),
-                reservation.getSpace().getName(),
+                spaceName,
                 reservation.getStartTime(),
                 reservation.getEndTime(),
                 reservation.getStatus(),

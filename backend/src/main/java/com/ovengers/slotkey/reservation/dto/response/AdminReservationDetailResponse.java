@@ -17,8 +17,8 @@ public record AdminReservationDetailResponse(
     LocalDateTime startTime,
     LocalDateTime endTime,
     ReservationStatus status,
-    Long totalAmount,
-    Long pricePerSlotSnapshot,
+    Integer totalAmount,
+    Integer pricePerSlotSnapshot,
     LocalDateTime createdAt,
     LocalDateTime cancelledAt,
     LocalDateTime checkedInAt,
@@ -28,15 +28,17 @@ public record AdminReservationDetailResponse(
 ) {
     public static AdminReservationDetailResponse from(
         Reservation reservation,
+        String memberEmail,
+        String spaceName,
         List<ReservationStatusHistoryResponse> statusHistory,
         List<DoorAccessLogResponse> accessLogs
     ) {
         return new AdminReservationDetailResponse(
             reservation.getId(),
             reservation.getMemberId(),
-            reservation.getMember().getEmail(),
+            memberEmail,
             reservation.getSpaceId(),
-            reservation.getSpace().getName(),
+            spaceName,
             reservation.getStartTime(),
             reservation.getEndTime(),
             reservation.getStatus(),

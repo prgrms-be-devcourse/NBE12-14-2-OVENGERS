@@ -1,17 +1,23 @@
 package com.ovengers.slotkey.reservation.service;
 
-import com.ovengers.slotkey.admin.entity.AuditLog;
-import com.ovengers.slotkey.admin.repository.AuditLogRepository;
+import com.ovengers.slotkey.audit.entity.AuditAction;
+import com.ovengers.slotkey.audit.entity.AuditTargetType;
+import com.ovengers.slotkey.audit.service.AuditLogService;
+import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
-import com.ovengers.slotkey.global.error.SlotKeyException;
+import com.ovengers.slotkey.member.entity.Member;
+import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.reservation.dto.response.AdminReservationDetailResponse;
 import com.ovengers.slotkey.reservation.dto.response.AdminReservationResponse;
 import com.ovengers.slotkey.reservation.dto.response.DoorAccessLogResponse;
 import com.ovengers.slotkey.reservation.dto.response.ReservationStatusHistoryResponse;
 import com.ovengers.slotkey.reservation.entity.Reservation;
+import com.ovengers.slotkey.reservation.entity.ReservationStatus;
 import com.ovengers.slotkey.reservation.entity.ReservationStatusHistory;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationStatusHistoryRepository;
+import com.ovengers.slotkey.space.entity.Space;
+import com.ovengers.slotkey.space.repository.SpaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,7 +38,9 @@ import java.util.List;
 public class AdminReservationService {
     private final ReservationRepository reservationRepository;
     private final ReservationStatusHistoryRepository statusHistoryRepository;
-    private final AuditLogRepository auditLogRepository;
+    private final MemberRepository memberRepository;
+    private final SpaceRepository spaceRepository;
+    private final AuditLogService auditLogService;
 
     /**
      * 전체 예약 조회 (페이지네이션).
@@ -40,7 +48,11 @@ public class AdminReservationService {
     @Transactional(readOnly = true)
     public Page<AdminReservationResponse> findAllReservations(Pageable pageable) {
         return reservationRepository.findAll(pageable)
-                .map(AdminReservationResponse::from);
+                .map(reservation -> AdminReservationResponse.from(
+                        reservation,
+                        findMemberEmail(reservation.getMemberId()),
+                        findSpaceName(reservation.getSpaceId())
+                ));
     }
 
     /**
@@ -50,9 +62,10 @@ public class AdminReservationService {
     @Transactional(readOnly = true)
     public AdminReservationDetailResponse getReservationDetail(Long reservationId) {
         Reservation reservation = reservationRepository.findById(reservationId)
-                .orElseThrow(() -> new SlotKeyException(ErrorCode.RESERVATION_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
 
-        List<ReservationStatusHistory> statusHistories = statusHistoryRepository.findByReservationId(reservationId);
+        List<ReservationStatusHistory> statusHistories =
+                statusHistoryRepository.findAllByReservationIdOrderByChangedAtAsc(reservationId);
         List<ReservationStatusHistoryResponse> historyResponses = statusHistories.stream()
                 .map(ReservationStatusHistoryResponse::from)
                 .toList();
@@ -60,7 +73,13 @@ public class AdminReservationService {
         // TODO(박창현님): access 도메인에서 DoorAccessLog 조회로 대체
         List<DoorAccessLogResponse> accessLogs = List.of();
 
-        return AdminReservationDetailResponse.from(reservation, historyResponses, accessLogs);
+        return AdminReservationDetailResponse.from(
+                reservation,
+                findMemberEmail(reservation.getMemberId()),
+                findSpaceName(reservation.getSpaceId()),
+                historyResponses,
+                accessLogs
+        );
     }
 
     /**
@@ -71,21 +90,26 @@ public class AdminReservationService {
     @Transactional
     public AdminReservationResponse forceCancel(Long reservationId, String reason, Long adminMemberId) {
         Reservation reservation = reservationRepository.findById(reservationId)
-                .orElseThrow(() -> new SlotKeyException(ErrorCode.RESERVATION_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
 
         // 이미 종료된 상태는 취소할 수 없음
         if (reservation.isTerminalState()) {
-            throw new SlotKeyException(ErrorCode.RESERVATION_STATE_CONFLICT);
+            throw new BusinessException(ErrorCode.RESERVATION_STATE_CONFLICT);
         }
+
+        ReservationStatus previousStatus = reservation.getStatus();
 
         // 상태 전이
         reservation.cancelByAdmin();
 
         // 상태 이력 저장
         ReservationStatusHistory history = ReservationStatusHistory.of(
-                reservation,
+                reservation.getId(),
+                adminMemberId,
+                previousStatus,
                 reservation.getStatus(),
-                adminMemberId
+                reason,
+                LocalDateTime.now()
         );
         statusHistoryRepository.save(history);
 
@@ -95,9 +119,32 @@ public class AdminReservationService {
         // TODO(박창현님): 활성 출입 토큰 revoke
 
         // 감사 로그 기록
-        AuditLog auditLog = AuditLog.ofForceCancel(adminMemberId, reservationId, reason);
-        auditLogRepository.save(auditLog);
+        auditLogService.log(
+                adminMemberId,
+                AuditAction.FORCE_CANCEL_RESERVATION,
+                AuditTargetType.RESERVATION,
+                reservationId,
+                reason,
+                previousStatus,
+                reservation.getStatus()
+        );
 
-        return AdminReservationResponse.from(reservation);
+        return AdminReservationResponse.from(
+                reservation,
+                findMemberEmail(reservation.getMemberId()),
+                findSpaceName(reservation.getSpaceId())
+        );
+    }
+
+    private String findMemberEmail(Long memberId) {
+        return memberRepository.findById(memberId)
+                .map(Member::getEmail)
+                .orElse(null);
+    }
+
+    private String findSpaceName(Long spaceId) {
+        return spaceRepository.findById(spaceId)
+                .map(Space::getName)
+                .orElse(null);
     }
 }

@@ -1,5 +1,7 @@
 package com.ovengers.slotkey.reservation.dto.response;
 
+import com.ovengers.slotkey.access.entity.AccessDenyReason;
+import com.ovengers.slotkey.access.entity.AccessResult;
 import com.ovengers.slotkey.access.entity.DoorAccessLog;
 import java.time.LocalDateTime;
 
@@ -9,15 +11,15 @@ import java.time.LocalDateTime;
 public record DoorAccessLogResponse(
     Long accessLogId,
     LocalDateTime attemptedAt,
-    Boolean allowed,
-    String reason
+    AccessResult result,
+    AccessDenyReason reasonCode
 ) {
     public static DoorAccessLogResponse from(DoorAccessLog log) {
         return new DoorAccessLogResponse(
             log.getId(),
             log.getAttemptedAt(),
-            log.getAllowed(),
-            log.getReason()
+            log.getResult(),
+            log.getReasonCode()
         );
     }
 }
