@@ -16,6 +16,9 @@ java {
 repositories {
     mavenCentral()
 }
+ext {
+    set('testcontainers.version', "1.21.4")
+}
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
