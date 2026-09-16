@@ -34,6 +34,59 @@ public class CreditGrantService {
         validateAmount(amount);
 
         // 회원 잔액 증가
+        increaseBalance(memberId, amount);
+
+        // 증가된 잔액을 가진 회원 조회
+        Member member = findMember(memberId);
+
+        // 회원가입 크레딧 지급 내역 저장
+        saveGrantTransaction(
+                member,
+                amount,
+                CreditTransactionType.SIGNUP_GRANT,
+                null
+        );
+
+        // 지급 후 잔액 반환
+        return member.getBalance();
+    }
+
+    // 관리자 크레딧 지급
+    @Transactional
+    public int grantAdminCredit(
+            Long memberId,
+            int amount,
+            String reason
+    ) {
+        // 지급 금액 검증
+        validateAmount(amount);
+
+        // 관리자 지급 사유 검증
+        validateReason(reason);
+
+        // 회원 잔액 증가
+        increaseBalance(memberId, amount);
+
+        // 증가된 잔액을 가진 회원 조회
+        Member member = findMember(memberId);
+
+        // 관리자 크레딧 지급 내역 저장
+        saveGrantTransaction(
+                member,
+                amount,
+                CreditTransactionType.ADMIN_GRANT,
+                reason
+        );
+
+        // 지급 후 잔액 반환
+        return member.getBalance();
+    }
+
+    // 회원 잔액 증가
+    private void increaseBalance(
+            Long memberId,
+            int amount
+    ) {
         int updatedRows =
                 creditBalanceRepository.increase(memberId, amount);
 
@@ -43,29 +96,34 @@ public class CreditGrantService {
                     ErrorCode.MEMBER_NOT_FOUND
             );
         }
+    }
 
-        // 크레딧 지급 후 회원 정보 조회
-        Member member = memberRepository.findById(memberId)
+    // ID로 회원 조회
+    private Member findMember(Long memberId) {
+        return memberRepository.findById(memberId)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.MEMBER_NOT_FOUND
                 ));
+    }
 
-        // 회원가입 크레딧 지급 내역 생성
+    // 크레딧 지급 거래 내역 저장
+    private void saveGrantTransaction(
+            Member member,
+            int amount,
+            CreditTransactionType type,
+            String reason
+    ) {
         CreditTransaction transaction = new CreditTransaction(
                 member,
                 amount,
-                CreditTransactionType.SIGNUP_GRANT,
+                type,
                 null,
                 member.getBalance(),
-                null,
+                reason,
                 LocalDateTime.now(clock)
         );
 
-        // 크레딧 거래 내역 저장
         creditTransactionRepository.save(transaction);
-
-        //  지급 후 잔액 반환
-        return member.getBalance();
     }
 
     // 지급 금액 검증
@@ -74,6 +132,23 @@ public class CreditGrantService {
             throw new BusinessException(
                     ErrorCode.VALIDATION_FAILED,
                     "크레딧 금액은 0보다 커야 합니다."
+            );
+        }
+    }
+
+    // 관리자 지급 사유 검증
+    private void validateReason(String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "관리자 크레딧 지급 사유는 필수입니다."
+            );
+        }
+
+        if (reason.length() > 500) {
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "관리자 크레딧 지급 사유는 500자 이하여야 합니다."
             );
         }
     }
