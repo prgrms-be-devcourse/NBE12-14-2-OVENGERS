@@ -18,7 +18,7 @@ spring:
 custom:
   jwt:
     secret-key: ${JWT_SECRET_KEY}
-    expire-millis: 900000
+    expire-millis: 300000
 
 app:
   cors:
