@@ -47,4 +47,12 @@ public class Member {
         this.status = MemberStatus.ACTIVE;
         this.createdAt = LocalDateTime.now();
     }
+
+    public void decreaseBalance(int amount) {
+        this.balance -= amount;
+    }
+
+    public void increaseBalance(int amount) {
+        this.balance += amount;
+    }
 }

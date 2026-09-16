@@ -32,7 +32,7 @@ public class CreditTransaction {
 
     // 크레딧 거래 유형
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 30)
     private CreditTransactionType type;
 
     // 크레딧 거래와 관련된 예약
@@ -45,6 +45,7 @@ public class CreditTransaction {
     private int balanceAfter;
 
     // 크레딧 거래 사유
+    @Column(length = 500)
     private String reason;
 
     // 크레딧 거래가 발생한 시각

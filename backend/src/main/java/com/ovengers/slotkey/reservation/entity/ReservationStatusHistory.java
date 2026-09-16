@@ -1,60 +1,64 @@
 package com.ovengers.slotkey.reservation.entity;
 
-import com.ovengers.slotkey.member.entity.Member;
 import jakarta.persistence.*;
-import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * 예약 상태 전이 이력. 성공한 전이만 기록한다 — 조건부 UPDATE의 영향 행이 1일 때만
+ * 같은 트랜잭션에서 INSERT한다(§3-1).
+ */
 @Entity
 @Table(name = "reservation_status_history")
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Builder
 @Getter
+@NoArgsConstructor
+@AllArgsConstructor
 public class ReservationStatusHistory {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;              // PK
+    private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "reservation_id", nullable = false)
-    private Reservation reservation;         // 상태가 변경된 예약
+    @Column(name = "reservation_id", nullable = false)
+    private Long reservationId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "changed_by_member_id")
-    private Member changedByMember;          // 상태를 변경한 회원
-
+    @Column(name = "changed_by_member_id")
+    private Long changedByMemberId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "from_status")
-    private ReservationStatus fromStatus;     // 변경 전 상태
-
+    @Column(name = "from_status", length = 20)
+    private ReservationStatus fromStatus;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "to_status", nullable = false)
-    private ReservationStatus toStatus;        // 변경 후 상태
+    @Column(name = "to_status", nullable = false, length = 20)
+    private ReservationStatus toStatus;
 
-    private String reason;                     // 상태 변경 사유
+    @Column(length = 255)
+    private String reason;
 
     @Column(name = "changed_at", nullable = false)
-    private LocalDateTime changedAt;           // 상태 변경 시각
+    private LocalDateTime changedAt;
 
-    // 예약 상태 변경 이력 생성
-    public ReservationStatusHistory(
-            Reservation reservation,
-            Member changedByMember,
+    public static ReservationStatusHistory of(
+            Long reservationId,
+            Long changedByMemberId,
             ReservationStatus fromStatus,
             ReservationStatus toStatus,
             String reason,
             LocalDateTime changedAt
-    )  {
-        this.reservation = reservation;
-        this.changedByMember = changedByMember;
-        this.fromStatus = fromStatus;
-        this.toStatus = toStatus;
-        this.reason = reason;
-        this.changedAt = changedAt;
+    ) {
+        return ReservationStatusHistory.builder()
+                .reservationId(reservationId)
+                .changedByMemberId(changedByMemberId)
+                .fromStatus(fromStatus)
+                .toStatus(toStatus)
+                .reason(reason)
+                .changedAt(changedAt)
+                .build();
     }
 }
