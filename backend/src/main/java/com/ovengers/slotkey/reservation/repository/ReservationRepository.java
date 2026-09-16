@@ -1,4 +1,6 @@
 package com.ovengers.slotkey.reservation.repository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import com.ovengers.slotkey.reservation.entity.Reservation;
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
@@ -84,4 +86,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("confirmed") ReservationStatus confirmed,
             @Param("inUse") ReservationStatus inUse
     );
+
+    // ===== 조회 (ReservationQueryService) =====
+    Page<Reservation> findAllByMemberId(Long memberId, Pageable pageable);
+    Page<Reservation> findAllByMemberIdAndStatus(Long memberId, ReservationStatus status, Pageable pageable);
 }
