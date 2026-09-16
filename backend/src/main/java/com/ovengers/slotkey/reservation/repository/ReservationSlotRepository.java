@@ -26,7 +26,7 @@ public interface ReservationSlotRepository extends JpaRepository<ReservationSlot
             @Param("slotStarts") List<LocalDateTime> slotStarts);
 
     /**
-     * 지금 막(혹은 이전에) EXPIRED로 전이된 예약들의 슬롯을 정리한다(§2-3).
+     * 지금 막(혹은 이전에) EXPIRED로 전이된 예약들의 슬롯을 정리한다(core-domain-decisions 2-3).
      * 서브쿼리가 삭제 시점에 상태를 다시 확인하므로, ids 중 실제로는 아직 HELD/CONFIRMED인
      * 예약(경합에서 만료 전이에 실패한 예약)의 슬롯은 건드리지 않는다.
      */

@@ -6,7 +6,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 
 /**
- * 가격 스냅샷 계산(§5-1). price_per_slot_snapshot × 점유 슬롯 수 = total_amount.
+ * 가격 스냅샷 계산(core-domain-decisions 5-1). price_per_slot_snapshot × 점유 슬롯 수 = total_amount.
  * 여기서 계산한 값을 그대로 저장하며, 이후 공간 가격이 바뀌어도 기존 예약 금액은 불변이다.
  */
 @Service

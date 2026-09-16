@@ -64,7 +64,7 @@ public class Reservation {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    /** HOLD 생성. 결제는 이 시점에 일어나지 않는다(§2-1). */
+    /** HOLD 생성. 결제는 이 시점에 일어나지 않는다(core-domain-decisions 2-1). */
     public static Reservation createHeld(
             Long memberId,
             Long spaceId,
@@ -121,7 +121,7 @@ public class Reservation {
     }
 
     /** IN_USE -> COMPLETED. 명시적 체크아웃 또는 종료 시각 경과(자동 퇴실)에서 호출한다.
-     *  자동 퇴실 시 checkedOutAt에는 배치 실행 시각이 아니라 end_time을 넣는다(§3-4). */
+     *  자동 퇴실 시 checkedOutAt에는 배치 실행 시각이 아니라 end_time을 넣는다(core-domain-decisions 3-4). */
     public void checkOut(LocalDateTime checkedOutAt) {
         requireStatus(ReservationStatus.IN_USE);
         this.status = ReservationStatus.COMPLETED;

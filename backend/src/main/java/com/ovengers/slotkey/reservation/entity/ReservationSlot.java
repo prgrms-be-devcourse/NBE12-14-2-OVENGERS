@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 
 /**
  * 30분 단위 슬롯 점유 행. 살아있는 점유일 때만 존재하며,
- * UNIQUE(space_id, slot_start)가 동시 예약 차단의 유일한 진실이다(§4-1, §4-2).
+ * UNIQUE(space_id, slot_start)가 동시 예약 차단의 유일한 진실이다(core-domain-decisions 4-1, core-domain-decisions 4-2).
  * 취소/노쇼/만료 시 하드 삭제한다.
  */
 @Entity

@@ -6,7 +6,7 @@ package com.ovengers.slotkey.credit.service;
  * (space 도메인의 OccupiedSlotProvider와 같은 포트-어댑터 패턴 — 도메인 완성 순서와
  * 무관하게 reservation이 독립적으로 빌드/테스트되도록 하기 위함).
  *
- * 차감은 반드시 조건부 UPDATE(WHERE balance >= amount)로 구현해야 한다(§1-5).
+ * 차감은 반드시 조건부 UPDATE(WHERE balance >= amount)로 구현해야 한다(core-domain-decisions 1-5).
  * dirty checking으로 잔액을 갱신하면 갱신 유실(lost update)이 발생한다.
  */
 public interface CreditService {

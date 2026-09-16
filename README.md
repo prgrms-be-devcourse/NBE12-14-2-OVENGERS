@@ -464,19 +464,25 @@ npm run dev
 main
 ├── dev
 │   ├── feat/{description}
+│   ├── refactor/{description}
 │   ├── test/{description}
 │   └── docs/{description}
+│   ├── perf/{description}
+│   ├── chore/{description}
 └── hotfix/{description}
 ```
 
-| 브랜치 | 분기 기준 | 병합 대상 | 용도 |
-| --- | --- | --- | --- |
-| `main` | — | — | 배포 가능한 코드 |
-| `dev` | `main` | `main` | 다음 배포를 위한 통합 |
-| `feat/*` | `dev` | `dev` | 새로운 기능 개발 |
-| `test/*` | `dev` | `dev` | 독립적인 테스트 추가·개선 |
-| `docs/*` | `dev` | `dev` | README 및 개발 문서 변경 |
-| `hotfix/*` | `main` | `main`, `dev` | 배포 환경의 긴급 장애 수정 |
+| 브랜치          | 분기 기준 | 병합 대상 | 용도                |
+|--------------| --- | --- |-------------------|
+| `main`       | — | — | 배포 가능한 코드         |
+| `dev`        | `main` | `main` | 다음 배포를 위한 통합      |
+| `feat/*`     | `dev` | `dev` | 새로운 기능 개발         |
+| `refactor/*` | `dev` | `dev` | 리팩토링              |
+| `test/*`     | `dev` | `dev` | 독립적인 테스트 추가·개선    |
+| `docs/*`     | `dev` | `dev` | README 및 개발 문서 변경 |
+| `perf/*`     | `dev` | `dev` | 성능 향상             |
+| `chore/*`    | `dev` | `dev` | 사소한 작업            |
+| `hotfix/*`   | `main` | `main`, `dev` | 배포 환경의 긴급 장애 수정   |
 
 ### 커밋 컨벤션
 

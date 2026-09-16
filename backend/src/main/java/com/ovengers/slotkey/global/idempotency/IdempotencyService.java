@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
- * Idempotency-Key 재생 서비스(api-명세서.md 1-7, core-domain-decisions.md §2-1).
+ * Idempotency-Key 재생 서비스(api-명세서.md 1-7, core-domain-decisions.md core-domain-decisions 2-1).
  * "돈이 움직이는 지점"인 결제 확인(pay) 등에서 사용한다.
  *
  * 동시에 같은 키로 두 요청이 동시에 들어와 저장 레코드를 둘 다 못 찾는 극히 좁은
