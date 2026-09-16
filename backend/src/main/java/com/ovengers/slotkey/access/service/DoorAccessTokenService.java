@@ -1,4 +1,221 @@
 package com.ovengers.slotkey.access.service;
 
+import com.ovengers.slotkey.access.authorization.DoorAccessAuthorizationService;
+import com.ovengers.slotkey.access.dto.response.DoorAccessTokenResponse;
+import com.ovengers.slotkey.access.entity.DoorAccessToken;
+import com.ovengers.slotkey.access.policy.DoorAccessTimePolicy;
+import com.ovengers.slotkey.access.repository.DoorAccessTokenRepository;
+import com.ovengers.slotkey.access.support.AccessTokenGenerator;
+import com.ovengers.slotkey.access.support.AccessTokenHasher;
+import com.ovengers.slotkey.global.error.BusinessException;
+import com.ovengers.slotkey.global.error.ErrorCode;
+import com.ovengers.slotkey.reservation.entity.Reservation;
+import com.ovengers.slotkey.reservation.entity.ReservationStatus;
+import com.ovengers.slotkey.reservation.repository.ReservationRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class DoorAccessTokenService {
+
+    private final DoorAccessTokenRepository doorAccessTokenRepository;
+    private final ReservationRepository reservationRepository;
+    private final DoorAccessAuthorizationService doorAccessAuthorizationService;
+    private final DoorAccessTimePolicy doorAccessTimePolicy;
+    private final AccessTokenGenerator accessTokenGenerator;
+    private final AccessTokenHasher accessTokenHasher;
+    private final Clock clock;
+
+    // 새로운 출입 토큰 생성
+    @Transactional
+    public DoorAccessToken create(
+            Reservation reservation,
+            String tokenHash,
+            LocalDateTime issuedAt
+    ) {
+        DoorAccessToken token = new DoorAccessToken(
+                reservation,
+                tokenHash,
+                issuedAt
+        );
+
+        return doorAccessTokenRepository.save(token);
+    }
+
+    // 예약에 사용할 출입 토큰 발급
+    @Transactional
+    public DoorAccessTokenResponse issue(
+            Long loginMemberId,
+            Long reservationId
+    ) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.RESERVATION_NOT_FOUND
+                ));
+
+        // 예약 소유자 확인
+        doorAccessAuthorizationService.validateOwner(
+                loginMemberId,
+                reservation.getMemberId()
+        );
+
+        // 확정된 예약인지 확인
+        if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
+            throw new BusinessException(
+                    ErrorCode.RESERVATION_STATE_CONFLICT
+            );
+        }
+
+        LocalDateTime issuedAt =
+                LocalDateTime.now(clock);
+
+        // 예약 종료 전인지 확인
+        if (!doorAccessTimePolicy.canIssueToken(
+                issuedAt,
+                reservation.getEndTime()
+        )) {
+            throw new BusinessException(
+                    ErrorCode.RESERVATION_STATE_CONFLICT
+            );
+        }
+
+        // 기존 활성 토큰이 있으면 먼저 폐기
+        doorAccessTokenRepository.findByReservationIdAndRevokedAtIsNull(reservationId)
+                .ifPresent(activeToken ->
+                        activeToken.revoke(
+                                issuedAt,
+                                "REISSUED"
+                        )
+                );
+
+        // 새로운 원문 토큰 생성
+        String rawToken =
+                accessTokenGenerator.generate();
+
+        // 원문 토큰을 SHA-256으로 해시
+        String tokenHash =
+                accessTokenHasher.hash(rawToken);
+
+        // DB에는 해시된 토큰 저장
+        create(
+                reservation,
+                tokenHash,
+                issuedAt
+        );
+
+        // 사용자에게는 원문 토큰 반환
+        return DoorAccessTokenResponse.of(
+                reservationId,
+                rawToken,
+                issuedAt
+        );
+    }
+
+    // 출입 토큰 단건 조회
+    public DoorAccessToken findById(Long tokenId) {
+        return doorAccessTokenRepository.findById(tokenId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.ACCESS_TOKEN_NOT_FOUND
+                ));
+    }
+
+    // 토큰 해시로 단건 조회
+    public DoorAccessToken findByTokenHash(String tokenHash) {
+        return doorAccessTokenRepository.findByTokenHash(tokenHash)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.ACCESS_TOKEN_NOT_FOUND
+                ));
+    }
+
+    // 원문 토큰으로 단건 조회
+    public DoorAccessToken findByRawToken(String rawToken) {
+        String tokenHash =
+                accessTokenHasher.hash(rawToken);
+
+        return findByTokenHash(tokenHash);
+    }
+
+    // 특정 예약의 활성 토큰 조회
+    public DoorAccessToken findActiveByReservationId(Long reservationId) {
+        return doorAccessTokenRepository.findByReservationIdAndRevokedAtIsNull(reservationId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.ACTIVE_ACCESS_TOKEN_NOT_FOUND
+                ));
+    }
+
+    // 출입 토큰 전체 조회
+    public List<DoorAccessToken> findAll() {
+        return doorAccessTokenRepository.findAll();
+    }
+
+    // 출입 토큰 ID로 폐기
+    @Transactional
+    public DoorAccessToken revoke(
+            Long tokenId,
+            LocalDateTime revokedAt,
+            String revokeReason
+    ) {
+        DoorAccessToken token =
+                findById(tokenId);
+
+        token.revoke(
+                revokedAt,
+                revokeReason
+        );
+
+        return token;
+    }
+
+    // 예약 소유자가 활성 출입 토큰 폐기
+    @Transactional
+    public void revokeByReservationId(
+            Long loginMemberId,
+            Long reservationId,
+            LocalDateTime revokedAt,
+            String revokeReason
+    ) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.RESERVATION_NOT_FOUND
+                ));
+
+        doorAccessAuthorizationService.validateOwner(
+                loginMemberId,
+                reservation.getMemberId()
+        );
+
+        DoorAccessToken token =
+                findActiveByReservationId(reservationId);
+
+        token.revoke(
+                revokedAt,
+                revokeReason
+        );
+    }
+
+    // 예약 상태 변경에 따른 활성 출입 토큰 폐기
+    @Transactional
+    public void revokeByReservation(
+            Long reservationId,
+            LocalDateTime revokedAt,
+            String revokeReason
+    ) {
+        doorAccessTokenRepository
+                .findByReservationIdAndRevokedAtIsNull(
+                        reservationId
+                )
+                .ifPresent(token ->
+                        token.revoke(
+                                revokedAt,
+                                revokeReason
+                        )
+                );
+    }
 }
