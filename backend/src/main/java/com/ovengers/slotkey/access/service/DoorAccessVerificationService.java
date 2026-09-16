@@ -37,10 +37,17 @@ public class DoorAccessVerificationService {
     // 제출된 출입 토큰 검증
     @Transactional
     public DoorAccessVerifyResponse verify(
+            Long loginMemberId,
             DoorAccessVerifyRequest request
     ) {
         LocalDateTime attemptedAt =
                 LocalDateTime.now(clock);
+
+        // 실제 출입을 시도한 로그인 회원 조회
+        Member actorMember = memberRepository.findById(loginMemberId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.AUTHENTICATION_REQUIRED
+                ));
 
         Space requestedSpace = spaceRepository.findById(request.getSpaceId())
                 .orElse(null);
@@ -59,7 +66,7 @@ public class DoorAccessVerificationService {
             }
 
             return deny(
-                    null,
+                    actorMember,
                     null,
                     requestedSpace,
                     AccessDenyReason.TOKEN_NOT_FOUND,
@@ -70,9 +77,19 @@ public class DoorAccessVerificationService {
         Reservation reservation =
                 accessToken.getReservation();
 
-        Member actorMember = memberRepository
-                .findById(reservation.getMemberId())
-                .orElse(null);
+        // 로그인 회원과 출입 토큰의 예약자가 같은지 확인
+        if (!Objects.equals(
+                loginMemberId,
+                reservation.getMemberId()
+        )) {
+            return deny(
+                    actorMember,
+                    reservation,
+                    requestedSpace,
+                    AccessDenyReason.MEMBER_MISMATCH,
+                    attemptedAt
+            );
+        }
 
         // 폐기된 토큰이면 출입 거절
         if (accessToken.isRevoked()) {
