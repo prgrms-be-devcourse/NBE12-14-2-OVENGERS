@@ -18,7 +18,7 @@ import java.util.List;
 /**
  * 연장(§7). 기존 슬롯은 건드리지 않고 뒤에 슬롯을 더 붙이는 방식이라, 실패해도
  * 원 예약은 무손상이다. 남의 점유가 HELD인지 CONFIRMED인지 구분하지 않는다 — 슬롯 행이
- * 존재하면 그냥 점유다(§7-1). 유일한 예외인 만료된 HELD 정리는 secureSlots가 처리한다.
+ * 존재하면 그냥 점유다(core-domain-decisions 7-1). 유일한 예외인 만료된 HELD 정리는 secureSlots가 처리한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -59,7 +59,7 @@ public class ReservationExtendService {
         reservationSlotService.secureSlots(reservationId, reservation.getSpaceId(), additionalSlotStarts);
 
         // 금액은 반드시 원 예약의 price_per_slot_snapshot 기준이다 — 같은 이용 건 후반부만
-        // 비싸지면 사용자가 납득하지 못한다(§7-2).
+        // 비싸지면 사용자가 납득하지 못한다(core-domain-decisions 7-2).
         int additionalAmount = pricingService.calculateTotalAmount(
                 reservation.getPricePerSlotSnapshot(), additionalSlotStarts.size());
         int newTotalAmount = reservation.getTotalAmount() + additionalAmount;

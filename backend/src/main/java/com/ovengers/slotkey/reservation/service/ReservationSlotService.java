@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 슬롯 점유의 유일한 진실(§4-1, §4-2). 동시 예약 차단은 UNIQUE(space_id, slot_start)가
+ * 슬롯 점유의 유일한 진실(core-domain-decisions 4-1, core-domain-decisions 4-2). 동시 예약 차단은 UNIQUE(space_id, slot_start)가
  * 담당하고, 이 서비스는 그 제약 위반을 도메인 예외 하나로 모으는 역할만 한다.
  */
 @Service
@@ -40,7 +40,7 @@ public class ReservationSlotService {
 
     /**
      * 해당 슬롯들을 reservationId 앞으로 확보한다. 만료된 HELD가 있다면 먼저 정리하고
-     * (§2-3), 그래도 살아있는 점유가 있으면(UNIQUE 위반) 409로 변환한다(§4-2).
+     * (core-domain-decisions 2-3), 그래도 살아있는 점유가 있으면(UNIQUE 위반) 409로 변환한다(core-domain-decisions 4-2).
      * 사전 가용성 조회는 하지 않는다 — INSERT의 성패가 유일한 판정이다.
      */
     @Transactional

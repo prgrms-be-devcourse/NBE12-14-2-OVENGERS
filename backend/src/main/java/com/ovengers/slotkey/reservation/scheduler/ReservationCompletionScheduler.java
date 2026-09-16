@@ -13,12 +13,12 @@ import java.util.List;
 import java.util.function.Predicate;
 
 /**
- * 시간 경과로 일어나는 예약 상태 전이 3종(§3-4).
+ * 시간 경과로 일어나는 예약 상태 전이 3종(core-domain-decisions 3-4).
  * - HELD -> EXPIRED (홀드 만료)
  * - CONFIRMED -> NO_SHOW (start + 15분까지 미체크인)
  * - IN_USE -> COMPLETED (종료 시각 경과, 자동 퇴실)
  *
- * "배치는 청소부지 심판이 아니다"(§2-3): 슬롯 정합성은 예약 생성 시점 정리가 보장하고,
+ * "배치는 청소부지 심판이 아니다"(core-domain-decisions 2-3): 슬롯 정합성은 예약 생성 시점 정리가 보장하고,
  * 이 배치는 늦게 돌아도 틀린 결과를 만들지 않도록 건별 조건부 UPDATE로만 전이한다.
  * 한 건이 실패해도 나머지는 계속 처리한다(건별 트랜잭션, ReservationBatchProcessor).
  *

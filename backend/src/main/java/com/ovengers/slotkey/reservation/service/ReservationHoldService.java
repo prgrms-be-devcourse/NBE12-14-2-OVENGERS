@@ -21,7 +21,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 예약 1단계: HOLD 생성(§2-1). 회원/공간 검증 -> 가격계산 -> 슬롯확보 -> HOLD 저장까지
+ * 예약 1단계: HOLD 생성(core-domain-decisions 2-1). 회원/공간 검증 -> 가격계산 -> 슬롯확보 -> HOLD 저장까지
  * 하나의 트랜잭션이며, 결제는 이 단계에 없다(구 ReservationCreateService는 1단계 설계
  * 흔적이라 2단계 확정 이후 역할을 HOLD 생성으로 좁히며 이 이름으로 정리했다).
  *

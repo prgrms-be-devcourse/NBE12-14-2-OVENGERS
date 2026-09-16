@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * 본인 예약 조회(api-spec §5-3). 본인 예약만 조회할 수 있다 — 관리자도 이 경로로는
+ * 본인 예약 조회(api-spec 5-3). 본인 예약만 조회할 수 있다 — 관리자도 이 경로로는
  * 타인 예약을 볼 수 없다(관리자 조회는 AdminReservationService).
  */
 @Service

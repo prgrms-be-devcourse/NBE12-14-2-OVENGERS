@@ -20,7 +20,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 
 /**
- * 예약 2단계: 결제 확인(§2-1, §6-2). 돈이 움직이는 지점이라 Idempotency-Key가 여기 붙는다
+ * 예약 2단계: 결제 확인(core-domain-decisions 2-1, core-domain-decisions 6-2). 돈이 움직이는 지점이라 Idempotency-Key가 여기 붙는다
  * (구 계획의 "8. 멱등성 연동"을 이 서비스에 통합).
  *
  * 순서가 중요하다: 크레딧 차감 -> 조건부 UPDATE(HELD -> CONFIRMED). 조건부 UPDATE가

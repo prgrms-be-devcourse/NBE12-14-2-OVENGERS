@@ -54,7 +54,7 @@ public class Space {
     @Column(nullable = false, length = 20)
     private SpaceStatus status; // 신규 예약 접수 가능 여부
 
-    // 2026-09-15 추가(이태호, core-domain-decisions.md §5-2/§11): DDL(V2)에는 이미 있었으나
+    // 2026-09-15 추가(이태호, core-domain-decisions.md core-domain-decisions 5-2/§11): DDL(V2)에는 이미 있었으나
     // 엔티티 매핑이 빠져 있던 낙관적 비교용 버전. HOLD 응답에 실어 보냈다가 결제 확인(pay) 시
     // 되돌려받아 비교한다 — 가격 값이 아니라 이 값으로 비교해야 ABA 문제를 피할 수 있다.
     // int(참조형 아님)로 둔 이유: 이미 있는 Space.builder() 호출부(SpaceCreateRequest.toEntity() 등)가

@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 /**
  * HOLD 생성 / 결제 확인 / 연장 / 체크아웃 / 취소 공통 응답 형태.
  * spaceVersion은 HOLD 생성 응답에서만 의미가 있다 — 클라이언트가 결제 확인 요청 시
- * 그대로 되돌려 보내면 서버가 space.version과 비교한다(§5-2). 그 외 응답에서는 null.
+ * 그대로 되돌려 보내면 서버가 space.version과 비교한다(core-domain-decisions 5-2). 그 외 응답에서는 null.
  * refundAmount/penaltyAmount는 취소 응답에서만 의미가 있다(§9) — 그 외 응답에서는 null.
  */
 public record ReservationResponse(

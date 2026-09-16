@@ -6,7 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
-/** 예약(HOLD) 생성 요청. 결제는 이 요청에 포함되지 않는다(§2-1). */
+/** 예약(HOLD) 생성 요청. 결제는 이 요청에 포함되지 않는다(core-domain-decisions 2-1). */
 public record ReservationCreateRequest(
         @NotNull Long spaceId,
         @NotNull LocalDate date,

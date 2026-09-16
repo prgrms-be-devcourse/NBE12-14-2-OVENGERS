@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 
 /**
  * 예약 상태 전이 이력. 성공한 전이만 기록한다 — 조건부 UPDATE의 영향 행이 1일 때만
- * 같은 트랜잭션에서 INSERT한다(§3-1).
+ * 같은 트랜잭션에서 INSERT한다(core-domain-decisions 3-1).
  */
 @Entity
 @Table(name = "reservation_status_history")

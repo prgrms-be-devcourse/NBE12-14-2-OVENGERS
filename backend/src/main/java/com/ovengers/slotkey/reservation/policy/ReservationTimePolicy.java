@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 /**
- * 예약 시간 자체에 대한 검사(슬롯 가용성 검사는 여기 포함하지 않는다 — §4-2, §9).
+ * 예약 시간 자체에 대한 검사(슬롯 가용성 검사는 여기 포함하지 않는다 — core-domain-decisions 4-2, §9).
  * SlotAlignmentRule / WithinOperatingHoursRule / NotPastRule을 하나로 모은 정적 검증기.
  */
 public final class ReservationTimePolicy {
