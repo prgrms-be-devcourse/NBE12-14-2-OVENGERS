@@ -8,6 +8,5 @@ import java.util.List;
 
 @Repository
 public interface ReservationStatusHistoryRepository extends JpaRepository<ReservationStatusHistory, Long> {
-
     List<ReservationStatusHistory> findAllByReservationIdOrderByChangedAtAsc(Long reservationId);
 }
