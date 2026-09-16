@@ -8,6 +8,7 @@ CREATE TABLE member (
                         status VARCHAR(20) NOT NULL,
                         balance INT NOT NULL DEFAULT 0,
                         created_at DATETIME(6) NOT NULL,
+                        updated_at DATETIME(6) NOT NULL,
 
                         PRIMARY KEY (id),
                         UNIQUE (email)

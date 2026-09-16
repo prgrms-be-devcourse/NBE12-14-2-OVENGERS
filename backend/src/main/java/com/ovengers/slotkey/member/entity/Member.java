@@ -1,16 +1,15 @@
 package com.ovengers.slotkey.member.entity;
 
+import com.ovengers.slotkey.global.common.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "member")
 @Getter
 @NoArgsConstructor
-public class Member {
+public class Member extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -36,15 +35,11 @@ public class Member {
     @Column(nullable = false)
     private int balance = 0;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
     public Member(String email, String passwordHash, String nickname) {
         this.email = email;
         this.passwordHash = passwordHash;
         this.nickname = nickname;
         this.role = MemberRole.USER;
         this.status = MemberStatus.ACTIVE;
-        this.createdAt = LocalDateTime.now();
     }
 }

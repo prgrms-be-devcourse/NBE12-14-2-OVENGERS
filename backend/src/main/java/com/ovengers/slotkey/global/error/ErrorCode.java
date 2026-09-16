@@ -23,6 +23,7 @@ public enum ErrorCode {
     SPACE_INACTIVE(HttpStatus.UNPROCESSABLE_ENTITY, "SPACE_INACTIVE", "예약이 불가능한 공간입니다."),
     INVALID_PRICE_UNIT(HttpStatus.BAD_REQUEST, "INVALID_PRICE_UNIT", "요금은 100원 단위여야 합니다."),
     INVALID_OPERATING_HOURS(HttpStatus.BAD_REQUEST, "INVALID_OPERATING_HOURS", "운영 종료 시각은 시작 시각보다 늦어야 합니다."),
+
     // ── Reservation ─────────────────────────────────────
     RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "RESERVATION_NOT_FOUND", "존재하지 않는 예약입니다."),
     RESERVATION_SLOT_CONFLICT(HttpStatus.CONFLICT, "RESERVATION_SLOT_CONFLICT", "이미 예약된 시간대입니다."),
@@ -32,7 +33,13 @@ public enum ErrorCode {
     SPACE_VERSION_MISMATCH(HttpStatus.CONFLICT, "SPACE_VERSION_MISMATCH", "공간 정보가 변경되었습니다. 다시 확인해주세요."),
     INSUFFICIENT_BALANCE(HttpStatus.UNPROCESSABLE_ENTITY, "INSUFFICIENT_BALANCE", "크레딧 잔액이 부족합니다."),
     INVALID_RESERVATION_TIME(HttpStatus.BAD_REQUEST, "INVALID_RESERVATION_TIME", "예약 가능한 시간이 아닙니다."),
-    IDEMPOTENCY_KEY_REQUIRED(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key 헤더가 필요합니다.");
+    IDEMPOTENCY_KEY_REQUIRED(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key 헤더가 필요합니다."),
+
+    // ── Door Access ──────────────────────────────────────
+    ACCESS_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "ACCESS_TOKEN_NOT_FOUND", "출입 토큰을 찾을 수 없습니다."),
+    ACTIVE_ACCESS_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "ACTIVE_ACCESS_TOKEN_NOT_FOUND", "활성 출입 토큰을 찾을 수 없습니다."),
+    ACCESS_LOG_NOT_FOUND(HttpStatus.NOT_FOUND, "ACCESS_LOG_NOT_FOUND", "출입 기록을 찾을 수 없습니다."),
+    ACCESS_DENY_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "ACCESS_DENY_REASON_REQUIRED", "출입 거절 사유는 필수입니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
