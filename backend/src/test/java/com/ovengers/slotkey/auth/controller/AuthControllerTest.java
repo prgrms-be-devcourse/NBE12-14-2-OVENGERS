@@ -25,6 +25,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import org.springframework.test.web.servlet.MvcResult;
+import com.ovengers.slotkey.global.security.jwt.JwtUtil;
+import jakarta.persistence.EntityManager;
+import org.springframework.beans.factory.annotation.Value;
+
+import java.time.LocalDateTime;
+import java.util.Map;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 @SpringBootTest
@@ -43,7 +49,11 @@ public class AuthControllerTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Value("${custom.jwt.secret-key}")
+    private String secretKey;
 
+    @Autowired
+    private EntityManager entityManager;
     @Test
     @DisplayName("회원가입 성공 시 일반 회원으로 저장하고 비밀번호를 해시한다")
     void t1() throws Exception {
@@ -386,6 +396,156 @@ public class AuthControllerTest {
                 .andDo(print())
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+    }
+    @Test
+    @DisplayName("만료된 액세스 토큰으로 내 정보를 조회하면 401을 반환한다")
+    void t12() throws Exception {
+        String email = "expired-access@example.com";
+        loginForTest(email);
+
+        Member member = memberRepository.findByEmail(email)
+                .orElseThrow();
+
+        // 기다리지 않고 처음부터 만료된 토큰을 만든다.
+        String expiredToken = JwtUtil.createToken(
+                secretKey,
+                -60_000L,
+                Map.of(
+                        "id", member.getId(),
+                        "email", member.getEmail()
+                )
+        );
+
+        mvc.perform(
+                        get("/api/v1/members/me")
+                                .header("Authorization", "Bearer " + expiredToken)
+                )
+                .andDo(print())
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
+    }
+
+    @Test
+    @DisplayName("다른 키로 서명한 액세스 토큰으로 접근하면 401을 반환한다")
+    void t13() throws Exception {
+        String email = "wrong-signature@example.com";
+        loginForTest(email);
+
+        Member member = memberRepository.findByEmail(email)
+                .orElseThrow();
+
+        // 서버가 사용하는 키와 다른 테스트용 키
+        String wrongSecretKey =
+                "wrong-signing-key-for-test-only-0123456789abcdef";
+
+        assertThat(wrongSecretKey).isNotEqualTo(secretKey);
+
+        String forgedToken = JwtUtil.createToken(
+                wrongSecretKey,
+                300_000L,
+                Map.of(
+                        "id", member.getId(),
+                        "email", member.getEmail()
+                )
+        );
+
+        mvc.perform(
+                        get("/api/v1/members/me")
+                                .header("Authorization", "Bearer " + forgedToken)
+                )
+                .andDo(print())
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
+    }
+
+    @Test
+    @DisplayName("DB에 저장된 리프레시 토큰이 만료되었으면 갱신을 거절한다")
+    void t14() throws Exception {
+        String email = "expired-refresh@example.com";
+        MvcResult loginResult = loginForTest(email);
+
+        Cookie refreshCookie = loginResult.getResponse()
+                .getCookie("refreshToken");
+
+        assertThat(refreshCookie).isNotNull();
+
+        Member member = memberRepository.findByEmail(email)
+                .orElseThrow();
+
+        // 로그인하면서 저장한 토큰을 DB에 반영한다.
+        entityManager.flush();
+
+        // 이번 테스트 회원의 토큰 만료 시각을 과거로 변경한다.
+        int updatedCount = entityManager.createQuery("""
+                    update RefreshToken r
+                    set r.expiresAt = :expiresAt
+                    where r.member.id = :memberId
+                    """)
+                .setParameter("expiresAt", LocalDateTime.of(2000, 1, 1, 0, 0))
+                .setParameter("memberId", member.getId())
+                .executeUpdate();
+
+        assertThat(updatedCount).isEqualTo(1);
+
+        // 메모리에 남은 기존 엔티티 대신 변경된 DB 값을 읽도록 한다.
+        entityManager.clear();
+
+        mvc.perform(
+                        post("/api/v1/auth/refresh")
+                                .cookie(refreshCookie)
+                )
+                .andDo(print())
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"));
+    }
+
+    @Test
+    @DisplayName("로그인 후 정지된 회원은 기존 액세스 토큰으로 접근할 수 없다")
+    void t15() throws Exception {
+        String email = "suspended-member@example.com";
+        MvcResult loginResult = loginForTest(email);
+        String accessToken = extractAccessToken(loginResult);
+
+        entityManager.flush();
+
+        // 정상적으로 로그인한 회원을 이후에 정지시킨 상황
+        int updatedCount = entityManager.createQuery("""
+                    update Member m
+                    set m.status = :status
+                    where m.email = :email
+                    """)
+                .setParameter("status", MemberStatus.SUSPENDED)
+                .setParameter("email", email)
+                .executeUpdate();
+
+        assertThat(updatedCount).isEqualTo(1);
+
+        entityManager.clear();
+
+        mvc.perform(
+                        get("/api/v1/members/me")
+                                .header("Authorization", "Bearer " + accessToken)
+                )
+                .andDo(print())
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_INACTIVE"));
+    }
+
+    @Test
+    @DisplayName("일반 회원이 관리자 공간 등록 API에 접근하면 403을 반환한다")
+    void t16() throws Exception {
+        MvcResult loginResult = loginForTest("user-admin-access@example.com");
+        String accessToken = extractAccessToken(loginResult);
+
+        mvc.perform(
+                        post("/api/v1/admin/spaces")
+                                .header("Authorization", "Bearer " + accessToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}")
+                )
+                .andDo(print())
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }
 
     // 회원 저장 후 실제 로그인 API를 호출한다.
