@@ -16,6 +16,7 @@ import com.ovengers.slotkey.auth.dto.internal.LoginResult;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import com.ovengers.slotkey.global.common.response.ApiResponse;
+import org.springframework.beans.factory.annotation.Value;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -24,6 +25,12 @@ public class AuthController {
 
     private final MemberService memberService;
     private final AuthService authService;
+
+    @Value("${app.auth.cookie.secure}")
+    private boolean cookieSecure;
+
+    @Value("${app.auth.cookie.same-site}")
+    private String cookieSameSite;
 
     // 공통 ApiResponse 형식이 정해지면 추후 반환 형태 수정
     @PostMapping("/signup")
@@ -55,8 +62,8 @@ public class AuthController {
         ResponseCookie refreshCookie = ResponseCookie
                 .from("refreshToken", result.refreshToken())
                 .httpOnly(true)
-                .secure(false) // 로컬 HTTP 개발용. HTTPS 배포에서는 true로 변경
-                .sameSite("Lax")
+                .secure(cookieSecure)
+                .sameSite(cookieSameSite)
                 .path("/api/v1/auth")
                 .maxAge(60L * 60 * 24) // 1일, 초 단위
                 .build();
@@ -97,8 +104,8 @@ public class AuthController {
         ResponseCookie deleteCookie = ResponseCookie
                 .from("refreshToken", "")
                 .httpOnly(true)
-                .secure(false) // 로컬 HTTP용. HTTPS 배포에서는 true
-                .sameSite("Lax")
+                .secure(cookieSecure)
+                .sameSite(cookieSameSite)
                 .path("/api/v1/auth")
                 .maxAge(0)
                 .build();
