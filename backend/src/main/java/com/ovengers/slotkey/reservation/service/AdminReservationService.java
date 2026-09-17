@@ -1,5 +1,8 @@
 package com.ovengers.slotkey.reservation.service;
 
+import com.ovengers.slotkey.access.entity.DoorAccessLog;
+import com.ovengers.slotkey.access.service.DoorAccessLogService;
+import com.ovengers.slotkey.access.service.DoorAccessTokenService;
 import com.ovengers.slotkey.audit.entity.AuditAction;
 import com.ovengers.slotkey.audit.entity.AuditTargetType;
 import com.ovengers.slotkey.audit.service.AuditLogService;
@@ -15,6 +18,7 @@ import com.ovengers.slotkey.reservation.entity.Reservation;
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
 import com.ovengers.slotkey.reservation.entity.ReservationStatusHistory;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
+import com.ovengers.slotkey.reservation.repository.ReservationSlotRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationStatusHistoryRepository;
 import com.ovengers.slotkey.space.entity.Space;
 import com.ovengers.slotkey.space.repository.SpaceRepository;
@@ -37,10 +41,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AdminReservationService {
     private final ReservationRepository reservationRepository;
+    private final ReservationSlotRepository reservationSlotRepository;
     private final ReservationStatusHistoryRepository statusHistoryRepository;
     private final MemberRepository memberRepository;
     private final SpaceRepository spaceRepository;
     private final AuditLogService auditLogService;
+    private final DoorAccessTokenService doorAccessTokenService;
+    private final DoorAccessLogService doorAccessLogService;
 
     /**
      * 전체 예약 조회 (페이지네이션).
@@ -70,8 +77,12 @@ public class AdminReservationService {
                 .map(ReservationStatusHistoryResponse::from)
                 .toList();
 
-        // TODO(박창현님): access 도메인에서 DoorAccessLog 조회로 대체
-        List<DoorAccessLogResponse> accessLogs = List.of();
+        // 관리자 조회이므로 소유자 검사 없이(findResponsesByReservationId는 owner 검증 포함)
+        // 예약 id로 출입 로그 엔티티를 직접 조회해 reservation 쪽 응답 DTO로 변환한다.
+        List<DoorAccessLog> accessLogEntities = doorAccessLogService.findAllByReservationId(reservationId);
+        List<DoorAccessLogResponse> accessLogs = accessLogEntities.stream()
+                .map(DoorAccessLogResponse::from)
+                .toList();
 
         return AdminReservationDetailResponse.from(
                 reservation,
@@ -102,6 +113,8 @@ public class AdminReservationService {
         // 상태 전이
         reservation.cancelByAdmin();
 
+        LocalDateTime now = LocalDateTime.now();
+
         // 상태 이력 저장
         ReservationStatusHistory history = ReservationStatusHistory.of(
                 reservation.getId(),
@@ -109,14 +122,16 @@ public class AdminReservationService {
                 previousStatus,
                 reservation.getStatus(),
                 reason,
-                LocalDateTime.now()
+                now
         );
         statusHistoryRepository.save(history);
 
         // 슬롯 삭제 (기존 취소와 동일)
-        // TODO: ReservationSlotRepository.deleteByReservationId(reservationId);
+        reservationSlotRepository.deleteByReservationId(reservationId);
 
-        // TODO(박창현님): 활성 출입 토큰 revoke
+        // 활성 출입 토큰 revoke. 관리자의 강제 취소이므로 소유자 검사가 없는
+        // revokeByReservation(예약 상태 변경에 따른 시스템 경로)을 사용한다.
+        doorAccessTokenService.revokeByReservation(reservationId, now, "ADMIN_FORCE_CANCEL");
 
         // 감사 로그 기록
         auditLogService.log(

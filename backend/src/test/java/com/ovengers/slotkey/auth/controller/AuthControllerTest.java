@@ -586,6 +586,40 @@ public class AuthControllerTest {
         assertThat(accessToken).isNotBlank();
 
         return accessToken;
+
+    }
+    @Test
+    @DisplayName("로그아웃 후에도 만료되지 않은 액세스 토큰은 사용할 수 있다")
+    void t17() throws Exception {
+        String email = "access-after-logout@example.com";
+
+        // 1. 실제 로그인으로 두 토큰 발급
+        MvcResult loginResult = loginForTest(email);
+        String accessToken = extractAccessToken(loginResult);
+
+        Cookie refreshCookie = loginResult.getResponse()
+                .getCookie("refreshToken");
+
+        assertThat(refreshCookie).isNotNull();
+
+        // 2. 로그아웃
+        mvc.perform(
+                        post("/api/v1/auth/logout")
+                                .cookie(refreshCookie)
+                )
+                .andDo(print())
+                .andExpect(status().isNoContent());
+
+        // 3. 로그아웃 전에 보관한 액세스 토큰으로 요청
+        // 현재 정책은 액세스 토큰을 즉시 무효화하지 않는다.
+        mvc.perform(
+                        get("/api/v1/members/me")
+                                .header("Authorization", "Bearer " + accessToken)
+                )
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.email").value(email));
     }
 }
 
