@@ -14,6 +14,7 @@ import com.ovengers.slotkey.space.repository.SpaceRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -26,174 +27,315 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class AdminSpaceServiceTest {
 
-        @Mock
-        private SpaceRepository spaceRepository;
+    @Mock
+    private SpaceRepository spaceRepository;
 
-        @Mock
-        private AuditLogService auditLogService;
+    @Mock
+    private AuditLogService auditLogService;
 
-        @InjectMocks
-        private AdminSpaceService adminSpaceService;
+    @InjectMocks
+    private AdminSpaceService adminSpaceService;
 
-        @Test
-        @DisplayName("공간 등록에 성공하면 저장된 공간 정보를 반환하고 REGISTER_SPACE 감사 로그를 기록한다")
-        void createSpace_success() {
-                // given
-                Long adminMemberId = 100L;
-                SpaceCreateRequest request = new SpaceCreateRequest(
-                                "컨퍼런스 룸",
-                                "서울시 테헤란로 123",
-                                "최대 10인 회의실",
-                                10,
-                                5000L,
-                                "/images/conf.jpg",
-                                LocalTime.of(9, 0),
-                                LocalTime.of(22, 0));
+    @Test
+    @DisplayName("공간 등록에 성공하면 저장된 공간 정보를 반환하고 REGISTER_SPACE 감사 로그를 기록한다")
+    void createSpace_success() {
+        // given
+        Long adminMemberId = 100L;
+        SpaceCreateRequest request = new SpaceCreateRequest(
+                "컨퍼런스 룸",
+                "서울시 테헤란로 123",
+                "최대 10인 회의실",
+                10,
+                5000L,
+                "/images/conf.jpg",
+                LocalTime.of(9, 0),
+                LocalTime.of(22, 0));
 
-                Space savedSpace = Space.builder()
-                                .id(1L)
-                                .name(request.name())
-                                .location(request.location())
-                                .description(request.description())
-                                .capacity(request.capacity())
-                                .pricePerSlot(request.pricePerSlot())
-                                .imagePath(request.imagePath())
-                                .openingTime(request.openingTime())
-                                .closingTime(request.closingTime())
-                                .status(SpaceStatus.ACTIVE)
-                                .build();
+        Space savedSpace = Space.builder()
+                .id(1L)
+                .name(request.name())
+                .location(request.location())
+                .description(request.description())
+                .capacity(request.capacity())
+                .pricePerSlot(request.pricePerSlot())
+                .imagePath(request.imagePath())
+                .openingTime(request.openingTime())
+                .closingTime(request.closingTime())
+                .status(SpaceStatus.ACTIVE)
+                .version(0)
+                .build();
 
-                given(spaceRepository.save(any(Space.class))).willReturn(savedSpace);
+        given(spaceRepository.save(any(Space.class))).willReturn(savedSpace);
 
-                // when
-                SpaceDetailResponse response = adminSpaceService.createSpace(request, adminMemberId);
+        // when
+        SpaceDetailResponse response = adminSpaceService.createSpace(request, adminMemberId);
 
-                // then
-                assertThat(response.id()).isEqualTo(1L);
-                assertThat(response.name()).isEqualTo("컨퍼런스 룸");
-                assertThat(response.pricePerSlot()).isEqualTo(5000L);
-                assertThat(response.status()).isEqualTo(SpaceStatus.ACTIVE);
+        // then
+        assertThat(response.id()).isEqualTo(1L);
+        assertThat(response.name()).isEqualTo("컨퍼런스 룸");
+        assertThat(response.pricePerSlot()).isEqualTo(5000L);
+        assertThat(response.status()).isEqualTo(SpaceStatus.ACTIVE);
+        assertThat(response.version()).isEqualTo(0);
 
-                // 감사 로그 호출 검증
-                verify(auditLogService).log(
-                                eq(adminMemberId),
-                                eq(AuditAction.REGISTER_SPACE),
-                                eq(AuditTargetType.SPACE),
-                                eq(1L),
-                                any(),
-                                any(SpaceDetailResponse.class));
-        }
+        // 감사 로그 호출 및 스냅샷 검증 (ArgumentCaptor)
+        ArgumentCaptor<Long> actorCaptor = ArgumentCaptor.forClass(Long.class);
+        ArgumentCaptor<AuditAction> actionCaptor = ArgumentCaptor.forClass(AuditAction.class);
+        ArgumentCaptor<AuditTargetType> targetTypeCaptor = ArgumentCaptor.forClass(AuditTargetType.class);
+        ArgumentCaptor<Long> targetIdCaptor = ArgumentCaptor.forClass(Long.class);
+        ArgumentCaptor<Object> beforeCaptor = ArgumentCaptor.forClass(Object.class);
+        ArgumentCaptor<Object> afterCaptor = ArgumentCaptor.forClass(Object.class);
 
-        @Test
-        @DisplayName("100원 단위가 아닌 요금으로 공간 등록 시 INVALID_PRICE_UNIT 예외가 발생한다")
-        void createSpace_invalidPriceUnit_throwsException() {
-                // given
-                SpaceCreateRequest request = new SpaceCreateRequest(
-                                "회의실",
-                                "강남",
-                                "설명",
-                                4,
-                                5250L, // 100원 단위 위반
-                                null,
-                                LocalTime.of(9, 0),
-                                LocalTime.of(18, 0));
+        verify(auditLogService).log(
+                actorCaptor.capture(),
+                actionCaptor.capture(),
+                targetTypeCaptor.capture(),
+                targetIdCaptor.capture(),
+                beforeCaptor.capture(),
+                afterCaptor.capture());
 
-                // when & then
-                assertThatThrownBy(() -> adminSpaceService.createSpace(request, 1L))
-                                .isInstanceOf(BusinessException.class)
-                                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRICE_UNIT);
-        }
+        assertThat(actorCaptor.getValue()).isEqualTo(adminMemberId);
+        assertThat(actionCaptor.getValue()).isEqualTo(AuditAction.REGISTER_SPACE);
+        assertThat(targetTypeCaptor.getValue()).isEqualTo(AuditTargetType.SPACE);
+        assertThat(targetIdCaptor.getValue()).isEqualTo(1L);
+        assertThat(beforeCaptor.getValue()).isNull();
 
-        @Test
-        @DisplayName("운영 시작 시각이 종료 시각과 같거나 늦으면 INVALID_OPERATING_HOURS 예외가 발생한다")
-        void createSpace_invalidOperatingHours_throwsException() {
-                // given
-                SpaceCreateRequest request = new SpaceCreateRequest(
-                                "회의실",
-                                "강남",
-                                "설명",
-                                4,
-                                5000L,
-                                null,
-                                LocalTime.of(18, 0), // 시작이 종료보다 늦음
-                                LocalTime.of(9, 0));
+        assertThat(afterCaptor.getValue()).isInstanceOf(SpaceDetailResponse.class);
+        SpaceDetailResponse afterSnapshot = (SpaceDetailResponse) afterCaptor.getValue();
+        assertThat(afterSnapshot.id()).isEqualTo(1L);
+        assertThat(afterSnapshot.name()).isEqualTo("컨퍼런스 룸");
+        assertThat(afterSnapshot.pricePerSlot()).isEqualTo(5000L);
+        assertThat(afterSnapshot.status()).isEqualTo(SpaceStatus.ACTIVE);
+        assertThat(afterSnapshot.version()).isEqualTo(0);
+    }
 
-                // when & then
-                assertThatThrownBy(() -> adminSpaceService.createSpace(request, 1L))
-                                .isInstanceOf(BusinessException.class)
-                                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_OPERATING_HOURS);
-        }
+    @Test
+    @DisplayName("100원 단위가 아닌 요금으로 공간 등록 시 INVALID_PRICE_UNIT 예외가 발생하고 저장/감사로그가 호출되지 않는다")
+    void createSpace_invalidPriceUnit_throwsException() {
+        // given
+        SpaceCreateRequest request = new SpaceCreateRequest(
+                "회의실",
+                "강남",
+                "설명",
+                4,
+                5250L, // 100원 단위 위반
+                null,
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0));
 
-        @Test
-        @DisplayName("공간 수정에 성공하면 변경사항을 반영하고 MODIFY_SPACE 감사 로그를 기록한다")
-        void updateSpace_success() {
-                // given
-                Long spaceId = 1L;
-                Long adminMemberId = 100L;
+        // when & then
+        assertThatThrownBy(() -> adminSpaceService.createSpace(request, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRICE_UNIT);
 
-                Space existingSpace = Space.builder()
-                                .id(spaceId)
-                                .name("이전 공간명")
-                                .location("이전 위치")
-                                .description("이전 설명")
-                                .capacity(4)
-                                .pricePerSlot(3000L)
-                                .openingTime(LocalTime.of(9, 0))
-                                .closingTime(LocalTime.of(18, 0))
-                                .status(SpaceStatus.ACTIVE)
-                                .build();
+        verify(spaceRepository, never()).save(any());
+        verifyNoInteractions(auditLogService);
+    }
 
-                SpaceUpdateRequest updateRequest = new SpaceUpdateRequest(
-                                null,
-                                "새 공간명",
-                                "새 위치",
-                                "새 설명",
-                                8,
-                                4000L,
-                                "/new-image.jpg",
-                                LocalTime.of(10, 0),
-                                LocalTime.of(20, 0),
-                                SpaceStatus.INACTIVE);
+    @Test
+    @DisplayName("운영 시작 시각이 종료 시각과 같거나 늦으면 INVALID_OPERATING_HOURS 예외가 발생하고 저장/감사로그가 호출되지 않는다")
+    void createSpace_invalidOperatingHours_throwsException() {
+        // given
+        SpaceCreateRequest request = new SpaceCreateRequest(
+                "회의실",
+                "강남",
+                "설명",
+                4,
+                5000L,
+                null,
+                LocalTime.of(18, 0), // 시작이 종료보다 늦음
+                LocalTime.of(9, 0));
 
-                given(spaceRepository.findById(spaceId)).willReturn(Optional.of(existingSpace));
+        // when & then
+        assertThatThrownBy(() -> adminSpaceService.createSpace(request, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_OPERATING_HOURS);
 
-                // when
-                SpaceDetailResponse response = adminSpaceService.updateSpace(spaceId, updateRequest, adminMemberId);
+        verify(spaceRepository, never()).save(any());
+        verifyNoInteractions(auditLogService);
+    }
 
-                // then
-                assertThat(response.name()).isEqualTo("새 공간명");
-                assertThat(response.capacity()).isEqualTo(8);
-                assertThat(response.pricePerSlot()).isEqualTo(4000L);
-                assertThat(response.status()).isEqualTo(SpaceStatus.INACTIVE);
+    @Test
+    @DisplayName("공간 수정 시 가격이 변경되면 version이 1 증가하고 MODIFY_SPACE 감사 로그에 수정 전후 스냅샷이 기록된다")
+    void updateSpace_priceChanged_versionIncrements_andLogsAudit() {
+        // given
+        Long spaceId = 1L;
+        Long adminMemberId = 100L;
 
-                // 감사 로그 호출 검증
-                verify(auditLogService).log(
-                                eq(adminMemberId),
-                                eq(AuditAction.MODIFY_SPACE),
-                                eq(AuditTargetType.SPACE),
-                                eq(spaceId),
-                                any(SpaceDetailResponse.class),
-                                any(SpaceDetailResponse.class));
-        }
+        Space existingSpace = Space.builder()
+                .id(spaceId)
+                .name("이전 공간명")
+                .location("이전 위치")
+                .description("이전 설명")
+                .capacity(4)
+                .pricePerSlot(3000L)
+                .openingTime(LocalTime.of(9, 0))
+                .closingTime(LocalTime.of(18, 0))
+                .status(SpaceStatus.ACTIVE)
+                .version(0)
+                .build();
 
-        @Test
-        @DisplayName("존재하지 않는 spaceId 수정 시 SPACE_NOT_FOUND 예외가 발생한다")
-        void updateSpace_notFound_throwsException() {
-                // given
-                Long invalidId = 999L;
-                SpaceUpdateRequest updateRequest = new SpaceUpdateRequest(
-                                null, "이름", "위치", "설명", 4, 3000L, null, null, null, null);
+        SpaceUpdateRequest updateRequest = new SpaceUpdateRequest(
+                null,
+                "새 공간명",
+                "새 위치",
+                "새 설명",
+                8,
+                4000L, // 가격 변경: 3000 -> 4000
+                "/new-image.jpg",
+                LocalTime.of(10, 0),
+                LocalTime.of(20, 0),
+                SpaceStatus.INACTIVE);
 
-                given(spaceRepository.findById(invalidId)).willReturn(Optional.empty());
+        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(existingSpace));
 
-                // when & then
-                assertThatThrownBy(() -> adminSpaceService.updateSpace(invalidId, updateRequest, 1L))
-                                .isInstanceOf(BusinessException.class)
-                                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SPACE_NOT_FOUND);
-        }
+        // when
+        SpaceDetailResponse response = adminSpaceService.updateSpace(spaceId, updateRequest, adminMemberId);
+
+        // then
+        assertThat(response.name()).isEqualTo("새 공간명");
+        assertThat(response.capacity()).isEqualTo(8);
+        assertThat(response.pricePerSlot()).isEqualTo(4000L);
+        assertThat(response.status()).isEqualTo(SpaceStatus.INACTIVE);
+        assertThat(response.version()).isEqualTo(1);
+
+        // 감사 로그 호출 및 수정 전후 스냅샷 검증
+        ArgumentCaptor<Object> beforeCaptor = ArgumentCaptor.forClass(Object.class);
+        ArgumentCaptor<Object> afterCaptor = ArgumentCaptor.forClass(Object.class);
+
+        verify(auditLogService).log(
+                eq(adminMemberId),
+                eq(AuditAction.MODIFY_SPACE),
+                eq(AuditTargetType.SPACE),
+                eq(spaceId),
+                beforeCaptor.capture(),
+                afterCaptor.capture());
+
+        SpaceDetailResponse beforeSnapshot = (SpaceDetailResponse) beforeCaptor.getValue();
+        SpaceDetailResponse afterSnapshot = (SpaceDetailResponse) afterCaptor.getValue();
+
+        // before 검증
+        assertThat(beforeSnapshot.name()).isEqualTo("이전 공간명");
+        assertThat(beforeSnapshot.pricePerSlot()).isEqualTo(3000L);
+        assertThat(beforeSnapshot.version()).isEqualTo(0);
+        assertThat(beforeSnapshot.status()).isEqualTo(SpaceStatus.ACTIVE);
+
+        // after 검증
+        assertThat(afterSnapshot.name()).isEqualTo("새 공간명");
+        assertThat(afterSnapshot.pricePerSlot()).isEqualTo(4000L);
+        assertThat(afterSnapshot.version()).isEqualTo(1);
+        assertThat(afterSnapshot.status()).isEqualTo(SpaceStatus.INACTIVE);
+    }
+
+    @Test
+    @DisplayName("공간 수정 시 동일한 가격을 전달하면 version이 유지되고 감사 로그가 기록된다")
+    void updateSpace_samePrice_versionMaintained() {
+        // given
+        Long spaceId = 1L;
+        Long adminMemberId = 100L;
+
+        Space existingSpace = Space.builder()
+                .id(spaceId)
+                .name("이전 공간명")
+                .location("위치")
+                .description("설명")
+                .capacity(4)
+                .pricePerSlot(3000L)
+                .openingTime(LocalTime.of(9, 0))
+                .closingTime(LocalTime.of(18, 0))
+                .status(SpaceStatus.ACTIVE)
+                .version(0)
+                .build();
+
+        // 동일 가격 3000L 전달
+        SpaceUpdateRequest updateRequest = new SpaceUpdateRequest(
+                null,
+                "수정된 이름",
+                null,
+                null,
+                null,
+                3000L,
+                null,
+                null,
+                null,
+                null);
+
+        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(existingSpace));
+
+        // when
+        SpaceDetailResponse response = adminSpaceService.updateSpace(spaceId, updateRequest, adminMemberId);
+
+        // then
+        assertThat(response.name()).isEqualTo("수정된 이름");
+        assertThat(response.pricePerSlot()).isEqualTo(3000L);
+        assertThat(response.version()).isEqualTo(0);
+
+        ArgumentCaptor<Object> afterCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditLogService).log(
+                eq(adminMemberId),
+                eq(AuditAction.MODIFY_SPACE),
+                eq(AuditTargetType.SPACE),
+                eq(spaceId),
+                any(),
+                afterCaptor.capture());
+
+        SpaceDetailResponse afterSnapshot = (SpaceDetailResponse) afterCaptor.getValue();
+        assertThat(afterSnapshot.version()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 spaceId 수정 시 SPACE_NOT_FOUND 예외가 발생하고 감사 로그가 호출되지 않는다")
+    void updateSpace_notFound_throwsException_andNeverLogsAudit() {
+        // given
+        Long invalidId = 999L;
+        SpaceUpdateRequest updateRequest = new SpaceUpdateRequest(
+                null, "이름", "위치", "설명", 4, 3000L, null, null, null, null);
+
+        given(spaceRepository.findById(invalidId)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> adminSpaceService.updateSpace(invalidId, updateRequest, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SPACE_NOT_FOUND);
+
+        verifyNoInteractions(auditLogService);
+    }
+
+    @Test
+    @DisplayName("공간 수정 시 유효하지 않은 가격 단위가 전달되면 INVALID_PRICE_UNIT 예외가 발생하고 감사 로그가 호출되지 않는다")
+    void updateSpace_invalidPriceUnit_throwsException_andNeverLogsAudit() {
+        // given
+        Long spaceId = 1L;
+        Space existingSpace = Space.builder()
+                .id(spaceId)
+                .name("공간명")
+                .location("위치")
+                .capacity(4)
+                .pricePerSlot(3000L)
+                .openingTime(LocalTime.of(9, 0))
+                .closingTime(LocalTime.of(18, 0))
+                .status(SpaceStatus.ACTIVE)
+                .version(0)
+                .build();
+
+        SpaceUpdateRequest invalidRequest = new SpaceUpdateRequest(
+                null, null, null, null, null,
+                3050L, // 100원 단위 위반
+                null, null, null, null);
+
+        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(existingSpace));
+
+        // when & then
+        assertThatThrownBy(() -> adminSpaceService.updateSpace(spaceId, invalidRequest, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRICE_UNIT);
+
+        verifyNoInteractions(auditLogService);
+    }
 }

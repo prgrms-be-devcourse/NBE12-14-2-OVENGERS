@@ -125,18 +125,21 @@ class SpaceSlotAvailabilityServiceTest {
         assertThat(slots.get(3).isAvailable()).isTrue();
         // 11:00 슬롯 -> 점유됨 -> false
         assertThat(slots.get(4).isAvailable()).isFalse();
+        // 11:30 슬롯 -> 점유 안 됨 -> true
+        assertThat(slots.get(5).isAvailable()).isTrue();
     }
 
     @Test
-    @DisplayName("공간 상태가 INACTIVE이면 미래 시간대라도 모든 슬롯이 false로 반환된다")
-    void getSlotAvailability_inactiveSpaceAllSlotsFalse() {
+    @DisplayName("공간 상태가 INACTIVE이면 점유 데이터가 존재하더라도 모든 슬롯이 false로 반환된다")
+    void getSlotAvailability_inactiveSpaceWithOccupiedSlots_allSlotsFalse() {
         // given
         Long spaceId = 1L;
         LocalDate targetDate = LocalDate.of(2026, 9, 20);
         Space inactiveSpace = createSpace(spaceId, SpaceStatus.INACTIVE);
 
+        LocalDateTime occupiedTime = LocalDateTime.of(2026, 9, 20, 11, 0);
         given(spaceRepository.findById(spaceId)).willReturn(Optional.of(inactiveSpace));
-        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate)).willReturn(Set.of());
+        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate)).willReturn(Set.of(occupiedTime));
 
         // when
         SpaceSlotAvailabilityResponse response = availabilityService.getSlotAvailability(spaceId, targetDate);
@@ -146,7 +149,26 @@ class SpaceSlotAvailabilityServiceTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 spaceId 조회 시 SPACE_NOT_FOUND 예외를 던진다")
+    @DisplayName("요청된 spaceId와 date가 응답 DTO에 정확히 보존된다")
+    void getSlotAvailability_preservesSpaceIdAndDate() {
+        // given
+        Long spaceId = 42L;
+        LocalDate targetDate = LocalDate.of(2026, 9, 20);
+        Space space = createSpace(spaceId, SpaceStatus.ACTIVE);
+
+        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(space));
+        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate)).willReturn(Set.of());
+
+        // when
+        SpaceSlotAvailabilityResponse response = availabilityService.getSlotAvailability(spaceId, targetDate);
+
+        // then
+        assertThat(response.spaceId()).isEqualTo(42L);
+        assertThat(response.date()).isEqualTo(targetDate);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 spaceId 조회 시 SPACE_NOT_FOUND 예외를 던지고 occupiedSlotProvider를 호출하지 않는다")
     void getSlotAvailability_spaceNotFound_throwsException() {
         // given
         Long invalidId = 999L;
@@ -156,5 +178,38 @@ class SpaceSlotAvailabilityServiceTest {
         assertThatThrownBy(() -> availabilityService.getSlotAvailability(invalidId, LocalDate.of(2026, 9, 20)))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SPACE_NOT_FOUND);
+
+        org.mockito.Mockito.verifyNoInteractions(occupiedSlotProvider);
+    }
+
+    @Test
+    @DisplayName("현재 시각과 슬롯 시작 시각이 정확히 일치할 때 isBefore는 false이므로 슬롯이 가용한 상태(true)로 판단된다 (현재 구현 문서화)")
+    void getSlotAvailability_exactStartTimeMatch_isAvailableUnderCurrentImplementation() {
+        // given
+        Long spaceId = 1L;
+        LocalDate targetDate = LocalDate.of(2026, 9, 20);
+        Space space = createSpace(spaceId, SpaceStatus.ACTIVE);
+
+        // 현재 시각을 10:30:00 정각으로 고정한 Clock 준비
+        LocalDateTime exactNow = LocalDateTime.of(2026, 9, 20, 10, 30, 0);
+        Clock exactClock = Clock.fixed(exactNow.atZone(zoneId).toInstant(), zoneId);
+        SpaceSlotAvailabilityService serviceWithExactClock = new SpaceSlotAvailabilityService(
+                spaceRepository,
+                operatingHoursPolicy,
+                occupiedSlotProvider,
+                exactClock);
+
+        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(space));
+        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate)).willReturn(Set.of());
+
+        // when
+        SpaceSlotAvailabilityResponse response = serviceWithExactClock.getSlotAvailability(spaceId, targetDate);
+
+        // then
+        // slots(3)은 10:30~11:00 슬롯. window.start() == 10:30, now == 10:30 ->
+        // isBefore(now)는 false -> isPast == false -> available == true
+        SlotResponse slot1030 = response.slots().get(3);
+        assertThat(slot1030.slotStart()).isEqualTo(LocalDateTime.of(2026, 9, 20, 10, 30));
+        assertThat(slot1030.isAvailable()).isTrue();
     }
 }
