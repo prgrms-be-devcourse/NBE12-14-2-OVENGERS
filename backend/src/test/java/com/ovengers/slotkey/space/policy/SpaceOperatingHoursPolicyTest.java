@@ -52,6 +52,23 @@ class SpaceOperatingHoursPolicyTest {
     }
 
     @Test
+    @DisplayName("운영 종료 시각이 30분 단위가 아닌 경우 종료 시각을 넘지 않는 완전한 30분 슬롯만 생성한다")
+    void generateSlots_closingNotAlignedTo30Minutes() {
+        // given: 09:00 ~ 11:45 (마지막 15분 구간은 30분 슬롯이 되지 못함)
+        LocalDate date = LocalDate.of(2026, 9, 20);
+        LocalTime openingTime = LocalTime.of(9, 0);
+        LocalTime closingTime = LocalTime.of(11, 45);
+
+        // when
+        List<SpaceOperatingHoursPolicy.SlotWindow> slots = policy.generateSlots(date, openingTime, closingTime);
+
+        // then: 09:00~09:30, 09:30~10:00, 10:00~10:30, 10:30~11:00, 11:00~11:30 (총 5개)
+        assertThat(slots).hasSize(5);
+        assertThat(slots.get(4).start()).isEqualTo(LocalDateTime.of(2026, 9, 20, 11, 0));
+        assertThat(slots.get(4).end()).isEqualTo(LocalDateTime.of(2026, 9, 20, 11, 30));
+    }
+
+    @Test
     @DisplayName("운영시간 내 포함 여부를 올바르게 검증한다")
     void isWithinOperatingHours() {
         LocalTime opening = LocalTime.of(9, 0);
@@ -68,6 +85,15 @@ class SpaceOperatingHoursPolicyTest {
 
         // 시작이 종료보다 늦은 경우
         assertThat(policy.isWithinOperatingHours(opening, closing, LocalTime.of(15, 0), LocalTime.of(14, 0))).isFalse();
+
+        // 시작과 종료가 같은 경우
+        assertThat(policy.isWithinOperatingHours(opening, closing, LocalTime.of(10, 0), LocalTime.of(10, 0))).isFalse();
+
+        // 요청 시각이 null인 경우
+        assertThat(policy.isWithinOperatingHours(opening, closing, null, LocalTime.of(10, 0))).isFalse();
+        assertThat(policy.isWithinOperatingHours(opening, closing, LocalTime.of(9, 0), null)).isFalse();
+        assertThat(policy.isWithinOperatingHours(null, closing, LocalTime.of(9, 0), LocalTime.of(10, 0))).isFalse();
+        assertThat(policy.isWithinOperatingHours(opening, null, LocalTime.of(9, 0), LocalTime.of(10, 0))).isFalse();
     }
 
     @Test
@@ -79,6 +105,7 @@ class SpaceOperatingHoursPolicyTest {
 
         assertThat(policy.isMultipleOf30Minutes(LocalTime.of(9, 15))).isFalse();
         assertThat(policy.isMultipleOf30Minutes(LocalTime.of(9, 30, 1))).isFalse();
+        assertThat(policy.isMultipleOf30Minutes(LocalTime.of(9, 0, 0, 500))).isFalse();
         assertThat(policy.isMultipleOf30Minutes(null)).isFalse();
     }
 }
