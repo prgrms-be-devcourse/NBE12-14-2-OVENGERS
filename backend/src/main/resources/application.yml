@@ -23,6 +23,10 @@ custom:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  auth:
+    cookie:
+      secure: true
+      same-site: Lax
 
   credit:
     signup-grant: 50000
