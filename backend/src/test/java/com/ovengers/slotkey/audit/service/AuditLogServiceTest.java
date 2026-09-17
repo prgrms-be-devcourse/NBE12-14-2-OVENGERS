@@ -1,5 +1,6 @@
 package com.ovengers.slotkey.audit.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.ovengers.slotkey.audit.entity.AuditAction;
@@ -17,6 +18,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -85,6 +89,77 @@ class AuditLogServiceTest {
         assertThat(saved.getReason()).isNull();
         assertThat(saved.getBeforeValue()).isNull();
         assertThat(saved.getAfterValue()).contains("\"name\":\"회의실 A\"");
+    }
+
+    @Test
+    @DisplayName("beforeValue와 afterValue가 각각 null이면 엔티티 필드도 null로 저장된다")
+    void log_withNullBeforeAndAfter_savesAuditLogWithNullValues() {
+        // given
+        Long actorMemberId = 2L;
+        AuditAction action = AuditAction.REGISTER_SPACE;
+        AuditTargetType targetType = AuditTargetType.SPACE;
+        Long targetId = 30L;
+        String reason = "신규 공간 등록";
+
+        // when
+        auditLogService.log(actorMemberId, action, targetType, targetId, reason, null, null);
+
+        // then
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+
+        AuditLog saved = captor.getValue();
+        assertThat(saved.getActorMemberId()).isEqualTo(actorMemberId);
+        assertThat(saved.getAction()).isEqualTo(action);
+        assertThat(saved.getTargetType()).isEqualTo(targetType);
+        assertThat(saved.getTargetId()).isEqualTo(targetId);
+        assertThat(saved.getReason()).isEqualTo(reason);
+        assertThat(saved.getBeforeValue()).isNull();
+        assertThat(saved.getAfterValue()).isNull();
+    }
+
+    @Test
+    @DisplayName("ObjectMapper가 JsonProcessingException을 던지면 toString() 결과로 대체하여 저장을 완료한다")
+    void log_whenSerializationThrowsException_fallbacksToStringAndSaves() throws Exception {
+        // given
+        ObjectMapper mockObjectMapper = mock(ObjectMapper.class);
+        AuditLogService serviceWithMock = new AuditLogService(auditLogRepository, mockObjectMapper);
+
+        Long actorMemberId = 1L;
+        AuditAction action = AuditAction.MODIFY_SPACE;
+        AuditTargetType targetType = AuditTargetType.SPACE;
+        Long targetId = 10L;
+        String reason = "직렬화 오류 테스트";
+
+        record TestPayload(String value) {
+            @Override
+            public String toString() {
+                return "TestPayload(" + value + ")";
+            }
+        }
+
+        TestPayload beforeObj = new TestPayload("before-state");
+        TestPayload afterObj = new TestPayload("after-state");
+
+        given(mockObjectMapper.writeValueAsString(any()))
+                .willThrow(new JsonProcessingException("JSON parse error") {
+                });
+
+        // when
+        serviceWithMock.log(actorMemberId, action, targetType, targetId, reason, beforeObj, afterObj);
+
+        // then
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+
+        AuditLog saved = captor.getValue();
+        assertThat(saved.getActorMemberId()).isEqualTo(actorMemberId);
+        assertThat(saved.getAction()).isEqualTo(action);
+        assertThat(saved.getTargetType()).isEqualTo(targetType);
+        assertThat(saved.getTargetId()).isEqualTo(targetId);
+        assertThat(saved.getReason()).isEqualTo(reason);
+        assertThat(saved.getBeforeValue()).isEqualTo(beforeObj.toString());
+        assertThat(saved.getAfterValue()).isEqualTo(afterObj.toString());
     }
 
     @Test

@@ -337,5 +337,44 @@ class AdminSpaceServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRICE_UNIT);
 
         verifyNoInteractions(auditLogService);
+}
+
+@Test
+@DisplayName("공간 수정 시 운영 시작 시각이 종료 시각과 같거나 늦으면 INVALID_OPERATING_HOURS 예외가 발생하고 감사 로그가 호출되지 않는다")
+void updateSpace_invalidOperatingHours_throwsException_andNeverLogsAudit() {
+        // given
+        Long spaceId = 1L;
+        Space existingSpace = Space.builder()
+                        .id(spaceId)
+                        .name("기존 공간명")
+                        .location("위치")
+                        .capacity(4)
+                        .pricePerSlot(3000L)
+                        .openingTime(LocalTime.of(9, 0))
+                        .closingTime(LocalTime.of(18, 0))
+                        .status(SpaceStatus.ACTIVE)
+                        .version(0)
+                        .build();
+
+        SpaceUpdateRequest invalidRequest = new SpaceUpdateRequest(
+                        null,
+                        "수정 시도 공간명",
+                        null,
+                        null,
+                        null,
+                        4000L,
+                        null,
+                        LocalTime.of(20, 0), // 시작이 종료보다 늦음
+                        LocalTime.of(10, 0),
+                        null);
+
+        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(existingSpace));
+
+        // when & then
+        assertThatThrownBy(() -> adminSpaceService.updateSpace(spaceId, invalidRequest, 1L))
+                        .isInstanceOf(BusinessException.class)
+                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_OPERATING_HOURS);
+
+        verifyNoInteractions(auditLogService);
     }
 }
