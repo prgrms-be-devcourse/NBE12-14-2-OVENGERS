@@ -42,7 +42,13 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/favicon.ico").permitAll()
-
+                        // Swagger UI 및 API 문서 접근 허용
+                        .requestMatchers(
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs",
+                                "/v3/api-docs/**"
+                        ).permitAll()
                         // 액세스 토큰 없이 접근 가능한 API
                         .requestMatchers(
                                 HttpMethod.POST,
