@@ -59,7 +59,10 @@ export function setUnauthorizedHandler(handler) {
 /* ---------------------------------------------------------------- 요청 */
 
 function buildUrl(path, query) {
-  const url = new URL(`${API_BASE_URL}${path}`, window.location.origin);
+  // API_BASE_URL 이 '/api/v1' 같은 상대 경로일 수 있으므로 기준 오리진이 필요합니다.
+  // 실제 호출은 모두 브라우저에서 일어나지만, 서버 렌더 중 평가돼도 터지지 않게 둡니다.
+  const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
+  const url = new URL(`${API_BASE_URL}${path}`, origin);
   if (query) {
     Object.entries(query).forEach(([key, value]) => {
       if (value === undefined || value === null || value === '') return;

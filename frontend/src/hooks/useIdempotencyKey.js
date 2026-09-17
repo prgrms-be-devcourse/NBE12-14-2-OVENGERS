@@ -10,9 +10,11 @@
 import { useCallback, useState } from 'react';
 
 function createKey() {
-  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  // 클라이언트 컴포넌트도 서버에서 한 번 렌더되므로 window 가 아니라 globalThis 를 씁니다.
+  const webCrypto = globalThis.crypto;
+  if (webCrypto?.randomUUID) return webCrypto.randomUUID();
   // randomUUID 미지원 브라우저에서도 서버의 UUID 형식 검증을 통과한다.
-  const bytes = window.crypto.getRandomValues(new Uint8Array(16));
+  const bytes = webCrypto.getRandomValues(new Uint8Array(16));
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');

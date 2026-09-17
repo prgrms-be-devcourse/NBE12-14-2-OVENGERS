@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import { ROUTES } from '../../constants/routePaths';
 import { SPACE_STATUS, SPACE_STATUS_META } from '../../constants/enums';
 import { formatPricePerSlot } from '../../utils/price';
@@ -48,7 +48,7 @@ export default function SpaceCard({ space, availability }) {
         </div>
 
         <Link
-          to={ROUTES.spaceDetail(space.id)}
+          href={ROUTES.spaceDetail(space.id)}
           className={`btn wide ${space.status === SPACE_STATUS.ACTIVE ? 'primary' : ''}`}
         >
           {space.status === SPACE_STATUS.ACTIVE ? '예약하기' : '상세 보기'}

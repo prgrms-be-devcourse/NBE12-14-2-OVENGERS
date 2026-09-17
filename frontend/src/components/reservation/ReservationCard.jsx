@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import { ROUTES } from '../../constants/routePaths';
 import { formatDateLabel, formatTimeRange } from '../../utils/date';
 import { formatWon } from '../../utils/price';
@@ -31,7 +31,7 @@ export default function ReservationCard({ reservation }) {
       </div>
       <div className="booking-right">
         <div className="price">{formatWon(reservation.totalAmount)}</div>
-        <Link to={targetRoute} className="btn small">
+        <Link href={targetRoute} className="btn small">
           {reservation.status === RESERVATION_STATUS.HELD ? '결제하기' : '상세 보기'}
         </Link>
       </div>

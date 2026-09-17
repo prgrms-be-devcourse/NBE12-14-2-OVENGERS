@@ -1,35 +1,30 @@
-import { Link, NavLink } from 'react-router-dom';
+'use client';
+
+import Link from 'next/link';
 import { ROUTES, USER_NAV } from '../../constants/routePaths';
 import { useAuth } from '../../hooks/useAuth';
 import { formatCredit } from '../../utils/price';
+import BrandMark from '../brand/BrandMark';
 import Button from '../common/Button';
+import ActiveLink from './ActiveLink';
 
 export default function Header() {
   const { member, isAuthenticated, isAdmin, logout } = useAuth();
 
   return (
     <header className="header">
-      <Link to={ROUTES.home} className="brand">
-        <span className="brandmark" aria-hidden="true">
-          🔑
-        </span>
+      <Link href={ROUTES.home} className="brand">
+        <BrandMark className="brandmark" size={40} />
         Slot<em>Key</em>
       </Link>
 
       <nav className="nav" aria-label="주요 메뉴">
         {USER_NAV.filter((item) => !item.requiresAuth || isAuthenticated).map((item) => (
-          <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? 'active' : '')}>
+          <ActiveLink key={item.href} href={item.href}>
             {item.label}
-          </NavLink>
+          </ActiveLink>
         ))}
-        {isAdmin && (
-          <NavLink
-            to={ROUTES.adminSpaces}
-            className={({ isActive }) => (isActive ? 'active' : '')}
-          >
-            관리자
-          </NavLink>
-        )}
+        {isAdmin && <ActiveLink href={ROUTES.adminSpaces}>관리자</ActiveLink>}
       </nav>
 
       <div className="header-actions">
@@ -47,10 +42,10 @@ export default function Header() {
           </>
         ) : (
           <>
-            <Link to={ROUTES.login} className="btn small">
+            <Link href={ROUTES.login} className="btn small">
               로그인
             </Link>
-            <Link to={ROUTES.signup} className="btn small primary">
+            <Link href={ROUTES.signup} className="btn small primary">
               회원가입
             </Link>
           </>

@@ -6,8 +6,7 @@
  * 고치면 되도록 하기 위함입니다.
  */
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api/v1';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
 
 export const API_ROUTES = {
   auth: {

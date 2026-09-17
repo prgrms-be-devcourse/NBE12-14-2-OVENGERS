@@ -9,6 +9,8 @@
 @import "./tokens.css";
 
 h1,h2,h3,p{margin-top:0}
+/* 한글은 어절 단위로만 줄바꿈한다. keep-all 이 없으면 '나누고,' 가 '나누/고,' 로 잘린다. */
+h1,h2,h3,p,.badge,.definition,.eyebrow{word-break:keep-all;overflow-wrap:break-word}
 h1{font-size:2.5rem;letter-spacing:-.055em;line-height:1.25;margin-bottom:16px}
 h2{font-size:1.65rem;letter-spacing:-.035em;line-height:1.35}
 h3{font-size:1.1rem;margin-bottom:12px;letter-spacing:-.02em}
@@ -17,16 +19,15 @@ p{color:var(--muted)}
 .eyebrow{color:var(--cyan);letter-spacing:.16em;font-size:.8rem;font-weight:700;margin-bottom:20px}
 .header{height:86px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 max(32px,calc((100vw - 1280px)/2));gap:32px;background:#0b1220ed;position:sticky;top:0;z-index:10;backdrop-filter:blur(20px)}
 .brand{display:flex;align-items:center;gap:12px;font-size:1.65rem;letter-spacing:-.04em;font-weight:750;white-space:nowrap}
-.brandmark{background:var(--blue);border-radius:12px;width:40px;height:40px;display:grid;place-items:center}
-.brandmark .icon{width:24px;height:24px}
+.brandmark{width:40px;height:40px;display:block;flex:none;border-radius:12px}
 .brand em{font-style:normal;color:var(--cyan)}
 .nav{display:flex;gap:28px;align-items:center;margin-right:auto}
 .nav a{color:var(--muted);font-size:.95rem;padding:28px 0;border-bottom:2px solid transparent}
 .nav a.active{color:white;border-bottom-color:var(--blue)}
 .header-actions{display:flex;gap:10px;align-items:center;font-size:.9rem}
 .container{max-width:1280px;padding:48px 32px 80px;margin:auto}
-.hero{display:grid;grid-template-columns:1.05fr 1fr;align-items:center;gap:64px;padding-top:30px;padding-bottom:72px}
-.hero h1{font-size:clamp(2.8rem,4.3vw,4.5rem);line-height:1.18;letter-spacing:-.065em;margin-bottom:26px}
+.hero{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);align-items:center;gap:64px;padding-top:30px;padding-bottom:72px}
+.hero h1{font-size:clamp(2.4rem,3.8vw,3.75rem);line-height:1.2;letter-spacing:-.06em;margin-bottom:26px;text-wrap:pretty}
 .hero h1 span{color:var(--cyan)}
 .hero p{font-size:1.1rem;line-height:1.9;max-width:440px}
 .hero .primary{padding:16px 24px}
@@ -240,7 +241,7 @@ dialog .modal-actions{display:flex;justify-content:end;gap:12px;margin-top:26px}
 .cardbody{padding:18px}
 .admin-shell{grid-template-columns:190px 1fr}
 .admin-main{padding:35px 24px}
-.hero h1{font-size:3.2rem}
+.hero h1{font-size:3rem}
 }
 @media(max-width:850px){.header .nav{display:none}
 .hero,.split,.auth-layout,.payment-layout{grid-template-columns:1fr}
