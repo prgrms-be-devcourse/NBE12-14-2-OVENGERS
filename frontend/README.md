@@ -41,10 +41,14 @@ BACKEND_ORIGIN=http://localhost:8080
 `vercel.json` 은 프레임워크를 `nextjs` 로 고정하는 용도만 남았습니다. rewrite 는
 `next.config.mjs` 로 옮겼으므로 여기서 찾지 않습니다.
 
-이 파일이 필요한 이유는, Vercel 프로젝트의 Framework Preset 이 Vite 로 고정된 채로
-남아 있으면 빌드 뒤 `dist/` 를 찾다가 실패하기 때문입니다(Next 는 `.next` 를 냅니다).
-`vercel.json` 의 설정이 대시보드 설정보다 우선하므로 여기서 못박아 둡니다.
-Root Directory 는 `frontend` 로 잡혀 있어야 합니다.
+이 파일이 필요한 이유는 Vite 시절 대시보드 설정이 남아 있기 때문입니다.
+Framework Preset 과 Output Directory 는 서로 다른 설정이라 하나만 고쳐서는 안 되고,
+Output Directory 가 `dist` 로 남아 있으면 빌드가 성공해도 Vercel 이 `.next` 대신
+`dist` 를 찾다가 배포가 실패합니다. `vercel.json` 의 설정이 대시보드보다 우선하므로
+둘 다 여기서 못박아 둡니다.
+
+Root Directory 는 `frontend` 로 잡혀 있어야 하며, 이 값은 `vercel.json` 으로 덮을 수
+없으니 대시보드에서 확인합니다.
 
 ## 구조
 
