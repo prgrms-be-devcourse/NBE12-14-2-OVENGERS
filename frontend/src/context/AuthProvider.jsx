@@ -75,7 +75,7 @@ export function AuthProvider({ children }) {
       member,
       initializing,
       isAuthenticated: Boolean(member),
-      isAdmin: member?.role === MEMBER_ROLE.PLATFORM_ADMIN,
+      isAdmin: member?.role === MEMBER_ROLE.ADMIN,
       login,
       signup,
       logout,

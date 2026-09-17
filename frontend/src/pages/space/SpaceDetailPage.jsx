@@ -54,7 +54,10 @@ export default function SpaceDetailPage() {
         endTime: selection.endTime,
         termsVersion: TERMS_VERSION,
       });
-      navigate(ROUTES.reservationPayment(reservation.reservationId));
+      // spaceVersion 은 HOLD 응답에만 있으므로 결제 화면으로 넘겨준다(api-spec.md 5-1).
+      navigate(ROUTES.reservationPayment(reservation.reservationId), {
+        state: { spaceVersion: reservation.spaceVersion },
+      });
     },
   );
 

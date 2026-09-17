@@ -15,7 +15,7 @@ import java.time.LocalTime;
 // 2026-09-15 수정(이태호): 테이블명이 V2 마이그레이션에서 spaces(복수) -> space(단수)로
 // 정정됐는데 엔티티 매핑은 그대로 남아 있어 실제 스키마와 어긋나 있었다(연결된 채로는 부팅 시 테이블을
 // 찾지 못한다). DDL(V2)과 맞춰 단수로 정정.
-@Table(name = "space")
+@Table(name = "spaces")
 @Builder
 @Getter
 @NoArgsConstructor

@@ -6,13 +6,13 @@
  */
 
 export const MEMBER_ROLE = {
-  MEMBER: 'MEMBER',
-  PLATFORM_ADMIN: 'PLATFORM_ADMIN',
+  USER: 'USER',
+  ADMIN: 'ADMIN',
 };
 
 export const MEMBER_ROLE_LABEL = {
-  MEMBER: '일반 회원',
-  PLATFORM_ADMIN: '플랫폼 관리자',
+  USER: '일반 회원',
+  ADMIN: '플랫폼 관리자',
 };
 
 export const MEMBER_STATUS = {

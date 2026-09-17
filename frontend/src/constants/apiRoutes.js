@@ -31,14 +31,14 @@ export const API_ROUTES = {
     detail: (reservationId) => `/reservations/${reservationId}`,
     // 결제 확인 및 확정. Idempotency-Key 필수(api-spec.md 5-2).
     pay: (reservationId) => `/reservations/${reservationId}/pay`,
-    // 취소는 DELETE. 시작 전 CONFIRMED 상태에서만 가능(api-spec.md 5-4).
-    cancel: (reservationId) => `/reservations/${reservationId}`,
+    // 취소는 POST .../cancel. 시작 전 CONFIRMED 상태에서만 가능(api-spec.md 5-4).
+    cancel: (reservationId) => `/reservations/${reservationId}/cancel`,
     extend: (reservationId) => `/reservations/${reservationId}/extend`,
     checkOut: (reservationId) => `/reservations/${reservationId}/check-out`,
     doorToken: (reservationId) => `/reservations/${reservationId}/door-token`,
   },
   access: {
-    // Mock Door 검증. 로그인 세션과 무관하게 토큰만으로 판정한다(api-spec.md 7-2).
+    // Mock Door 검증. 로그인 필요 — 서버가 예약자 본인 여부도 확인한다(api-spec.md 7).
     verify: '/door-access/verify',
   },
   admin: {
@@ -56,4 +56,4 @@ export const API_ROUTES = {
 };
 
 /** 인증 헤더를 붙이지 않는 경로 (비회원도 호출 가능) */
-export const PUBLIC_PATH_PREFIXES = ['/auth/', '/spaces', '/door-access/verify'];
+export const PUBLIC_PATH_PREFIXES = ['/auth/', '/spaces'];

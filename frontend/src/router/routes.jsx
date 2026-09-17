@@ -31,9 +31,8 @@ export default function AppRoutes() {
         <Route path={ROUTES.signup} element={<SignupPage />} />
         <Route path={ROUTES.spaces} element={<SpaceListPage />} />
         <Route path={ROUTES.spaceDetail()} element={<SpaceDetailPage />} />
-        <Route path={ROUTES.door} element={<DoorTerminalPage />} />
-
         <Route element={<ProtectedRoute />}>
+          <Route path={ROUTES.door} element={<DoorTerminalPage />} />
           <Route path={ROUTES.reservations} element={<ReservationListPage />} />
           <Route path={ROUTES.reservationPayment()} element={<PaymentPage />} />
           <Route path={ROUTES.reservationDetail()} element={<ReservationDetailPage />} />

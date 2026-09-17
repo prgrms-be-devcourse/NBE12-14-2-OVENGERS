@@ -12,9 +12,9 @@ export function issueDoorToken(reservationId) {
 }
 
 /**
- * Mock Door 단말의 출입 검증. 로그인 세션과 무관하게 토큰만으로 판정하며,
+ * Mock Door 단말의 출입 검증. 서버가 로그인 회원이 예약자 본인인지도 확인하므로 인증이 필요하며,
  * 허용·거절 모두 서버에 기록된다(api-spec.md 7-2).
  */
 export function verifyAccess({ token, spaceId }) {
-  return api.post(API_ROUTES.access.verify, { token, spaceId }, { auth: false });
+  return api.post(API_ROUTES.access.verify, { token, spaceId });
 }

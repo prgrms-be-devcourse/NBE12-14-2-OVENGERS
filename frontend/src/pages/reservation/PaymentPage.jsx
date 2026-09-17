@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getMyReservation, payReservation } from '../../api/reservationApi';
+import { getSpace } from '../../api/spaceApi';
 import { useAction, useAsync } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useIdempotencyKey } from '../../hooks/useIdempotencyKey';
@@ -16,6 +17,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 export default function PaymentPage() {
   const { reservationId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { member, refreshMember } = useAuth();
   const { key: idempotencyKey } = useIdempotencyKey();
   const [locallyExpired, setLocallyExpired] = useState(false);
@@ -25,9 +27,13 @@ export default function PaymentPage() {
   const { data: reservation, loading, error, run: reload } = useAsync(fetchReservation, [fetchReservation]);
 
   const pay = useAction(async () => {
+    // 예약 상세 응답에는 spaceVersion 이 없다. HOLD 응답에서 넘겨받은 값을 쓰고,
+    // 새로고침 등으로 state 가 사라졌을 때만 현재 공간 version 으로 대체한다.
+    const spaceVersion =
+      location.state?.spaceVersion ?? (await getSpace(reservation.spaceId)).version;
     await payReservation(
       reservationId,
-      { spaceVersion: reservation.spaceVersion },
+      { spaceVersion },
       idempotencyKey,
     );
     // 잔액 재조회 실패가 이미 성공한 결제를 실패처럼 보이게 만들면 안 된다.

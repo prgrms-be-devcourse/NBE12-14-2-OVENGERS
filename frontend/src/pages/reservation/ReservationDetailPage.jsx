@@ -47,8 +47,8 @@ export default function ReservationDetailPage() {
     await reload();
   });
 
-  const extend = useAction(async ({ endTime }) => {
-    await extendReservation(reservationId, { endTime, expectedEndTime: reservation.endTime });
+  const extend = useAction(async ({ newEndTime }) => {
+    await extendReservation(reservationId, { newEndTime, expectedEndTime: reservation.endTime });
     setExtending(false);
     setToast('이용 시간이 연장되었습니다.');
     await refreshMember();

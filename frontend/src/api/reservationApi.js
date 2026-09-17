@@ -42,7 +42,7 @@ export function getMyReservation(reservationId) {
  * 시작 이후에는 취소할 수 없다(체크아웃으로만 종료). core-domain-decisions.md 6-1.
  */
 export function cancelReservation(reservationId) {
-  return api.delete(API_ROUTES.reservations.cancel(reservationId));
+  return api.post(API_ROUTES.reservations.cancel(reservationId));
 }
 
 /**
@@ -50,9 +50,9 @@ export function cancelReservation(reservationId) {
  * expectedEndTime 은 화면이 마지막으로 읽은 reservation.endTime — 서버가 이 값으로
  * 낙관적 검사(WHERE end_time=:expectedEndTime)를 하여 중복 연장 요청을 걸러낸다(core-domain-decisions.md 7-2).
  */
-export function extendReservation(reservationId, { endTime, expectedEndTime }) {
+export function extendReservation(reservationId, { newEndTime, expectedEndTime }) {
   return api.post(API_ROUTES.reservations.extend(reservationId), {
-    endTime,
+    newEndTime,
     expectedEndTime,
   });
 }

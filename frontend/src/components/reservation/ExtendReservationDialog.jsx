@@ -6,12 +6,13 @@ import { formatWon } from '../../utils/price';
 
 const EXTEND_OPTIONS_MINUTES = [30, 60, 90, 120];
 
-function addMinutes(timeString, minutes) {
-  const [h, m] = timeString.split(':').map(Number);
-  const total = h * 60 + m + minutes;
-  const hh = Math.floor(total / 60) % 24;
-  const mm = total % 60;
-  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+const pad = (n) => String(n).padStart(2, '0');
+
+/** "YYYY-MM-DDTHH:mm:ss"(서버 LocalDateTime) 에 분을 더해 같은 형식으로 돌려준다. 날짜 넘김도 처리한다. */
+function addMinutes(dateTimeString, minutes) {
+  const d = new Date(dateTimeString); // 오프셋 없는 ISO 문자열은 로컬 시각으로 해석된다
+  d.setMinutes(d.getMinutes() + minutes);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 }
 
 /**
@@ -40,7 +41,7 @@ export default function ExtendReservationDialog({
       confirmLabel="연장하기"
       loading={loading}
       onClose={onClose}
-      onConfirm={() => onConfirm({ endTime: newEndTime })}
+      onConfirm={() => onConfirm({ newEndTime })}
     >
       <Select
         label="연장할 시간"
@@ -53,7 +54,7 @@ export default function ExtendReservationDialog({
       />
       <div className="definition">
         <span>변경될 종료 시각</span>
-        <strong>{newEndTime ?? '-'}</strong>
+        <strong>{newEndTime ? newEndTime.slice(11, 16) : '-'}</strong>
       </div>
       <div className="definition total">
         <span>추가 결제 예상 금액</span>

@@ -2,8 +2,12 @@ import api, { clearTokens, getRefreshToken, setTokens } from './client';
 import { API_ROUTES } from '../constants/apiRoutes';
 
 /** 회원가입. role 은 보내지 않습니다. 서버가 항상 MEMBER 로 생성합니다(FR-AUTH-02). */
-export function signup({ email, password, nickname }) {
-  return api.post(API_ROUTES.auth.signup, { email, password, nickname }, { auth: false });
+export function signup({ email, password, passwordConfirm, nickname }) {
+  return api.post(
+    API_ROUTES.auth.signup,
+    { email, password, passwordConfirm, nickname },
+    { auth: false },
+  );
 }
 
 export async function login({ email, password }) {
