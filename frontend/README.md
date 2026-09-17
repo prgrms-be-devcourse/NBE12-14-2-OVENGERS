@@ -1,7 +1,8 @@
 # Slot Key — Frontend
 
-Next.js(App Router) 앱입니다. 화면 구성은 `slot-key-web` 프로토타입과 독립 결제 화면을 따르며,
-디자인 시스템(`src/styles/tokens.css`, `src/styles/global.css`)도 프로토타입에서 이식했습니다.
+Next.js(App Router) + TypeScript 앱입니다. 화면 구성은 `slot-key-web` 프로토타입과 독립 결제
+화면을 따르며, 디자인 시스템(`src/styles/tokens.css`, `src/styles/global.css`)도 프로토타입에서
+이식했습니다.
 
 ## 실행
 
@@ -21,7 +22,8 @@ BACKEND_ORIGIN=http://localhost:8080
 | `npm run dev` | 개발 서버 |
 | `npm run build` | 프로덕션 빌드 (`.next/`) |
 | `npm run start` | 빌드 결과 실행 |
-| `npm run lint` | ESLint 검사 (`next/core-web-vitals`) |
+| `npm run lint` | ESLint 검사 (`next/core-web-vitals` + `next/typescript`) |
+| `npx tsc --noEmit` | 타입 검사만 (빌드 없이) |
 
 ## 환경변수
 
@@ -54,6 +56,7 @@ Root Directory 는 `frontend` 로 잡혀 있어야 하며, 이 값은 `vercel.js
 
 ```
 src
+├── types/api.ts         서버 응답·요청 타입. 서버 DTO 가 바뀌면 여기부터 고칩니다
 ├── app                  App Router 라우트. page/layout 은 얇게 두고 metadata 만 선언
 │   ├── layout.jsx       <html>/<body>, 공통 metadata, Providers
 │   ├── icon.svg         파비콘 (apple-icon.png 과 같은 브랜드 마크)
@@ -70,6 +73,10 @@ src
 
 ## 알아둘 점
 
+- **타입의 기준은 `src/types/api.ts` 입니다.** 서버 DTO 가 바뀌면 이 파일을 먼저 고치고,
+  컴파일 오류가 가리키는 화면을 따라가면 고쳐야 할 곳이 빠짐없이 드러납니다.
+- **`tsconfig.json` 은 `strict: true` 입니다.** `any` 로 막지 말고 타입을 좁히거나
+  `src/types/api.ts` 에 모양을 추가하는 쪽으로 해결합니다.
 - **화면의 접근 제어는 편의입니다.** `RequireAuth`·`RequireAdmin` 이 메뉴와 화면을 가리지만,
   실제 권한 판단은 서버가 합니다. 화면에서 버튼을 숨겼다는 이유로 서버 검사를 생략하지 않습니다.
 - **인증은 클라이언트에서만 이루어집니다.** 토큰을 `localStorage` 에 두므로 화면은 모두
