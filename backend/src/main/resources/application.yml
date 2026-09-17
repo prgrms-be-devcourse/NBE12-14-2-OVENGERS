@@ -27,3 +27,6 @@ app:
     cookie:
       secure: true
       same-site: Lax
+
+  credit:
+    signup-grant: 50000
