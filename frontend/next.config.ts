@@ -8,9 +8,10 @@ import type { NextConfig } from 'next';
  * CORS 설정과 혼합 콘텐츠(HTTPS 페이지 → HTTP API) 문제를 함께 피합니다.
  * (기존 vercel.json 의 rewrites 를 옮겨온 것입니다.)
  *
- * 로컬 백엔드로 붙일 때는 .env.local 에 BACKEND_ORIGIN=http://localhost:8080 을 둡니다.
+ * 기본값은 로컬 백엔드입니다. npm run dev 만으로 바로 붙습니다.
+ * 배포 환경에서는 BACKEND_ORIGIN 을 실제 백엔드 주소로 넣어 줘야 합니다.
  */
-const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN ?? 'http://3.36.74.44:8080';
+const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN ?? 'http://localhost:8080';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
