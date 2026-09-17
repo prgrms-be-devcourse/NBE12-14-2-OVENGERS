@@ -50,11 +50,8 @@ public class CreditServiceImpl implements CreditService {
         }
 
         // ID로 회원 / 예약 조회
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow();
-
-        Reservation reservation = reservationRepository.findById(reservationId)
-                .orElseThrow();
+        Member member = findMember(memberId);
+        Reservation reservation = findReservation(reservationId);
 
         saveTransaction(
                 member,
@@ -77,14 +74,18 @@ public class CreditServiceImpl implements CreditService {
         validateAmount(amount);
 
         // 잔액 증가
-        creditBalanceRepository.increase(memberId, amount);
+        int updatedRows =
+                creditBalanceRepository.increase(memberId, amount);
+
+        if (updatedRows == 0) {
+            throw new BusinessException(
+                    ErrorCode.MEMBER_NOT_FOUND
+            );
+        }
 
         // ID로 회원 / 예약 조회
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow();
-
-        Reservation reservation = reservationRepository.findById(reservationId)
-                .orElseThrow();
+        Member member = findMember(memberId);
+        Reservation reservation = findReservation(reservationId);
 
         saveTransaction(
                 member,
@@ -117,11 +118,8 @@ public class CreditServiceImpl implements CreditService {
         }
 
         // ID로 회원 / 예약 조회
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow();
-
-        Reservation reservation = reservationRepository.findById(reservationId)
-                .orElseThrow();
+        Member member = findMember(memberId);
+        Reservation reservation = findReservation(reservationId);
 
         saveTransaction(
                 member,
@@ -151,6 +149,22 @@ public class CreditServiceImpl implements CreditService {
         );
 
         creditTransactionRepository.save(transaction);
+    }
+
+    // ID로 회원 조회
+    private Member findMember(Long memberId) {
+        return memberRepository.findById(memberId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.MEMBER_NOT_FOUND
+                ));
+    }
+
+    // ID로 예약 조회
+    private Reservation findReservation(Long reservationId) {
+        return reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.RESERVATION_NOT_FOUND
+                ));
     }
 
     // 크레딧 금액은 0보다 큰 값만 허용
