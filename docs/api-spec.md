@@ -7,7 +7,7 @@
 ## 공통 사항
 
 - Base URL: `/api/v1` (예: `/spaces` → 실제로는 `/api/v1/spaces`)
-  - ⚠️ **예외**: 출입(§7) API는 현재 코드상 `/api` 접두사(`DoorAccessController`)라 `/api/reservations/{id}/door-token`처럼 `v1`이 없다. `/api/v1`로 통일할지 팀 합의 필요(§팀 확인 필요 사항 3).
+  - 출입(§7) API도 `/api/v1`로 통일됨(2026-09-17, 기존 `/api`).
 - 인증: Access Token(JWT, `Authorization: Bearer`), Refresh Token(임의 문자열, 재발급 전용 엔드포인트에서만 사용, 쿠키 전달 시 HttpOnly/Secure/SameSite)
 - JWT 클레임은 `sub`(회원 식별자), `exp`만 포함. 역할·상태는 넣지 않고 **모든 보호 API가 요청 시점에 DB에서 재조회**한다.
 - 인증 불필요 API: 회원가입, 로그인, 토큰 재발급, 공간 목록/상세 조회, 슬롯 가용성 조회.
@@ -158,7 +158,7 @@
 
 ## 7. 출입 (Door Access)
 
-> 현재 구현 경로(접두사 `/api`): `POST /api/reservations/{id}/door-token`, `PATCH /api/reservations/{id}/access-token/revoke`, `GET /api/reservations/{id}/access-logs`, `POST /api/door-access/verify`. revoke·access-logs는 이 문서에 세부 규칙 미기재 — 담당자 확인 필요.
+> 현재 구현 경로(접두사 `/api/v1`): `POST /reservations/{id}/door-token`, `PATCH /reservations/{id}/access-token/revoke`, `GET /reservations/{id}/access-logs`, `POST /door-access/verify`. **4개 모두 로그인 필요**(verify도 서버가 로그인 회원이 예약자 본인인지 확인). revoke·access-logs는 이 문서에 세부 규칙 미기재 — 담당자 확인 필요.
 
 - `POST /reservations/{reservationId}/door-token` (예약자 본인만): **발급에는 시간 제한이 없다** — `CONFIRMED`이고 `now < end_time`이면 예약 확정 직후부터 언제든 발급 가능(발급은 입장 권한이 아니라 신분증을 받는 것일 뿐, `start` 전엔 문이 열리지 않는다). 기존 활성 토큰은 먼저 폐기 후 재발급. 오류: FORBIDDEN_NOT_OWNER(403, 관리자 포함), RESERVATION_NOT_FOUND(404), RESERVATION_NOT_CONFIRMED(422)
 - `POST /door-access/verify`: `{ spaceId, token }`. 검증 순서: ① 해시로 활성 토큰 조회(폐기 토큰은 즉시 거절) ② 예약 상태(`CONFIRMED` 또는 `IN_USE`) 확인, 요청 공간=예약 공간 확인 ③ 시간대 확인 — **최초 체크인: `[start_time, start_time + 15분]`(앞 여유 0분, 시작 시각 정각 허용)**, **재입장: `(checked_in_at, end_time)`(종료 시각 정각은 거절)** ④ 최초 체크인 성공 시 `CONFIRMED → IN_USE` 전이가 부수 효과로 일어남 ⑤ 성공/실패 모두 `door_access_log`에 기록. 거절도 200 + `result: DENY`로 응답. `reasonCode`: TOKEN_NOT_FOUND, TOKEN_REVOKED, RESERVATION_NOT_ACTIVE(취소/완료/노쇼), OUTSIDE_ALLOWED_TIME, SPACE_MISMATCH
@@ -169,7 +169,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| `member.role` | MEMBER, PLATFORM_ADMIN |
+| `member.role` | USER, ADMIN (문서 본문의 MEMBER/PLATFORM_ADMIN 표기는 각각 USER/ADMIN을 뜻함) |
 | `member.status` | ACTIVE, SUSPENDED |
 | `space.status` | ACTIVE, INACTIVE |
 | `reservation.status` | HELD, EXPIRED, CONFIRMED, IN_USE, COMPLETED, CANCELLED, NO_SHOW |
@@ -182,7 +182,6 @@
 
 1. **감사 로그 조회 API**: `GET /admin/audit-logs`는 DoD에 명시되어 있지 않음. 필요 시 추가 정의(우선순위 낮음, MVP 3개 기능 범위 밖).
 2. **노쇼 환불률**: 현재 확정값은 0%이며 강사 피드백에 따라 재검토 중(`core-domain-decisions.md` §13). 바뀌면 이 문서와 `credit_transaction.type` 처리 로직도 함께 갱신.
-3. **출입 API 접두사**: `DoorAccessController`만 `/api`, 나머지는 `/api/v1`. 통일 여부 결정 필요(프론트 axios baseURL에 영향).
 
 > 2026-09-14 확정: 도어 토큰 발급 시작 시점은 예약 시작 30분 전부터(기획서 4-3 시나리오 "14:30"은 오타 — 14:00 시작 기준 정정값은 13:30으로 규칙과 일치). 최초 체크인 허용 구간은 시작 전후 30분(기존 15분에서 변경)으로 확정.
 > 2026-09-15 갱신: 위 2026-09-14 확정 내용은 `core-domain-decisions.md` §8로 다시 대체되었다(발급 시간 제한 없음, 체크인은 `[start, start+15분]`). 이 문서의 "팀 확인 필요 사항"에는 더 이상 해당하지 않으며, §7을 최신 기준으로 본다.

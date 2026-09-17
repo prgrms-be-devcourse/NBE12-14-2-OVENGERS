@@ -22,7 +22,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api")
+@RequestMapping("/api/v1")
 public class DoorAccessController {
 
     private final DoorAccessTokenService doorAccessTokenService;
