@@ -1,5 +1,6 @@
 package com.ovengers.slotkey.reservation.scheduler;
 
+import com.ovengers.slotkey.access.service.DoorAccessTokenService;
 import com.ovengers.slotkey.reservation.entity.Reservation;
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
 import com.ovengers.slotkey.reservation.entity.ReservationStatusHistory;
@@ -33,6 +34,7 @@ public class ReservationBatchProcessor {
     private final ReservationRepository reservationRepository;
     private final ReservationSlotRepository reservationSlotRepository;
     private final ReservationStatusHistoryRepository reservationStatusHistoryRepository;
+    private final DoorAccessTokenService doorAccessTokenService;
 
     /** HELD -> EXPIRED + 슬롯 삭제(core-domain-decisions 2-3). 예약 생성 시점 정리와 같은 쿼리를 재사용한다. */
     @Transactional
@@ -58,7 +60,12 @@ public class ReservationBatchProcessor {
         }
         reservationSlotRepository.deleteByReservationId(reservationId);
 
-        // TODO(access 도메인 연동 필요, 박창현님): 활성 출입 토큰 revoke(core-domain-decisions 3-2 NO_SHOW -> 토큰 폐기).
+        // 활성 출입 토큰 revoke(core-domain-decisions 3-2 NO_SHOW -> 토큰 폐기).
+        doorAccessTokenService.revokeByReservation(
+                reservationId,
+                now,
+                "NO_SHOW"
+        );
 
         saveHistory(reservationId, ReservationStatus.CONFIRMED, ReservationStatus.NO_SHOW, "NO_SHOW", now);
         return true;
@@ -78,7 +85,12 @@ public class ReservationBatchProcessor {
         // clearAutomatically = true 이므로 UPDATE 이후의 값(end_time)을 다시 읽는다.
         Reservation completed = reservationRepository.findById(reservationId).orElseThrow();
 
-        // TODO(access 도메인 연동 필요, 박창현님): 활성 출입 토큰 revoke(core-domain-decisions 3-2 COMPLETED -> 토큰 폐기).
+        // 활성 출입 토큰 revoke(core-domain-decisions 3-2 COMPLETED -> 토큰 폐기).
+        doorAccessTokenService.revokeByReservation(
+                reservationId,
+                completed.getEndTime(),
+                "AUTO_CHECK_OUT"
+        );
 
         saveHistory(reservationId, ReservationStatus.IN_USE, ReservationStatus.COMPLETED,
                 "AUTO_CHECK_OUT", completed.getEndTime());

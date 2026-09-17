@@ -1,5 +1,6 @@
 package com.ovengers.slotkey.reservation.service;
 
+import com.ovengers.slotkey.access.service.DoorAccessTokenService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.reservation.dto.response.ReservationResponse;
@@ -29,6 +30,7 @@ public class ReservationCheckOutService {
     private final ReservationRepository reservationRepository;
     private final ReservationStatusHistoryRepository reservationStatusHistoryRepository;
     private final Clock clock;
+    private final DoorAccessTokenService doorAccessTokenService;
 
     @Transactional
     public ReservationResponse checkOut(Long memberId, Long reservationId) {
@@ -46,9 +48,12 @@ public class ReservationCheckOutService {
             throw new BusinessException(ErrorCode.RESERVATION_STATE_CONFLICT, "체크아웃할 수 없는 상태입니다.");
         }
 
-        // TODO(access 도메인 연동 필요, 박창현님): 활성 출입 토큰 revoke.
-        // door_access_token.active_reservation_id가 이 reservationId인 활성 토큰을
-        // revoked_at=now로 폐기해야 한다(core-domain-decisions 8-3). access 도메인 완성 후 여기서 어댑터를 호출한다.
+        // // 체크아웃 성공 시 예약에 발급된 활성 출입 토큰 폐기.
+        doorAccessTokenService.revokeByReservation(
+                reservationId,
+                now,
+                "CHECKED_OUT"
+        );
 
         reservationStatusHistoryRepository.save(
                 ReservationStatusHistory.of(reservationId, memberId, ReservationStatus.IN_USE, ReservationStatus.COMPLETED, null, now)
