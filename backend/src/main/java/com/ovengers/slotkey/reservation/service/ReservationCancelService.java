@@ -1,5 +1,6 @@
 package com.ovengers.slotkey.reservation.service;
 
+import com.ovengers.slotkey.access.service.DoorAccessTokenService;
 import com.ovengers.slotkey.credit.service.CreditService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
@@ -35,6 +36,7 @@ public class ReservationCancelService {
     private final ReservationSlotRepository reservationSlotRepository;
     private final ReservationStatusHistoryRepository reservationStatusHistoryRepository;
     private final CreditService creditService;
+    private final DoorAccessTokenService doorAccessTokenService;
     private final Clock clock;
 
     @Transactional
@@ -60,9 +62,9 @@ public class ReservationCancelService {
         // 점유 슬롯 반환.
         reservationSlotRepository.deleteByReservationId(reservationId);
 
-        // TODO(access 도메인 연동 필요, 박창현님): 활성 출입 토큰 revoke.
-        // door_access_token.active_reservation_id가 이 reservationId인 활성 토큰을
-        // revoked_at=now로 폐기해야 한다. access 도메인 완성 후 여기서 어댑터를 호출한다.
+        // 활성 출입 토큰 revoke. 회원 본인의 취소이므로(이미 위에서 owner 검사를 마쳤음)
+        // owner 검사가 없는 revokeByReservation(예약 상태 변경에 따른 시스템 경로)을 사용한다.
+        doorAccessTokenService.revokeByReservation(reservationId, now, "CANCELLED");
 
         // 환불 등급(§9): 시작 1시간 전까지는 전액, 1시간 전~시작 전은 50%만 환급한다.
         // credit_transaction에는 REFUND(+전액)와 PENALTY(-위약금)를 두 줄로 분리해 기록한다
