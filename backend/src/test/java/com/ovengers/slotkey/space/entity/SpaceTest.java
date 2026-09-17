@@ -238,7 +238,7 @@ class SpaceTest {
         }
 
         @Test
-        @DisplayName("validateOperatingHours는 null이거나 시작이 종료보다 늦으면 예외를 발생시킨다")
+        @DisplayName("validateOperatingHours는 null, 시간 순서 오류 또는 30분 경계가 아닌 시각에 예외를 발생시킨다")
         void validateOperatingHours_throwsException() {
                 assertThatThrownBy(() -> Space.validateOperatingHours(null, LocalTime.of(18, 0)))
                                 .isInstanceOf(BusinessException.class)
@@ -253,6 +253,14 @@ class SpaceTest {
                                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_OPERATING_HOURS);
 
                 assertThatThrownBy(() -> Space.validateOperatingHours(LocalTime.of(9, 0), LocalTime.of(9, 0)))
+                                .isInstanceOf(BusinessException.class)
+                                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_OPERATING_HOURS);
+
+                assertThatThrownBy(() -> Space.validateOperatingHours(LocalTime.of(9, 15), LocalTime.of(18, 0)))
+                                .isInstanceOf(BusinessException.class)
+                                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_OPERATING_HOURS);
+
+                assertThatThrownBy(() -> Space.validateOperatingHours(LocalTime.of(9, 0), LocalTime.of(18, 30, 1)))
                                 .isInstanceOf(BusinessException.class)
                                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_OPERATING_HOURS);
         }

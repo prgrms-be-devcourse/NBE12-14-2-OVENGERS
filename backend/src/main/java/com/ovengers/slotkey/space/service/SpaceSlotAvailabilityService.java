@@ -47,7 +47,7 @@ public class SpaceSlotAvailabilityService {
                     // 1. 공간 자체가 비활성(INACTIVE)이면 예약 불가
                     // 2. 과거 시각이면 예약 불가
                     // 3. 이미 다른 예약에 의해 점유되었으면 예약 불가
-                    boolean isPast = window.start().isBefore(now);
+                    boolean isPast = !window.start().isAfter(now);
                     boolean isOccupied = occupiedSlots.contains(window.start());
                     boolean available = isSpaceActive && !isPast && !isOccupied;
 

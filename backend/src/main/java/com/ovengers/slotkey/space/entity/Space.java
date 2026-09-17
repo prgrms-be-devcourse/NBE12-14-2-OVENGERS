@@ -63,9 +63,19 @@ public class Space {
     private int version;
 
     public static void validateOperatingHours(LocalTime openingTime, LocalTime closingTime) {
-        if (openingTime == null || closingTime == null || !openingTime.isBefore(closingTime)) {
+        if (openingTime == null
+                || closingTime == null
+                || !openingTime.isBefore(closingTime)
+                || !isHalfHourBoundary(openingTime)
+                || !isHalfHourBoundary(closingTime)) {
             throw new BusinessException(ErrorCode.INVALID_OPERATING_HOURS);
         }
+    }
+
+    private static boolean isHalfHourBoundary(LocalTime time) {
+        return (time.getMinute() == 0 || time.getMinute() == 30)
+                && time.getSecond() == 0
+                && time.getNano() == 0;
     }
 
     public static void validatePricePerSlot(Long pricePerSlot) {

@@ -183,8 +183,8 @@ class SpaceSlotAvailabilityServiceTest {
     }
 
     @Test
-    @DisplayName("현재 시각과 슬롯 시작 시각이 정확히 일치할 때 isBefore는 false이므로 슬롯이 가용한 상태(true)로 판단된다 (현재 구현 문서화)")
-    void getSlotAvailability_exactStartTimeMatch_isAvailableUnderCurrentImplementation() {
+    @DisplayName("현재 시각과 슬롯 시작 시각이 정확히 일치하면 예약 정책과 동일하게 해당 슬롯은 가용하지 않다")
+    void getSlotAvailability_exactStartTimeMatch_isUnavailable() {
         // given
         Long spaceId = 1L;
         LocalDate targetDate = LocalDate.of(2026, 9, 20);
@@ -206,10 +206,12 @@ class SpaceSlotAvailabilityServiceTest {
         SpaceSlotAvailabilityResponse response = serviceWithExactClock.getSlotAvailability(spaceId, targetDate);
 
         // then
-        // slots(3)은 10:30~11:00 슬롯. window.start() == 10:30, now == 10:30 ->
-        // isBefore(now)는 false -> isPast == false -> available == true
+        // slots(3)은 10:30~11:00 슬롯. window.start() == now 이므로 즉시 예약할 수 없다.
         SlotResponse slot1030 = response.slots().get(3);
         assertThat(slot1030.slotStart()).isEqualTo(LocalDateTime.of(2026, 9, 20, 10, 30));
-        assertThat(slot1030.isAvailable()).isTrue();
+        assertThat(slot1030.isAvailable()).isFalse();
+
+        // 다음 슬롯은 아직 미래이므로 가용하다.
+        assertThat(response.slots().get(4).isAvailable()).isTrue();
     }
 }
