@@ -28,7 +28,10 @@ import org.springframework.test.web.servlet.MvcResult;
 import com.ovengers.slotkey.global.security.jwt.JwtUtil;
 import jakarta.persistence.EntityManager;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.mock.mockito.SpyBean;
+import org.springframework.transaction.annotation.Propagation;
 
+import static org.mockito.Mockito.doReturn;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -44,7 +47,7 @@ public class AuthControllerTest {
     @Autowired
     private MockMvc mvc;
 
-    @Autowired
+    @SpyBean // 스파이빈은 실제 레포지토리를 이용하면서 테스트에서 지정한 메스드만 결과를 바꿀수 있게 한다고 합니다.
     private MemberRepository memberRepository;
 
     @Autowired
@@ -620,6 +623,59 @@ public class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.email").value(email));
+    }
+    @Test
+    @DisplayName("사전 중복 검사를 통과해도 DB에서 이메일이 중복되면 409를 반환한다")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void t18() throws Exception {
+        String email = "duplicate-at-save@example.com";
+
+        // 다른 가입 요청이 먼저 성공한 상황을 준비
+        Member existingMember = memberRepository.saveAndFlush(
+                new Member(
+                        email,
+                        passwordEncoder.encode("Test1234!"),
+                        "기존회원"
+                )
+        );
+
+        try {
+            // 사전 검사 당시에는 이메일이 없었다고 가정한다.
+            // 저장 메서드는 실제 MySQL을 그대로 사용한다.
+            doReturn(false)
+                    .when(memberRepository)
+                    .existsByEmail(email);
+
+            mvc.perform(
+                            post("/api/v1/auth/signup")
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content("""
+                                        {
+                                            "email": "%s",
+                                            "password": "Test1234!",
+                                            "passwordConfirm": "Test1234!",
+                                            "nickname": "새회원"
+                                        }
+                                        """.formatted(email))
+                    )
+                    .andDo(print())
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code")
+                            .value("EMAIL_ALREADY_EXISTS"));
+
+            // 기존 회원이 그대로 유지되는지 확인
+            Member savedMember = memberRepository.findByEmail(email)
+                    .orElseThrow();
+
+            assertThat(savedMember.getId())
+                    .isEqualTo(existingMember.getId());
+
+            assertThat(savedMember.getNickname())
+                    .isEqualTo("기존회원");
+        } finally {
+            // 이 테스트는 자동 롤백을 사용하지 않으므로 직접 정리
+            memberRepository.deleteById(existingMember.getId());
+        }
     }
 }
 

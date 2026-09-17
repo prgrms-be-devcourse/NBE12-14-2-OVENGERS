@@ -5,6 +5,8 @@ import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +53,18 @@ public class MemberService {
 
         Member member = new Member(email, passwordHash, nickname);
 
-        return memberRepository.save(member);
+        try {
+            return memberRepository.saveAndFlush(member);
+        } catch (DataIntegrityViolationException e) {
+            if (e.getCause() instanceof ConstraintViolationException violation) {
+                String name = violation.getConstraintName();
+
+                if ("email".equals(name) || "member.email".equals(name)) {
+                    throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
+                }
+            }
+
+            throw e;
+        }
     }
 }
