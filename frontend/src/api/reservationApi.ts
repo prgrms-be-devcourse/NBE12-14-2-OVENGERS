@@ -60,6 +60,16 @@ export interface ReservationListParams {
   status?: ReservationStatus | '';
 }
 
+export function getMyReservations({
+                                    page = 0,
+                                    size = 10,
+                                    status,
+                                  }: ReservationListParams = {}): Promise<Page<ReservationSummary>> {
+  return api.get<Page<ReservationSummary>>(API_ROUTES.reservations.list, {
+    query: { page, size, status },
+  });
+}
+
 /** 실제 예약 상세 API 응답 */
 export interface ReservationDetailApiResponse {
   reservationId: number;
