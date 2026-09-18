@@ -1,3 +1,7 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import styles from './AccessKeyPanel.module.css';
 import { formatAccessKey } from '../../utils/format';
 import { formatDateTime } from '../../utils/date';
 
@@ -15,6 +19,34 @@ export interface AccessKeyPanelProps {
 }
 
 export default function AccessKeyPanel({ accessKey, issuedAt, notice }: AccessKeyPanelProps) {
+  const [feedback, setFeedback] = useState<{ key: string; message: string } | null>(null);
+  const copyVersion = useRef(0);
+
+  useEffect(() => {
+    return () => { copyVersion.current += 1; };
+  }, [accessKey]);
+
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = window.setTimeout(() => setFeedback(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [feedback]);
+
+  const copyKey = async () => {
+    if (!accessKey) return;
+    const version = ++copyVersion.current;
+    try {
+      await navigator.clipboard.writeText(accessKey);
+      if (version === copyVersion.current) {
+        setFeedback({ key: accessKey, message: '클립보드에 복사되었습니다' });
+      }
+    } catch {
+      if (version === copyVersion.current) {
+        setFeedback({ key: accessKey, message: '복사하지 못했습니다. 클립보드 권한을 확인하고 다시 눌러 주세요.' });
+      }
+    }
+  };
+
   if (!accessKey) {
     return (
       <div className="key-card">
@@ -28,7 +60,18 @@ export default function AccessKeyPanel({ accessKey, issuedAt, notice }: AccessKe
     <div className="key-card">
       <h2>출입 키가 발급되었습니다</h2>
       <p className="muted">이 화면을 벗어나면 다시 볼 수 없습니다. 필요하면 지금 저장해 주세요.</p>
-      <p className="key-code">{formatAccessKey(accessKey)}</p>
+      <button
+        type="button"
+        className={`key-code ${styles.copyKey}`}
+        onClick={copyKey}
+        aria-label="출입 키를 클립보드에 복사"
+        aria-describedby="access-key-copy-feedback"
+      >
+        {formatAccessKey(accessKey)}
+      </button>
+      <p id="access-key-copy-feedback" className={styles.feedback} role="status" aria-live="polite">
+        {feedback?.key === accessKey ? feedback.message : '출입 키를 클릭하면 복사됩니다'}
+      </p>
       {issuedAt && <p className="muted">발급 시각 {formatDateTime(issuedAt)}</p>}
       {notice && <p className="note">{notice}</p>}
     </div>
