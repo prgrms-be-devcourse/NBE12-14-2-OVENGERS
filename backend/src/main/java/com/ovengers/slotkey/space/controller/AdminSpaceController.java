@@ -33,7 +33,7 @@ public class AdminSpaceController {
 
     @PatchMapping("/spaces/{spaceId}")
     public ResponseEntity<ApiResponse<SpaceDetailResponse>> updateSpace(
-            @PathVariable Long spaceId,
+            @PathVariable("spaceId") Long spaceId,
             @Valid @RequestBody SpaceUpdateRequest request,
             @AuthenticationPrincipal AuthPrincipal authPrincipal) {
         spaceAuthorizationService.validateCanManageSpace(authPrincipal);
