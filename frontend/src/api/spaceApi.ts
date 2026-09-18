@@ -28,13 +28,38 @@ export function getSpace(spaceId: number | string): Promise<Space> {
   return api.get<Space>(API_ROUTES.spaces.detail(spaceId), { auth: false });
 }
 
-/** 날짜별 30분 슬롯 가용성(FR-SPACE-03). */
-export function getSpaceSlots(
+/** 실제 백엔드 슬롯 응답 */
+interface SpaceSlotsApiResponse {
+  spaceId: number;
+  date: string;
+  slots: {
+    slotStart: string;
+    slotEnd: string;
+    isAvailable: boolean;
+  }[];
+}
+
+/** 날짜별 30분 슬롯 가용성 */
+export async function getSpaceSlots(
   spaceId: number | string,
   date: string,
 ): Promise<SpaceSlotsResponse> {
-  return api.get<SpaceSlotsResponse>(API_ROUTES.spaces.slots(spaceId), {
-    query: { date },
-    auth: false,
-  });
+  const response = await api.get<SpaceSlotsApiResponse>(
+    API_ROUTES.spaces.slots(spaceId),
+    {
+      query: { date },
+      auth: false,
+    },
+  );
+
+  return {
+    spaceId: response.spaceId,
+    date: response.date,
+    slots: response.slots.map((slot) => ({
+      startTime: slot.slotStart.slice(11, 16),
+      endTime: slot.slotEnd.slice(11, 16),
+      available: slot.isAvailable,
+    })),
+  };
 }
+

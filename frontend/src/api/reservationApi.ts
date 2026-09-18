@@ -8,12 +8,19 @@ import type {
 } from '../types/api';
 import { API_ROUTES } from '../constants/apiRoutes';
 import api from './client';
-
+import { getSpace } from './spaceApi';
 /**
  * 예약 생성 = 슬롯 확보(HOLD). 결제는 아직 일어나지 않으므로 Idempotency-Key가 필요 없다
  * (core-domain-decisions.md 2-1, api-spec.md 5-1).
  * 응답에 totalAmount, spaceVersion, holdExpiresAt 이 포함된다.
  */
+export function cancelReservation(
+  reservationId: number | string,
+): Promise<void> {
+  return api.post<void>(
+    API_ROUTES.reservations.cancel(reservationId),
+  );
+}
 export function createReservation({
   spaceId,
   date,
@@ -53,26 +60,41 @@ export interface ReservationListParams {
   status?: ReservationStatus | '';
 }
 
-export function getMyReservations({
-  page = 0,
-  size = 10,
-  status,
-}: ReservationListParams = {}): Promise<Page<ReservationSummary>> {
-  return api.get<Page<ReservationSummary>>(API_ROUTES.reservations.list, {
-    query: { page, size, status },
-  });
+/** 실제 예약 상세 API 응답 */
+export interface ReservationDetailApiResponse {
+  reservationId: number;
+  spaceId: number;
+  startTime: string;
+  endTime: string;
+  status: ReservationStatus;
+  pricePerSlotSnapshot: number;
+  totalAmount: number;
+  holdExpiresAt: string | null;
+  checkedInAt: string | null;
+  checkedOutAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  statusHistory: {
+    fromStatus: ReservationStatus | null;
+    toStatus: ReservationStatus;
+    reason: string | null;
+    changedAt: string;
+  }[];
 }
 
-export function getMyReservation(reservationId: number | string): Promise<Reservation> {
-  return api.get<Reservation>(API_ROUTES.reservations.detail(reservationId));
-}
+export async function getMyReservation(reservationId: number | string) {
+  const reservation = await api.get<ReservationDetailApiResponse>(
+    API_ROUTES.reservations.detail(reservationId),
+  );
 
-/**
- * 예약자 본인만 취소할 수 있다. 시작 1시간 전까지 100%, 1시간 전~시작 전 50% 환불,
- * 시작 이후에는 취소할 수 없다(체크아웃으로만 종료). core-domain-decisions.md 6-1.
- */
-export function cancelReservation(reservationId: number | string): Promise<void> {
-  return api.post<void>(API_ROUTES.reservations.cancel(reservationId));
+  // 예약 응답에 없는 공간 이름·위치는 공간 상세 API에서 조회한다.
+  const space = await getSpace(reservation.spaceId);
+
+  return {
+    ...reservation,
+    spaceName: space.name,
+    spaceLocation: space.location,
+  };
 }
 
 /**
