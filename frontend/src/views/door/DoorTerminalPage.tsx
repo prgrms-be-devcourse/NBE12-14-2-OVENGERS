@@ -6,9 +6,12 @@ import BrandMark from '../../components/brand/BrandMark';
 import { ROUTES } from '../../constants/routePaths';
 import { formatDateTime } from '../../utils/date';
 import styles from './DoorTerminalPage.module.css';
-import type { AccessVerifyResult } from '../../types/api';
+import type { AccessVerifyResult, ReservationSummary } from '../../types/api';
 import type { DoorVerifyFormValue } from '../../components/access/DoorVerifyForm';
-import { getSpaces } from '../../api/spaceApi';
+import { getMyReservations, getMyReservation } from '../../api/reservationApi';
+import { useAuth } from '../../hooks/useAuth';
+import { reservationEndTime } from '../../utils/reservationKey';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { verifyAccess } from '../../api/doorAccessApi';
 import { useAction, useAsync } from '../../hooks/useApi';
 import DoorVerifyForm from '../../components/access/DoorVerifyForm';
@@ -22,7 +25,17 @@ import ErrorMessage from '../../components/common/ErrorMessage';
  * 허용·거절 판단은 모두 서버가 하며, 이 화면은 결과를 보여주기만 합니다.
  */
 export default function DoorTerminalPage() {
-  const [form, setForm] = useState<DoorVerifyFormValue>({ accessKey: '', spaceId: '' });
+  const { member, initializing } = useAuth();
+  if (initializing) return <LoadingSpinner />;
+  if (!member) return <section className="terminal panel"><h1>모의 출입</h1><p>로그인 후 내 예약으로 출입을 확인할 수 있습니다.</p><Link className="btn primary" href={ROUTES.login}>로그인</Link></section>;
+  return <MemberDoorTerminal key={member.memberId} />;
+}
+
+const reservationTime = (reservation: ReservationSummary, field: 'startTime' | 'endTime') =>
+  reservationEndTime(reservation[field].includes('T') ? reservation[field] : `${reservation.date}T${reservation[field]}`);
+
+function MemberDoorTerminal() {
+  const [form, setForm] = useState<DoorVerifyFormValue>({ accessKey: '', reservationId: '' });
   const [result, setResult] = useState<AccessVerifyResult | null>(null);
 
   const approvedHeading = useRef<HTMLHeadingElement>(null);
@@ -32,14 +45,38 @@ export default function DoorTerminalPage() {
     if (allowed) approvedHeading.current?.focus();
   }, [allowed]);
 
-  const fetchSpaces = useCallback(() => getSpaces({ size: 100 }), []);
-  const { data: spaceData } = useAsync(fetchSpaces, [fetchSpaces]);
+  const fetchReservations = useCallback(async () => {
+    const groups = await Promise.all((['CONFIRMED', 'IN_USE'] as const).map(async (status) => {
+      const rows: ReservationSummary[] = [];
+      let page = 0;
+      while (true) {
+        const response = await getMyReservations({ page, size: 100, status });
+        rows.push(...response.content);
+        page += 1;
+        if (page >= response.totalPages || response.content.length === 0) break;
+      }
+      return rows;
+    }));
+    return groups.flat().filter((item) => reservationTime(item, 'endTime') > Date.now())
+      .sort((a, b) => reservationTime(a, 'startTime') - reservationTime(b, 'startTime'));
+  }, []);
+  const { data: reservations, loading: reservationsLoading, error: reservationsError, run: reloadReservations } = useAsync(fetchReservations, [fetchReservations]);
 
   const { execute, loading, error, setError } = useAction(async () => {
     setResult(null);
+    const selected = reservations?.find((item) => String(item.reservationId) === form.reservationId);
+    if (!selected) throw new Error('내 예약을 먼저 선택해 주세요.');
+    // 이름은 표시용이다. 본인 예약 상세를 재조회하고 공간 ID로만 연결한다.
+    const current = await getMyReservation(selected.reservationId);
+    if (current.reservationId !== selected.reservationId || current.spaceId !== selected.spaceId) {
+      throw new Error('예약 정보가 변경되었습니다. 목록을 새로고침하고 다시 선택해 주세요.');
+    }
+    if (!['CONFIRMED', 'IN_USE'].includes(current.status)) {
+      throw new Error('현재 출입할 수 없는 예약 상태입니다. 내 예약을 확인해 주세요.');
+    }
     const response = await verifyAccess({
       token: (form.accessKey ?? '').replace(/\s/g, ''),
-      spaceId: Number(form.spaceId),
+      spaceId: current.spaceId,
     });
     setResult(response);
   });
@@ -49,7 +86,7 @@ export default function DoorTerminalPage() {
       <div className="terminal-top">
         <p className="page-kicker">ACCESS YOUR SPACE</p>
         <h1 ref={formHeading} tabIndex={-1}>모의 출입</h1>
-        <p>{allowed ? '예약한 공간에서 좋은 시간을 시작하세요.' : '예약한 공간과 출입 키를 입력해 이용 가능 여부를 확인하세요.'}</p>
+        <p>{allowed ? '예약한 공간에서 좋은 시간을 시작하세요.' : '내 예약을 선택하고 출입을 확인하세요.'}</p>
       </div>
 
       {allowed && result ? (
@@ -69,19 +106,24 @@ export default function DoorTerminalPage() {
             <Link className={styles.primary} href={ROUTES.reservations}>내 예약 보기</Link>
             <button type="button" className={styles.reset} onClick={() => {
               setResult(null);
-              setForm({ accessKey: '', spaceId: '' });
+              setForm({ accessKey: '', reservationId: '' });
               setError(null);
               formHeading.current?.focus();
             }}>다른 출입 확인</button>
           </div>
         </section>
       ) : <>
+      {reservationsLoading && <p role="status">내 예약을 불러오고 있습니다…</p>}
+      <ErrorMessage error={reservationsError} onRetry={reloadReservations} />
+      {!reservationsLoading && !reservationsError && reservations?.length === 0 && <p>출입을 확인할 예약이 없습니다. 확정되었거나 이용 중인 예약만 표시됩니다.</p>}
       <DoorVerifyForm
-        spaces={spaceData?.content ?? []}
+        reservations={reservations ?? []}
+        disabled={reservationsLoading || Boolean(reservationsError) || !reservations?.length}
         value={form}
         onChange={(next) => {
-          setForm(next);
+          setForm(next.reservationId !== form.reservationId ? { ...next, accessKey: '' } : next);
           setResult(null);
+          setError(null);
         }}
         onSubmit={() => execute().catch(() => {})}
         loading={loading}
