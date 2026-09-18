@@ -6,8 +6,6 @@ import com.ovengers.slotkey.access.entity.AccessDenyReason;
 import com.ovengers.slotkey.access.entity.AccessResult;
 import com.ovengers.slotkey.access.entity.DoorAccessToken;
 import com.ovengers.slotkey.access.policy.DoorAccessTimePolicy;
-import com.ovengers.slotkey.global.error.BusinessException;
-import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.reservation.entity.Reservation;
@@ -29,6 +27,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,6 +35,7 @@ public class DoorAccessVerificationServiceTest {
 
     private static final Long MEMBER_ID = 1L;
     private static final Long OTHER_MEMBER_ID = 2L;
+    private static final Long RESERVATION_ID = 3L;
     private static final Long SPACE_ID = 10L;
     private static final Long OTHER_SPACE_ID = 20L;
     private static final String RAW_TOKEN = "raw-token";
@@ -99,8 +99,8 @@ public class DoorAccessVerificationServiceTest {
     void shouldDenyWhenTokenDoesNotExist() {
         givenRequestContext();
 
-        given(doorAccessTokenService.findByRawToken(RAW_TOKEN))
-                .willThrow(new BusinessException(ErrorCode.ACCESS_TOKEN_NOT_FOUND));
+        given(doorAccessTokenService.findOptionalByRawToken(RAW_TOKEN))
+                        .willReturn(Optional.empty());
 
         DoorAccessVerifyResponse response = service.verify(
                 MEMBER_ID,
@@ -249,6 +249,7 @@ public class DoorAccessVerificationServiceTest {
     void shouldAllowAccessAndCheckIn() {
         givenRequestContext();
         givenActiveReservation();
+        given(reservation.getId()).willReturn(RESERVATION_ID);
 
         given(doorAccessTimePolicy.findDenyReason(
                 NOW,
@@ -268,6 +269,14 @@ public class DoorAccessVerificationServiceTest {
 
         verify(reservation).checkIn(NOW);
 
+        verify(reservationStatusHistoryRepository)
+                        .save(argThat(history -> RESERVATION_ID.equals(history.getReservationId())
+                                        && MEMBER_ID.equals(history.getChangedByMemberId())
+                                        && history.getFromStatus() == ReservationStatus.CONFIRMED
+                                        && history.getToStatus() == ReservationStatus.IN_USE
+                                        && "FIRST_CHECK_IN".equals(history.getReason())
+                                        && NOW.equals(history.getChangedAt())));
+
         verify(doorAccessLogService).createAllowLog(
                 actorMember,
                 reservation,
@@ -284,7 +293,8 @@ public class DoorAccessVerificationServiceTest {
     }
 
     private void givenTokenAndReservation() {
-        given(doorAccessTokenService.findByRawToken(RAW_TOKEN)).willReturn(accessToken);
+            given(doorAccessTokenService.findOptionalByRawToken(RAW_TOKEN))
+                            .willReturn(Optional.of(accessToken));
         given(accessToken.getReservation()).willReturn(reservation);
     }
 
