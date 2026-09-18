@@ -1,4 +1,9 @@
 package com.ovengers.slotkey.member.dto.request;
 
-public class AdminMemberSearchCondition {
+import com.ovengers.slotkey.member.entity.MemberStatus;
+
+public record AdminMemberSearchCondition(
+        MemberStatus status,
+        String keyword
+) {
 }

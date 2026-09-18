@@ -42,4 +42,8 @@ public class Member extends BaseTimeEntity {
         this.role = MemberRole.USER;
         this.status = MemberStatus.ACTIVE;
     }
+
+    public void updateStatus(MemberStatus status) {
+        this.status = status;
+    }
 }

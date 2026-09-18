@@ -9,8 +9,11 @@ import com.ovengers.slotkey.space.dto.request.SpaceCreateRequest;
 import com.ovengers.slotkey.space.dto.request.SpaceUpdateRequest;
 import com.ovengers.slotkey.space.dto.response.SpaceDetailResponse;
 import com.ovengers.slotkey.space.entity.Space;
+import com.ovengers.slotkey.space.entity.SpaceStatus;
 import com.ovengers.slotkey.space.repository.SpaceRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +23,12 @@ public class AdminSpaceService {
 
     private final SpaceRepository spaceRepository;
     private final AuditLogService auditLogService;
+
+    @Transactional(readOnly = true)
+    public Page<SpaceDetailResponse> getSpaces(SpaceStatus status, String keyword, Pageable pageable) {
+        return spaceRepository.searchSpacesByNameOrDescription(keyword, status, pageable)
+                .map(SpaceDetailResponse::from);
+    }
 
     @Transactional
     public SpaceDetailResponse createSpace(SpaceCreateRequest request, Long adminMemberId) {
