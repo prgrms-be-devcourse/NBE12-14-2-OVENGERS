@@ -43,16 +43,14 @@ export class ApiError extends Error {
 /* ------------------------------------------------------------------ 토큰 */
 
 let accessToken: string | null = getItem(STORAGE_KEYS.accessToken);
-let refreshToken: string | null = getItem(STORAGE_KEYS.refreshToken);
 let onUnauthorized: (() => void) | null = null;
 
 export function setTokens(tokens: Partial<AuthTokens> | null): void {
   accessToken = tokens?.accessToken ?? null;
-  refreshToken = tokens?.refreshToken ?? null;
   if (accessToken) setItem(STORAGE_KEYS.accessToken, accessToken);
   else removeItem(STORAGE_KEYS.accessToken);
-  if (refreshToken) setItem(STORAGE_KEYS.refreshToken, refreshToken);
-  else removeItem(STORAGE_KEYS.refreshToken);
+  // 리프레시 토큰은 HttpOnly 쿠키로만 관리한다. 이전 버전이 저장한 값도 제거한다.
+  removeItem(STORAGE_KEYS.refreshToken);
 }
 
 export function clearTokens(): void {
@@ -61,10 +59,6 @@ export function clearTokens(): void {
 
 export function getAccessToken(): string | null {
   return accessToken;
-}
-
-export function getRefreshToken(): string | null {
-  return refreshToken;
 }
 
 export function hasSession(): boolean {
@@ -131,6 +125,7 @@ async function send<T>(
       method,
       headers: requestHeaders,
       body: body === undefined ? undefined : JSON.stringify(body),
+      credentials: 'same-origin',
     });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
@@ -156,15 +151,13 @@ async function send<T>(
 let refreshPromise: Promise<boolean> | null = null;
 
 async function refreshAccessToken(): Promise<boolean> {
-  if (!refreshToken) return false;
   // 동시에 여러 요청이 401 을 받아도 재발급은 한 번만 수행합니다.
   if (!refreshPromise) {
     refreshPromise = send<AuthTokens>('POST', API_ROUTES.auth.refresh, {
-      body: { refreshToken },
       auth: false,
     })
       .then((data) => {
-        setTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+        setTokens({ accessToken: data.accessToken });
         return true;
       })
       .catch(() => {

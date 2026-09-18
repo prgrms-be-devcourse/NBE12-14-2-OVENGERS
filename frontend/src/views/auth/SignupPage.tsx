@@ -34,7 +34,12 @@ export default function SignupPage() {
     event.preventDefault();
     if (!validate()) return;
     try {
-      await execute({ email: form.email, password: form.password, nickname: form.nickname });
+      await execute({
+        email: form.email,
+        password: form.password,
+        passwordConfirm: form.passwordConfirm,
+        nickname: form.nickname,
+      });
       router.replace(ROUTES.spaces);
     } catch {
       // 오류 문구는 ErrorMessage 가 보여줍니다.

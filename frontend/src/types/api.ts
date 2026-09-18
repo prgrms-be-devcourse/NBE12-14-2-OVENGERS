@@ -52,7 +52,6 @@ export interface AdminMember extends Member {
 
 export interface AuthTokens {
   accessToken: string;
-  refreshToken: string;
 }
 
 /** 로그인 응답. member 를 함께 내려주지 않으면 화면이 /members/me 로 한 번 더 조회합니다. */
@@ -63,7 +62,7 @@ export interface LoginResponse extends AuthTokens {
 export interface SignupRequest {
   email: string;
   password: string;
-  passwordConfirm?: string;
+  passwordConfirm: string;
   nickname: string;
 }
 
