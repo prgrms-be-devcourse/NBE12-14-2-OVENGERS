@@ -422,3 +422,39 @@ dialog .modal-actions{flex-wrap:wrap}
 @media(min-width:851px){.sidebar{align-self:start;position:sticky;top:86px;min-height:calc(100svh - 86px)}}
 @media(max-width:850px){.payment-reservation>.photo-placeholder{height:180px}}
 @media(max-width:600px){.payment-reservation>.photo-placeholder{height:210px}.form-section-title{font-size:1.2rem}.payment-card .definition strong{white-space:normal}.terminal-icon{width:60px;height:60px}.auth-form .page-kicker{font-size:.8rem;margin-bottom:12px}}
+/* 공간명 길이와 관계없이 가격·버튼을 카드 하단에 정렬 */
+.spacecard {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  
+  .spacecard > .photo {
+    flex-shrink: 0;
+  }
+  
+  .spacecard > .cardbody {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .spacecard > .cardbody > .divider {
+    margin-top: auto;
+    flex-shrink: 0;
+  }
+  
+  /* 내용과 하단 가격 영역 사이의 최소 간격 */
+  .spacecard > .cardbody > .divider::before {
+    content: "";
+    display: block;
+  }
+  
+  .spacecard > .cardbody > .divider {
+    margin-top: auto;
+  }
+  
+  .spacecard > .cardbody > .row {
+    flex-shrink: 0;
+  }
