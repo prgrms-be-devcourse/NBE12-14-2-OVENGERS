@@ -104,6 +104,7 @@ export async function getMyReservation(reservationId: number | string) {
     ...reservation,
     spaceName: space.name,
     spaceLocation: space.location,
+    spaceImagePath: space.imagePath,
   };
 }
 
