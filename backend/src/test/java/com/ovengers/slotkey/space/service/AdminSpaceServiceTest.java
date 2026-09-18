@@ -44,6 +44,49 @@ class AdminSpaceServiceTest {
     private AdminSpaceService adminSpaceService;
 
     @Test
+    @DisplayName("존재하는 공간 ID로 상세 조회하면 공간을 반환하고 감사 로그를 남기지 않는다")
+    void getSpaceDetailById_success_returnsSpaceWithoutAuditLog() {
+        // given
+        Long spaceId = 1L;
+        Space space = Space.builder()
+                .id(spaceId)
+                .name("관리자용 회의실")
+                .location("서울시 강남구")
+                .capacity(8)
+                .pricePerSlot(5000L)
+                .openingTime(LocalTime.of(9, 0))
+                .closingTime(LocalTime.of(18, 0))
+                .status(SpaceStatus.INACTIVE)
+                .version(2)
+                .build();
+        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(space));
+
+        // when
+        Space result = adminSpaceService.getSpaceDetailById(spaceId);
+
+        // then
+        assertThat(result).isSameAs(space);
+        verify(spaceRepository).findById(spaceId);
+        verifyNoInteractions(auditLogService);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 공간 ID로 상세 조회하면 SPACE_NOT_FOUND 예외가 발생하고 감사 로그를 남기지 않는다")
+    void getSpaceDetailById_notFound_throwsExceptionWithoutAuditLog() {
+        // given
+        Long spaceId = 999L;
+        given(spaceRepository.findById(spaceId)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> adminSpaceService.getSpaceDetailById(spaceId))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SPACE_NOT_FOUND);
+
+        verify(spaceRepository).findById(spaceId);
+        verifyNoInteractions(auditLogService);
+    }
+
+    @Test
     @DisplayName("공간 등록에 성공하면 저장된 공간 정보를 반환하고 REGISTER_SPACE 감사 로그를 기록한다")
     void createSpace_success() {
         // given

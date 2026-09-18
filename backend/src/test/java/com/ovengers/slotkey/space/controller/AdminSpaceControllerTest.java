@@ -7,6 +7,7 @@ import com.ovengers.slotkey.global.security.AuthPrincipal;
 import com.ovengers.slotkey.member.entity.MemberRole;
 import com.ovengers.slotkey.space.dto.request.SpaceCreateRequest;
 import com.ovengers.slotkey.space.dto.response.SpaceDetailResponse;
+import com.ovengers.slotkey.space.entity.Space;
 import com.ovengers.slotkey.space.entity.SpaceStatus;
 import com.ovengers.slotkey.space.service.AdminSpaceService;
 import org.junit.jupiter.api.AfterEach;
@@ -38,6 +39,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -78,6 +80,56 @@ class AdminSpaceControllerTest {
         @AfterEach
         void tearDown() {
                 SecurityContextHolder.clearContext();
+        }
+
+        @Test
+        @DisplayName("관리자 공간 상세 조회 요청은 경로의 spaceId로 200 OK와 ApiResponse를 반환한다")
+        void getSpaceDetailById_returnsOk() throws Exception {
+                // given
+                Long spaceId = 1L;
+                Space space = Space.builder()
+                                .id(spaceId)
+                                .name("관리자 회의실")
+                                .location("서울시 강남구")
+                                .description("수정 화면 초기값")
+                                .capacity(8)
+                                .pricePerSlot(5000L)
+                                .imagePath("/images/admin-space.jpg")
+                                .openingTime(LocalTime.of(9, 0))
+                                .closingTime(LocalTime.of(18, 0))
+                                .status(SpaceStatus.INACTIVE)
+                                .version(2)
+                                .build();
+                given(adminSpaceService.getSpaceDetailById(spaceId)).willReturn(space);
+
+                // when & then
+                mockMvc.perform(get("/api/v1/admin/spaces/{spaceId}", spaceId))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                                .andExpect(jsonPath("$.code").value("OK"))
+                                .andExpect(jsonPath("$.data.id").value(spaceId))
+                                .andExpect(jsonPath("$.data.name").value("관리자 회의실"))
+                                .andExpect(jsonPath("$.data.status").value("INACTIVE"))
+                                .andExpect(jsonPath("$.data.version").value(2));
+
+                verify(adminSpaceService).getSpaceDetailById(spaceId);
+        }
+
+        @Test
+        @DisplayName("존재하지 않는 관리자 공간 상세 조회는 404 SPACE_NOT_FOUND를 반환한다")
+        void getSpaceDetailById_notFound() throws Exception {
+                // given
+                Long spaceId = 999L;
+                given(adminSpaceService.getSpaceDetailById(spaceId))
+                                .willThrow(new BusinessException(ErrorCode.SPACE_NOT_FOUND));
+
+                // when & then
+                mockMvc.perform(get("/api/v1/admin/spaces/{spaceId}", spaceId))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("SPACE_NOT_FOUND"));
+
+                verify(adminSpaceService).getSpaceDetailById(spaceId);
         }
 
         @Test
