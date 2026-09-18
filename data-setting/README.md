@@ -32,8 +32,9 @@ setup/clean/reset은 동시에 실행하지 않습니다. 데이터베이스와 
 
 ## 데이터
 
-- 테스트 일반 회원 100명: sample.user001@example.com ~ sample.user100@example.com
-- 공통 초기 비밀번호: Sample1234! (DB에는 BCrypt 해시)
+- 테스트 일반 회원 100명: user001@sample.com ~ user100@sample.com
+- 공통 초기 비밀번호: 00000000 (DB에는 BCrypt 해시)
+- 테스트 관리자 아이디: admin000@sample.com  ,  비밀번호: 00000000
 - USER / ACTIVE, 초기 1,000,000 크레딧 및 동일 금액 SIGNUP_GRANT 원장.
 - 판교 13개 / 하남 13개 / 강남 13개, 총 39개 공간, 사진도 중복 없이 한 장씩.
 - 공간명은 사진 특징을 바탕으로 만든 가상 이름이며 실제 업체/촬영지를 의미하지 않습니다.
