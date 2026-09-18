@@ -15,7 +15,7 @@ import { useAction, useAsync } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { ROUTES } from '../../constants/routePaths';
 import { CHECK_IN_DEADLINE_MINUTES, RESERVATION_STATUS } from '../../constants/enums';
-import { formatDateLabel, formatDateTime, formatTimeRange, toDate } from '../../utils/date';
+import { formatDateLabel, formatDateTime, formatTimeRange} from '../../utils/date';
 import { formatWon } from '../../utils/price';
 import { formatReservationNo } from '../../utils/format';
 import ReservationStatusBadge from '../../components/reservation/ReservationStatusBadge';
@@ -94,8 +94,9 @@ export default function ReservationDetailPage() {
   const canIssueKey = confirmed || inUse;
 
   const now = new Date();
-  const startsAt = toDate(reservation.date, reservation.startTime);
-  const endsAt = toDate(reservation.date, reservation.endTime);
+// 서버의 LocalDateTime은 한국 시각으로 해석한다.
+const startsAt = new Date(`${reservation.startTime}+09:00`);
+const endsAt = new Date(`${reservation.endTime}+09:00`);
   // 날짜가 다른 예약(며칠 뒤 예약 등)에도 안전하도록 Date 차이로 직접 계산한다.
   // 59분 59초를 60분으로 올림해 전액 환불로 잘못 안내하지 않도록 내림한다.
   const minutesUntilStart = Math.floor((startsAt.getTime() - now.getTime()) / 60000);
@@ -126,11 +127,18 @@ export default function ReservationDetailPage() {
           <div className="summary-strip">
             <div>
               <span>이용 날짜</span>
-              <strong>{formatDateLabel(reservation.date)}</strong>
+              <strong>
+  {formatDateLabel(reservation.startTime.slice(0, 10))}
+</strong>
             </div>
             <div>
               <span>이용 시간</span>
-              <strong>{formatTimeRange(reservation.startTime, reservation.endTime)}</strong>
+              <strong>
+  {formatTimeRange(
+    reservation.startTime.slice(11, 16),
+    reservation.endTime.slice(11, 16),
+  )}
+</strong>
             </div>
             <div>
               <span>결제 금액</span>
@@ -187,7 +195,7 @@ export default function ReservationDetailPage() {
 
           <section className="section">
             <h2>상태 변경 이력</h2>
-            <ReservationStatusHistory histories={reservation.statusHistories} />
+            <ReservationStatusHistory histories={reservation.statusHistory} />
           </section>
         </div>
 
@@ -195,7 +203,7 @@ export default function ReservationDetailPage() {
           <>
               <AccessKeyPanel
                 accessKey={issuedKey?.accessKey}
-                issuedAt={issuedKey?.issuedAt ?? reservation.accessKey?.issuedAt}
+                issuedAt={issuedKey?.issuedAt}
                 notice={
                   canIssueKey
                     ? '예약 시간이 지나거나 예약을 취소하면 이 키는 사용할 수 없습니다.'
@@ -207,7 +215,7 @@ export default function ReservationDetailPage() {
                 <div className="panel" style={{ marginTop: 24 }}>
                   <ErrorMessage error={issue.error} />
                   <AccessKeyIssueButton
-                    hasActiveKey={Boolean(reservation.accessKey?.active)}
+                   hasActiveKey={Boolean(issuedKey)}
                     loading={issue.loading}
                     disabled={false}
                     onIssue={() => issue.execute().catch(() => {})}
