@@ -29,14 +29,23 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Old 60-space samples found. Use clean then setup, or reset, after reviewing sample reservation deletion.';
   END IF;
   WHILE n<=100 DO
-    SET sample_email=CONCAT('sample.user',LPAD(n,3,'0'),'@example.com');
+    SET sample_email=CONCAT('user',LPAD(n,3,'0'),'@sample.com');
     SET sample_key=CONCAT('user-',LPAD(n,3,'0'));
     IF NOT EXISTS (SELECT 1 FROM slotkey_sample_registry WHERE kind='MEMBER' AND seed_key=sample_key) THEN
       IF EXISTS (SELECT 1 FROM member WHERE email=sample_email) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Sample email already belongs to an untracked member. No existing data modified.';
       END IF;
       INSERT INTO member(email,password_hash,nickname,role,status,balance,created_at,updated_at)
-      VALUES(sample_email,'$2b$10$B8E311Ye98PPSX2q2pI40udJvCsrYyHDajufv0MnLhemfl5sPJV/i',CONCAT('샘플회원',LPAD(n,3,'0')),'USER','ACTIVE',1000000,NOW(6),NOW(6));
+      VALUES(
+  sample_email,
+  '$2b$12$kRiVg0sZNHrmMtl9Q7eIguuqTOc0vQY51A/REFpC5sUmr7zyRzM8u',
+  CONCAT('샘플회원',LPAD(n,3,'0')),
+  'USER',
+  'ACTIVE',
+  1000000,
+  NOW(6),
+  NOW(6)
+);
       SET sample_id=LAST_INSERT_ID();
       INSERT INTO slotkey_sample_registry VALUES('MEMBER',sample_key,sample_id);
       INSERT INTO credit_transaction(member_id,amount,type,reservation_id,balance_after,reason,created_at)
@@ -70,6 +79,39 @@ BEGIN
       WHERE NOT (s.name <=> sample_name) OR NOT (s.image_path <=> sample_image);
       SET n=n+1;
     END WHILE;
+    -- 샘플 관리자 1명 생성
+IF NOT EXISTS (
+  SELECT 1
+  FROM slotkey_sample_registry
+  WHERE kind='MEMBER' AND seed_key='admin-000'
+) THEN
+  IF EXISTS (
+    SELECT 1 FROM member WHERE email='admin000@sample.com'
+  ) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT='Admin email already belongs to an untracked member.';
+  END IF;
+
+  INSERT INTO member(
+    email, password_hash, nickname, role, status,
+    balance, created_at, updated_at
+  )
+  VALUES(
+    'admin000@sample.com',
+    '$2b$12$kRiVg0sZNHrmMtl9Q7eIguuqTOc0vQY51A/REFpC5sUmr7zyRzM8u',
+    '샘플관리자',
+    'ADMIN',
+    'ACTIVE',
+    0,
+    NOW(6),
+    NOW(6)
+  );
+
+  SET sample_id=LAST_INSERT_ID();
+
+  INSERT INTO slotkey_sample_registry
+  VALUES('MEMBER','admin-000',sample_id);
+END IF;
     SET region_idx=region_idx+1;
   END WHILE;
   COMMIT;
