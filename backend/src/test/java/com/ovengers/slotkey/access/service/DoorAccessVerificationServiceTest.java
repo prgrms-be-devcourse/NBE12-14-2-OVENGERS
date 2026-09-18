@@ -12,6 +12,7 @@ import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.reservation.entity.Reservation;
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
+import com.ovengers.slotkey.reservation.repository.ReservationStatusHistoryRepository;
 import com.ovengers.slotkey.space.entity.Space;
 import com.ovengers.slotkey.space.repository.SpaceRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +60,9 @@ public class DoorAccessVerificationServiceTest {
     private SpaceRepository spaceRepository;
 
     @Mock
+    private ReservationStatusHistoryRepository reservationStatusHistoryRepository;
+
+    @Mock
     private DoorAccessVerifyRequest request;
 
     @Mock
@@ -85,7 +89,8 @@ public class DoorAccessVerificationServiceTest {
                 doorAccessTimePolicy,
                 memberRepository,
                 spaceRepository,
-                clock
+                        clock,
+                        reservationStatusHistoryRepository
         );
     }
 
