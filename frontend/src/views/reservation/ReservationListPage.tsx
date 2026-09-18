@@ -30,8 +30,9 @@ export default function ReservationListPage() {
     <>
       <div className="pagehead">
         <div>
+          <p className="page-kicker">MY RESERVATIONS</p>
           <h1>내 예약</h1>
-          <p>본인이 만든 예약만 보입니다. 취소한 예약도 기록으로 남습니다.</p>
+          <p>다가오는 일정과 지난 이용 내역을 한눈에 확인하세요.</p>
         </div>
         <Link href={ROUTES.spaces} className="btn primary">
           공간 예약하기

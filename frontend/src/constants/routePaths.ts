@@ -29,7 +29,7 @@ export interface NavItem {
 
 /** 상단 메뉴 (일반 사용자) */
 export const USER_NAV: NavItem[] = [
-  { href: ROUTES.spaces, label: '공간 찾기' },
+  { href: ROUTES.spaces, label: '오피스 찾기' },
   { href: ROUTES.reservations, label: '내 예약', requiresAuth: true },
   { href: ROUTES.door, label: '모의 출입' },
 ];

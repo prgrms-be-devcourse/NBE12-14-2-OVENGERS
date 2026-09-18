@@ -20,16 +20,16 @@ export default function SpaceFilter({ value, onChange, showStatus = false }: Spa
 
   return (
     <div className="filters">
-      <label>
-        <span>날짜</span>
+      {!showStatus && <label>
+        <span>이용 날짜</span>
         <input
           type="date"
           value={value.date ?? ''}
           onChange={(event) => update({ date: event.target.value })}
         />
-      </label>
+      </label>}
       <Input
-        label="검색"
+        label="공간 검색"
         placeholder="공간 이름 또는 위치"
         value={value.keyword ?? ''}
         onChange={(event) => update({ keyword: event.target.value })}

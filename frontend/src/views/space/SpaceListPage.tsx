@@ -29,8 +29,9 @@ export default function SpaceListPage() {
     <>
       <div className="pagehead">
         <div>
-          <h1>공간 찾기</h1>
-          <p>날짜를 고르면 그날의 예약 가능한 시간을 함께 볼 수 있습니다.</p>
+          <p className="page-kicker">FIND YOUR OFFICE</p>
+          <h1>오피스 찾기</h1>
+          <p>오늘의 일정과 함께할 사람에 맞는 공간을 찾아보세요.</p>
         </div>
       </div>
 
@@ -52,7 +53,7 @@ export default function SpaceListPage() {
         />
       )}
 
-      {spaces.length > 0 && (
+      {!loading && !error && spaces.length > 0 && (
         <>
           <div className="grid3">
             {spaces.map((space) => (

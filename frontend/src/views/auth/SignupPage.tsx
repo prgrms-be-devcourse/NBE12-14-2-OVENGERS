@@ -50,14 +50,16 @@ export default function SignupPage() {
     <div className="auth-layout">
       <div className="auth-cover" aria-hidden="true">
         <div>
-          <h2>30분 단위로 필요한 만큼만</h2>
-          <p>가입 후 바로 공간을 예약할 수 있습니다.</p>
+          <h2>좋은 공간에서<br />시작하는 새로운 일</h2>
+          <p>나에게 맞는 공간을 찾고<br />필요한 시간만큼 이용하세요.</p>
         </div>
+        <small className="auth-image-note">건축 이미지 예시</small>
       </div>
 
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
+        <p className="page-kicker">GET STARTED</p>
         <h1>회원가입</h1>
-        <p>이메일과 비밀번호만으로 가입합니다.</p>
+        <p>계정을 만들고 나에게 맞는 공간을 찾아보세요.</p>
 
         <Input
           label="이메일"
@@ -73,7 +75,7 @@ export default function SignupPage() {
           type="password"
           required
           autoComplete="new-password"
-          help="8자 이상. BCrypt 로 해시하여 저장하며 원문은 보관하지 않습니다."
+          help="8자 이상 입력해 주세요."
           error={validation.password}
           value={form.password}
           onChange={(event) => setForm({ ...form, password: event.target.value })}

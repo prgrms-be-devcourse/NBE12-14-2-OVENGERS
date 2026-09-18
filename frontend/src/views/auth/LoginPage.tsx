@@ -33,12 +33,14 @@ export default function LoginPage() {
     <div className="auth-layout">
       <div className="auth-cover" aria-hidden="true">
         <div>
-          <h2>예약이 곧 열쇠입니다</h2>
-          <p>로그인하면 예약과 출입 키를 함께 관리할 수 있습니다.</p>
+          <h2>다시 만나는<br />나의 업무 공간</h2>
+          <p>예약부터 이용까지<br />한곳에서 편하게 관리하세요.</p>
         </div>
+        <small className="auth-image-note">건축 이미지 예시</small>
       </div>
 
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
+        <p className="page-kicker">WELCOME BACK</p>
         <h1>로그인</h1>
         <p>Slot Key 계정으로 로그인해 주세요.</p>
 

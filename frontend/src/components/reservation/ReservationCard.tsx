@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import SpacePhoto from '../space/SpacePhoto';
 import type { ReservationSummary } from '../../types/api';
 import { ROUTES } from '../../constants/routePaths';
 import { formatDateLabel, formatTimeRange } from '../../utils/date';
@@ -15,11 +16,7 @@ export default function ReservationCard({ reservation }: { reservation: Reservat
 
   return (
     <article className="booking-row">
-      {reservation.spaceImagePath ? (
-        <img src={reservation.spaceImagePath} alt="" />
-      ) : (
-        <div />
-      )}
+      <SpacePhoto src={reservation.spaceImagePath} alt={reservation.spaceName} />
       <div>
         <div className="row wrap">
           <ReservationStatusBadge status={reservation.status} />

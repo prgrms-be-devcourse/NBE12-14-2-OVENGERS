@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import '../styles/global.css';
+import '../styles/home-shell.css';
 import Providers from './providers';
 
 export const metadata = {
@@ -12,7 +13,7 @@ export const metadata = {
   applicationName: 'Slot Key',
   openGraph: {
     title: 'Slot Key',
-    description: '시간을 Slot으로 나누고, 예약한 Slot이 하나의 Key가 됩니다.',
+    description: '몰입할 공간, 필요한 만큼. 회의실과 공유오피스를 만나는 Slot Key.',
     siteName: 'Slot Key',
     locale: 'ko_KR',
     type: 'website',
@@ -20,8 +21,8 @@ export const metadata = {
 };
 
 export const viewport = {
-  themeColor: '#0b1220',
-  colorScheme: 'dark',
+  themeColor: '#f1f6fb',
+  colorScheme: 'light',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

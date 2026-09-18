@@ -36,8 +36,9 @@ export default function AdminReservationListPage() {
     <>
       <div className="pagehead">
         <div>
+          <p className="page-kicker">RESERVATION MANAGEMENT</p>
           <h1>예약 관리</h1>
-          <p>취소된 예약도 삭제하지 않고 그대로 조회할 수 있습니다.</p>
+          <p>날짜와 공간별 예약 현황을 확인하세요. 취소된 예약도 조회할 수 있습니다.</p>
         </div>
       </div>
 
@@ -61,7 +62,7 @@ export default function AdminReservationListPage() {
 
       {reservations.length > 0 && (
         <>
-          <div className="tablebox">
+          <div className="tablebox" tabIndex={0}>
             <table>
               <caption className="sr-only">전체 예약 목록</caption>
               <thead>

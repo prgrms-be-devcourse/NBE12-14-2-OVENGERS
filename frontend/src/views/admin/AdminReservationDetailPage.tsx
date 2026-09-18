@@ -100,15 +100,15 @@ export default function AdminReservationDetailPage() {
         </section>
 
         <section className="panel">
-          <h3>상태 변경 이력</h3>
+          <h3>예약 타임라인</h3>
           <ReservationStatusHistory histories={data.statusHistories} />
         </section>
       </div>
 
       <section className="section">
-        <h2>출입 시도 기록</h2>
+        <h2>출입 기록</h2>
         {data.accessLogs?.length ? (
-          <div className="tablebox">
+          <div className="tablebox" tabIndex={0}>
             <table>
               <caption className="sr-only">출입 시도 기록</caption>
               <thead>

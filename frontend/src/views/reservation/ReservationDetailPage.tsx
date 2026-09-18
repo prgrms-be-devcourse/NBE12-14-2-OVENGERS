@@ -141,7 +141,7 @@ export default function ReservationDetailPage() {
           {status === RESERVATION_STATUS.EXPIRED && (
             <section className="panel">
               <h3>결제 시간이 끝나 취소되었습니다</h3>
-              <p>10분 안에 결제하지 않아 슬롯이 반환되었습니다. 다시 예약해 주세요.</p>
+              <p>결제 대기 시간이 지나 예약이 취소되었습니다. 공간과 시간을 다시 선택해 주세요.</p>
             </section>
           )}
 
@@ -186,7 +186,7 @@ export default function ReservationDetailPage() {
           {status === RESERVATION_STATUS.CANCELLED && <CancelRefundInfo />}
 
           <section className="section">
-            <h2>상태 변경 이력</h2>
+            <h2>예약 타임라인</h2>
             <ReservationStatusHistory histories={reservation.statusHistories} />
           </section>
         </div>
@@ -249,7 +249,7 @@ export default function ReservationDetailPage() {
           </>
 
           <p className="note">
-            출입은 <Link href={ROUTES.door} className="soft-link">모의 출입 단말</Link>에서 확인합니다.
+            출입은 <Link href={ROUTES.door} className="soft-link">모의 출입</Link>에서 확인합니다.
           </p>
         </aside>
       </div>

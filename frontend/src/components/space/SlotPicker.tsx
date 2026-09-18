@@ -35,8 +35,9 @@ export default function SlotPicker({ slots, isSelected, onSelect, disabled }: Sl
           </button>
         ))}
       </div>
+      <div className="slot-legend" aria-label="시간 선택 상태 안내"><span><i />선택 가능</span><span><i className="chosen" />선택됨</span><span><i className="unavailable" />선택 불가</span></div>
       <p className="form-help">
-        시작 슬롯과 마지막 슬롯을 차례로 누르면 사이 시간이 함께 선택됩니다.
+        시작 시간과 마지막 시간을 차례로 누르면 사이 시간이 함께 선택됩니다.
         취소선이 있는 시간은 이미 예약되었거나 지난 시간입니다.
       </p>
     </>

@@ -1,5 +1,6 @@
 'use client';
 
+import SpacePhoto from '../../components/space/SpacePhoto';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { getMyReservation, payReservation } from '../../api/reservationApi';
@@ -77,7 +78,8 @@ export default function PaymentPage() {
       </ol>
 
       <div className="payment-heading">
-        <h1>결제하기</h1>
+        <p className="page-kicker">CONFIRM YOUR BOOKING</p>
+        <h1>예약을 마무리하세요</h1>
         <p>선택한 예약 정보를 확인하고 크레딧 결제를 진행해 주세요.</p>
       </div>
 
@@ -86,15 +88,11 @@ export default function PaymentPage() {
           <section className="payment-card">
             <h2>예약 정보</h2>
             <div className="payment-reservation">
-              {reservation.spaceImagePath ? (
-                <img src={reservation.spaceImagePath} alt="" />
-              ) : (
-                <div className="payment-image-placeholder" aria-hidden="true">Slot Key</div>
-              )}
+              <SpacePhoto src={reservation.spaceImagePath} alt={reservation.spaceName} />
               <div>
                 <div className="row wrap payment-space-title">
                   <h3>{reservation.spaceName}</h3>
-                  <span className="badge cyan">{reservation.spaceType ?? '회의실'}</span>
+                  {reservation.spaceType && <span className="badge cyan">{reservation.spaceType}</span>}
                 </div>
                 <p>{reservation.spaceLocation}</p>
                 <dl className="payment-booking-data">
@@ -109,7 +107,7 @@ export default function PaymentPage() {
           <section>
             <div className="payment-section-title">
               <h2>결제 수단</h2>
-              <p>원하는 결제 수단을 선택해 주세요.</p>
+              <p>보유 크레딧으로 결제합니다.</p>
             </div>
             <label className="payment-method selected">
               <input type="radio" name="paymentMethod" checked readOnly />
@@ -123,13 +121,13 @@ export default function PaymentPage() {
             <span className="payment-info-icon" aria-hidden="true">i</span>
             <div>
               <h3>모의 결제 안내</h3>
-              <p>실제 카드 결제가 아닌 프로토타입용 결제입니다. 결제하기를 누르면 예약 금액만큼 크레딧이 차감되고 예약이 확정됩니다.</p>
+              <p>실제 금액이 청구되지 않는 모의 결제입니다. 결제하면 크레딧이 차감되고 예약이 확정됩니다.</p>
             </div>
           </section>
 
           <section className="payment-expiry-card">
             <span className="payment-clock" aria-hidden="true">◷</span>
-            <div><h3>결제 만료 시간</h3><p>서버가 발급한 HOLD 만료 시각 전까지 결제를 완료해 주세요.</p></div>
+            <div><h3>결제 만료 시간</h3><p>남은 시간 안에 결제를 완료해 주세요.</p></div>
             {reservation.holdExpiresAt && (
               <HoldCountdown holdExpiresAt={reservation.holdExpiresAt} onExpire={handleExpire} compact />
             )}
@@ -161,7 +159,7 @@ export default function PaymentPage() {
           </div>
 
           <div className="payment-refund-guide" id="refund-policy">
-            <div className="between row"><h3>취소 및 환불 안내</h3><a href="#refund-policy">자세히 보기 ›</a></div>
+            <div className="between row"><h3>취소 및 환불 안내</h3></div>
             <p><span className="refund-dot green">✓</span><strong>전액 환불</strong><small>이용 시작 1시간 전까지</small></p>
             <p><span className="refund-dot cyan">◷</span><strong>50% 환불</strong><small>이용 시작 1시간 전부터 시작 전까지</small></p>
             <p><span className="refund-dot red">×</span><strong>취소 불가</strong><small>이용 시작 이후</small></p>
@@ -171,7 +169,7 @@ export default function PaymentPage() {
           {insufficient && <div className="form-error" role="alert">크레딧 잔액이 부족합니다.</div>}
           {locallyExpired && <div className="form-error" role="alert">결제 대기 시간이 끝났습니다. 새로 예약해 주세요.</div>}
           <Button variant="primary" wide loading={pay.loading} disabled={paymentDisabled} onClick={() => pay.execute().catch(() => {})}>
-            🔒 {formatWon(reservation.totalAmount)} 결제하기
+            {formatWon(reservation.totalAmount)} 크레딧 결제하기
           </Button>
         </aside>
       </div>

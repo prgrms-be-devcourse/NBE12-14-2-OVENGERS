@@ -74,8 +74,9 @@ export default function SpaceForm({
   };
 
   return (
-    <form className="panel" onSubmit={handleSubmit} noValidate>
+    <form className="panel admin-space-form" onSubmit={handleSubmit} noValidate>
       <div className="form-grid">
+        <h2 className="form-section-title">공간 기본 정보</h2>
         <div className="full">
           <Input
             label="공간 이름"
@@ -95,6 +96,7 @@ export default function SpaceForm({
           />
         </div>
 
+        <h2 className="form-section-title">이용 조건</h2>
         <Input
           label="수용 인원"
           type="number"
@@ -123,6 +125,7 @@ export default function SpaceForm({
           error={validation.hours}
         />
 
+        <h2 className="form-section-title">사진과 소개</h2>
         <div className="full">
           <Input
             label="이미지 주소"

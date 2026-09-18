@@ -64,8 +64,9 @@ export default function AdminMemberListPage() {
     <>
       <div className="pagehead">
         <div>
+          <p className="page-kicker">MEMBER MANAGEMENT</p>
           <h1>회원 관리</h1>
-          <p>일반 회원만 정지·복구하거나 크레딧을 지급할 수 있습니다. 관리자 계정은 대상이 아닙니다.</p>
+          <p>회원 상태와 크레딧을 관리하세요. 관리자 계정은 변경 대상에서 제외됩니다.</p>
         </div>
       </div>
 
@@ -99,7 +100,7 @@ export default function AdminMemberListPage() {
 
       {members.length > 0 && (
         <>
-          <div className="tablebox">
+          <div className="tablebox" tabIndex={0}>
             <table>
               <caption className="sr-only">회원 목록</caption>
               <thead>

@@ -32,8 +32,9 @@ export default function AdminSpaceListPage() {
     <>
       <div className="pagehead">
         <div>
+          <p className="page-kicker">OFFICE MANAGEMENT</p>
           <h1>공간 관리</h1>
-          <p>등록한 공간의 요금과 운영시간을 관리합니다.</p>
+          <p>공간의 운영 상태, 요금과 이용 시간을 관리하세요.</p>
         </div>
         <Link href={ROUTES.adminSpaceNew} className="btn primary">
           공간 등록
@@ -58,7 +59,7 @@ export default function AdminSpaceListPage() {
 
       {spaces.length > 0 && (
         <>
-          <div className="tablebox">
+          <div className="tablebox" tabIndex={0}>
             <table>
               <caption className="sr-only">공간 목록</caption>
               <thead>

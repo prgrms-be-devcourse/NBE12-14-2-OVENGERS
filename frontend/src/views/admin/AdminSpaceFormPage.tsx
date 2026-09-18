@@ -41,11 +41,12 @@ export default function AdminSpaceFormPage({ mode = 'create' }: { mode?: 'create
 
       <div className="pagehead">
         <div>
+          <p className="page-kicker">OFFICE DETAILS</p>
           <h1>{isEdit ? '공간 수정' : '공간 등록'}</h1>
           <p>
             {isEdit
               ? '요금을 바꿔도 이미 확정된 예약의 금액은 유지됩니다.'
-              : '등록자와 등록 시각은 서버가 기록합니다.'}
+              : '공간 정보와 이용 조건을 입력해 주세요.'}
           </p>
         </div>
       </div>

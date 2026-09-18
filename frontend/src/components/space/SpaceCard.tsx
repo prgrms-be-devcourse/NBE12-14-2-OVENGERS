@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import SpacePhoto from './SpacePhoto';
 import type { SlotAvailability, Space } from '../../types/api';
 import { ROUTES } from '../../constants/routePaths';
 import { SPACE_STATUS, SPACE_STATUS_META } from '../../constants/enums';
@@ -21,7 +22,7 @@ export default function SpaceCard({
   return (
     <article className="spacecard">
       <div className="photo">
-        {space.imagePath && <img src={space.imagePath} alt="" />}
+        <SpacePhoto src={space.imagePath} alt={space.name} />
         <MetaBadge meta={SPACE_STATUS_META[space.status]} />
       </div>
       <div className="cardbody">
@@ -58,7 +59,7 @@ export default function SpaceCard({
           href={ROUTES.spaceDetail(space.id)}
           className={`btn wide ${space.status === SPACE_STATUS.ACTIVE ? 'primary' : ''}`}
         >
-          {space.status === SPACE_STATUS.ACTIVE ? '예약하기' : '상세 보기'}
+          {space.status === SPACE_STATUS.ACTIVE ? '시간 선택하기' : '상세 보기'}
         </Link>
       </div>
     </article>

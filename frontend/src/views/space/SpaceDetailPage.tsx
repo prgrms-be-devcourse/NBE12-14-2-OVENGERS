@@ -16,6 +16,7 @@ import { today } from '../../utils/date';
 import { decorateSlots } from '../../utils/slot';
 import { calculateTotal, formatPricePerSlot } from '../../utils/price';
 import { MetaBadge } from '../../components/common/Badge';
+import SpacePhoto from '../../components/space/SpacePhoto';
 import SlotPicker from '../../components/space/SlotPicker';
 import PriceSummary from '../../components/reservation/PriceSummary';
 import TermsAgreement from '../../components/reservation/TermsAgreement';
@@ -35,7 +36,7 @@ export default function SpaceDetailPage() {
   const { data: space, loading: spaceLoading, error: spaceError } = useAsync(fetchSpace, [fetchSpace]);
 
   const fetchSlots = useCallback(() => getSpaceSlots(spaceId, date), [spaceId, date]);
-  const { data: slotData, loading: slotLoading, run: reloadSlots } = useAsync(fetchSlots, [fetchSlots]);
+  const { data: slotData, loading: slotLoading, error: slotError, run: reloadSlots } = useAsync(fetchSlots, [fetchSlots]);
 
   const slots = useMemo(
     () => decorateSlots(slotData?.slots ?? [], date),
@@ -98,14 +99,14 @@ export default function SpaceDetailPage() {
   return (
     <>
       <nav className="crumb" aria-label="현재 위치">
-        <Link href={ROUTES.spaces}>공간 찾기</Link>
+        <Link href={ROUTES.spaces}>오피스 찾기</Link>
         <span>›</span>
         <span>{space.name}</span>
       </nav>
 
       <div className="split">
         <div>
-          {space.imagePath && <img className="detailphoto" src={space.imagePath} alt="" />}
+          <SpacePhoto className="detailphoto" src={space.imagePath} alt={space.name} />
 
           <div className="pagehead">
             <div>
@@ -127,7 +128,8 @@ export default function SpaceDetailPage() {
           {space.description && <p>{space.description}</p>}
 
           <div className="section">
-            <h2>이용 시간 선택</h2>
+            <h2>언제 이용하시나요?</h2>
+            <p>날짜와 시작·마지막 시간을 선택해 주세요. 요금은 예약 내용에서 확인할 수 있습니다.</p>
             <label className="field" style={{ maxWidth: 260 }}>
               <span>날짜</span>
               <input
@@ -143,6 +145,8 @@ export default function SpaceDetailPage() {
 
             {slotLoading ? (
               <LoadingSpinner label="예약 가능한 시간을 불러오는 중입니다…" />
+            ) : slotError ? (
+              <ErrorMessage error={slotError} onRetry={() => { void reloadSlots().catch(() => {}); }} />
             ) : (
               <SlotPicker
                 slots={slots}
@@ -158,7 +162,7 @@ export default function SpaceDetailPage() {
         </div>
 
         <aside className="panel sticky">
-          <h3>예약 내용</h3>
+          <h2>예약 내용</h2>
           <PriceSummary
             space={space}
             date={date}
@@ -195,8 +199,7 @@ export default function SpaceDetailPage() {
           )}
 
           <p className="space-note muted">
-            화면에 예약 가능으로 보여도 확정은 서버가 판단합니다. 예약 후에는 결제 대기(HOLD)
-            상태가 되며, 10분 안에 결제를 완료해야 확정됩니다.
+            선택 중 다른 예약이 먼저 확정될 수 있습니다. 예약 후 10분 안에 크레딧 결제를 완료하면 확정됩니다.
           </p>
         </aside>
       </div>
