@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
+import com.ovengers.slotkey.reservation.dto.response.ReservationListResponse;
 /**
  * 본인 예약 API. SecurityConfig에서 이 경로는 anyRequest().authenticated()로 이미
  * 인증을 강제하므로, 여기서는 소유권 검사만 신경 쓰면 된다 — 각 서비스가
@@ -111,13 +111,18 @@ public class ReservationController {
 
     /** 본인 예약 목록 (최신 시작 시각 순). */
     @GetMapping
-    public ResponseEntity<ApiResponse<Page<ReservationResponse>>> getMyReservations(
+    public ResponseEntity<ApiResponse<Page<ReservationListResponse>>> getMyReservations(
             @CurrentMember AuthPrincipal principal,
             @ModelAttribute ReservationSearchCondition condition,
             Pageable pageable
     ) {
-        Page<ReservationResponse> response =
-                reservationQueryService.getMyReservations(principal.memberId(), condition, pageable);
+        Page<ReservationListResponse> response =
+                reservationQueryService.getMyReservations(
+                        principal.memberId(),
+                        condition,
+                        pageable
+                );
+
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
