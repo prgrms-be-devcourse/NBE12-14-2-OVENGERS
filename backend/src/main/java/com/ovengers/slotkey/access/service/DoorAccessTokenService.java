@@ -66,8 +66,10 @@ public class DoorAccessTokenService {
                 reservation.getMemberId()
         );
 
-        // 확정된 예약인지 확인
-        if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
+        // // 확정 또는 이용 중인 예약인지 확인
+        ReservationStatus status = reservation.getStatus();
+
+        if (status != ReservationStatus.CONFIRMED && status != ReservationStatus.IN_USE) {
             throw new BusinessException(
                     ErrorCode.RESERVATION_STATE_CONFLICT
             );

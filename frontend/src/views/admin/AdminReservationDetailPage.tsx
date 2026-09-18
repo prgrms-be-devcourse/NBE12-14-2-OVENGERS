@@ -121,13 +121,13 @@ export default function AdminReservationDetailPage() {
               </thead>
               <tbody>
                 {data.accessLogs.map((log) => (
-                  <tr key={log.id}>
+                  <tr key={log.accessLogId}>
                     <td>{formatDateTime(log.attemptedAt)}</td>
                     <td>{log.requestedSpaceName ?? '-'}</td>
                     <td>
                       <MetaBadge meta={ACCESS_RESULT_META[log.result]} />
                     </td>
-                    <td>{accessReasonLabel(log.reasonCode)}</td>
+                    <td>{log.reasonCode ? accessReasonLabel(log.reasonCode) : '-'}</td>
                   </tr>
                 ))}
               </tbody>

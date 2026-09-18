@@ -10,7 +10,7 @@ export default function DoorVerifyResult({ result }: { result: AccessVerifyResul
   return (
     <div className={cx('result', allowed ? 'allow' : 'deny')} role="status" aria-live="polite">
       <strong>{allowed ? '출입이 허용되었습니다' : '출입이 거절되었습니다'}</strong>
-      <p>{accessReasonLabel(result.reasonCode)}</p>
+      {!allowed && result.reasonCode && <p>{accessReasonLabel(result.reasonCode)}</p>}
       {allowed && result.spaceName && (
         <p>
           {result.spaceName} · {result.firstCheckIn ? '최초 체크인' : '재입장'}

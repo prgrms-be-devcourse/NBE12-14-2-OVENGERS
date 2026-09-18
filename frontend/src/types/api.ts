@@ -207,32 +207,33 @@ export interface CreateReservationRequest {
 export type AccessResult = 'ALLOW' | 'DENY';
 
 export type AccessReasonCode =
-  | 'ALLOWED'
-  | 'TOKEN_NOT_FOUND'
-  | 'TOKEN_REVOKED'
-  | 'RESERVATION_NOT_ACTIVE'
-  | 'OUTSIDE_ALLOWED_TIME'
-  | 'SPACE_MISMATCH';
+    | 'ALLOWED'
+    | 'TOKEN_NOT_FOUND'
+    | 'TOKEN_REVOKED'
+    | 'RESERVATION_NOT_ACTIVE'
+    | 'OUTSIDE_ALLOWED_TIME'
+    | 'SPACE_MISMATCH'
+    | 'MEMBER_MISMATCH';
 
 /** 토큰 원문은 발급 응답에만 있습니다. 서버에는 해시만 저장되어 재조회할 수 없습니다. */
 export interface IssuedDoorToken {
-  accessKey: string;
+  reservationId: number;
+  token: string;
   issuedAt: string;
-  expiresAt?: string;
 }
 
 export interface AccessVerifyResult {
   result: AccessResult;
-  reasonCode: AccessReasonCode | string;
-  spaceName?: string | null;
-  firstCheckIn?: boolean;
-  attemptedAt?: string;
+  reasonCode: AccessReasonCode | null;
+  spaceName: string | null;
+  firstCheckIn: boolean | null;
+  attemptedAt: string;
 }
 
 export interface DoorAccessLog {
-  id: number;
+  accessLogId: number;
   attemptedAt: string;
   requestedSpaceName: string | null;
   result: AccessResult;
-  reasonCode: AccessReasonCode | string;
+  reasonCode: AccessReasonCode | string | null;
 }

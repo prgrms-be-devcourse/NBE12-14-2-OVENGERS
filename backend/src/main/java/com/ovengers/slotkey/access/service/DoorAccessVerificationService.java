@@ -11,6 +11,8 @@ import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.reservation.entity.Reservation;
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
+import com.ovengers.slotkey.reservation.entity.ReservationStatusHistory;
+import com.ovengers.slotkey.reservation.repository.ReservationStatusHistoryRepository;
 import com.ovengers.slotkey.space.entity.Space;
 import com.ovengers.slotkey.space.repository.SpaceRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ public class DoorAccessVerificationService {
     private final MemberRepository memberRepository;
     private final SpaceRepository spaceRepository;
     private final Clock clock;
+    private final ReservationStatusHistoryRepository reservationStatusHistoryRepository;
 
     // 제출된 출입 토큰 검증
     @Transactional
@@ -146,10 +149,24 @@ public class DoorAccessVerificationService {
             );
         }
 
-        // 최초 체크인 성공 시 예약 상태 변경
-        if (reservation.getStatus()
-                == ReservationStatus.CONFIRMED) {
+        // 상태를 변경하기 전에 최초 체크인 여부를 저장한다.
+        boolean firstCheckIn =
+                reservation.getStatus() == ReservationStatus.CONFIRMED;
+
+        // 최초 체크인 성공 시 예약 상태와 이력을 함께 변경한다.
+        if (firstCheckIn) {
             reservation.checkIn(attemptedAt);
+
+            reservationStatusHistoryRepository.save(
+                    ReservationStatusHistory.of(
+                            reservation.getId(),
+                            loginMemberId,
+                            ReservationStatus.CONFIRMED,
+                            ReservationStatus.IN_USE,
+                            "FIRST_CHECK_IN",
+                            attemptedAt
+                    )
+            );
         }
 
         doorAccessLogService.createAllowLog(
@@ -160,6 +177,8 @@ public class DoorAccessVerificationService {
         );
 
         return DoorAccessVerifyResponse.allow(
+                requestedSpace.getName(),
+                firstCheckIn,
                 attemptedAt
         );
     }

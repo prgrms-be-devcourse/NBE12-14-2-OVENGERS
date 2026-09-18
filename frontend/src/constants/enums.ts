@@ -89,6 +89,7 @@ const ACCESS_REASON_LABEL: Record<AccessReasonCode, string> = {
   ALLOWED: '출입이 허용되었습니다.',
   TOKEN_NOT_FOUND: '등록되지 않은 출입 키입니다.',
   TOKEN_REVOKED: '이미 무효화된 출입 키입니다.',
+  MEMBER_MISMATCH: '본인의 예약에 발급된 출입 키가 아닙니다.',
   RESERVATION_NOT_ACTIVE: '취소·종료·노쇼 처리된 예약입니다.',
   OUTSIDE_ALLOWED_TIME: '출입할 수 있는 시간이 아닙니다.',
   SPACE_MISMATCH: '예약한 공간이 아닙니다.',
