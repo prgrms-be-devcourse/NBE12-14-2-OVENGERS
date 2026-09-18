@@ -17,6 +17,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+
 
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -33,6 +36,14 @@ public class AdminSpaceController {
             @PageableDefault(size = 20) Pageable pageable) {
         PageResponse<SpaceDetailResponse> response =
                 PageResponse.from(adminSpaceService.getSpaces(status, keyword, pageable));
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/spaces/{spaceId}")
+    public ResponseEntity<ApiResponse<SpaceDetailResponse>> getSpaceDetailById(
+            @PathVariable("spaceId") Long spaceId) {
+        SpaceDetailResponse response = 
+                SpaceDetailResponse.from(adminSpaceService.getSpaceDetailById(spaceId));
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

@@ -30,6 +30,12 @@ public class AdminSpaceService {
                 .map(SpaceDetailResponse::from);
     }
 
+    @Transactional(readOnly = true)
+    public Space getSpaceDetailById(Long spaceId) {
+        return spaceRepository.findById(spaceId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.SPACE_NOT_FOUND));
+    }
+
     @Transactional
     public SpaceDetailResponse createSpace(SpaceCreateRequest request, Long adminMemberId) {
         Space space = request.toEntity();
@@ -71,4 +77,5 @@ public class AdminSpaceService {
 
         return afterSnapshot;
     }
+
 }
