@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { IssuedDoorToken } from '../../types/api';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -10,7 +9,6 @@ import {
   extendReservation,
   getMyReservation,
 } from '../../api/reservationApi';
-import { issueDoorToken } from '../../api/doorAccessApi';
 import { useAction, useAsync } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { ROUTES } from '../../constants/routePaths';
@@ -23,8 +21,8 @@ import ReservationStatusHistory from '../../components/reservation/ReservationSt
 import CancelRefundInfo from '../../components/reservation/CancelRefundInfo';
 import ExtendReservationDialog from '../../components/reservation/ExtendReservationDialog';
 import CheckOutButton from '../../components/reservation/CheckOutButton';
-import AccessKeyPanel from '../../components/access/AccessKeyPanel';
-import AccessKeyIssueButton from '../../components/access/AccessKeyIssueButton';
+import ReservationAccessKey from '../../components/access/ReservationAccessKey';
+import { forgetReservationKey } from '../../utils/reservationKey';
 import Button from '../../components/common/Button';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -34,8 +32,7 @@ import Toast from '../../components/common/Toast';
 export default function ReservationDetailPage() {
   const { reservationId } = useParams<{ reservationId: string }>();
   const router = useRouter();
-  const { refreshMember } = useAuth();
-  const [issuedKey, setIssuedKey] = useState<IssuedDoorToken | null>(null);
+  const { member, refreshMember } = useAuth();
   const [cancelling, setCancelling] = useState(false);
   const [extending, setExtending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -45,7 +42,7 @@ export default function ReservationDetailPage() {
 
   const cancel = useAction(async () => {
     await cancelReservation(reservationId);
-    setIssuedKey(null);
+    if (member) forgetReservationKey(member.memberId, reservationId);
     setCancelling(false);
     setToast('예약이 취소되었습니다. 기존 출입 키도 사용할 수 없습니다.');
     await refreshMember();
@@ -63,18 +60,9 @@ export default function ReservationDetailPage() {
 
   const checkOut = useAction(async () => {
     await checkOutReservation(reservationId);
-    setIssuedKey(null);
+    if (member) forgetReservationKey(member.memberId, reservationId);
     setToast('체크아웃이 완료되었습니다.');
     await reload();
-  });
-
-  const issue = useAction(async () => {
-    const result = await issueDoorToken(reservationId);
-    // 원문은 이 응답에서만 내려옵니다. 다시 조회할 수 없습니다.
-    setIssuedKey(result);
-    setToast('출입 키가 발급되었습니다.');
-    await reload();
-    return result;
   });
 
   // 아직 결제 전이면 결제 화면으로 보냅니다(react-router 의 <Navigate/> 대체).
@@ -91,7 +79,6 @@ export default function ReservationDetailPage() {
   const status = reservation.status;
   const confirmed = status === RESERVATION_STATUS.CONFIRMED;
   const inUse = status === RESERVATION_STATUS.IN_USE;
-  const canIssueKey = confirmed || inUse;
 
   const now = new Date();
 // 서버의 LocalDateTime은 한국 시각으로 해석한다.
@@ -195,34 +182,21 @@ const endsAt = new Date(`${reservation.endTime}+09:00`);
 
           <section className="section">
             <h2>예약 타임라인</h2>
-            <ReservationStatusHistory histories={reservation.statusHistories} />
+            <ReservationStatusHistory histories={reservation.statusHistory} />
 
           </section>
         </div>
 
         <aside className="sticky">
           <>
-              <AccessKeyPanel
-                accessKey={issuedKey?.token}
-                issuedAt={issuedKey?.issuedAt}
-                notice={
-                  canIssueKey
-                    ? '예약 시간이 지나거나 예약을 취소하면 이 키는 사용할 수 없습니다.'
-                    : '확정된 예약만 출입 키를 발급받을 수 있습니다.'
-                }
-              />
-
-              {canIssueKey && (
-                <div className="panel" style={{ marginTop: 24 }}>
-                  <ErrorMessage error={issue.error} />
-                  <AccessKeyIssueButton
-                   hasActiveKey={Boolean(issuedKey)}
-                    loading={issue.loading}
-                    disabled={false}
-                    onIssue={() => issue.execute().catch(() => {})}
-                  />
-                </div>
-              )}
+              {member && <ReservationAccessKey
+                key={`${member.memberId}:${reservation.reservationId}`}
+                memberId={member.memberId}
+                reservationId={reservation.reservationId}
+                status={status}
+                startTime={reservation.startTime}
+                endTime={reservation.endTime}
+              />}
 
               {inUse && (
                 <div className="panel" style={{ marginTop: 24 }}>
