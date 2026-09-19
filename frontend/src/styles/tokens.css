@@ -5,23 +5,30 @@
  * 팀이 확정한 색·간격·컴포넌트 규칙을 그대로 유지하기 위해 새로 작성하지 않고 이식했습니다.
  * 값을 바꿀 때는 프로토타입이 아니라 이 파일을 기준으로 합니다.
  */
-
-:root{color-scheme:dark;--bg:#0b1220;--surface:#111d30;--raised:#17253c;--line:#293b55;--text:#f3f6fc;--muted:#a3b2c7;--blue:#2563eb;--cyan:#71d5fa;--green:#6ee7b7;--red:#ffacb3;--radius:18px;font-family:Inter,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:16px}
+/* 공통 디자인 토큰. 의사결정: docs/UI_DESIGN_DECISIONS.md */
+:root{
+  color-scheme:light;
+  --bg:#f1f6fb;--surface:#fff;--raised:#f7faff;--line:#d7e3ef;
+  --text:#20334d;--muted:#536b85;--blue:#2864dc;--cyan:#2560bc;
+  --green:#147454;--red:#b53749;--radius:14px;
+  font-family:"Apple SD Gothic Neo","Noto Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:16px;
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);line-height:1.6}
+body{margin:0;background:var(--bg);color:var(--text);line-height:1.7}
 button,input,select,textarea{font:inherit}
-button,a,input,select,textarea{outline-offset:4px}
-button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--cyan)}
+button,a,input,select,textarea,summary{outline-offset:4px}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #3274ed}
 a{color:inherit;text-decoration:none}
 button{cursor:pointer}
-button:disabled{cursor:not-allowed;opacity:.4}
-button,.btn{border:1px solid var(--line);background:var(--raised);color:var(--text);border-radius:10px;padding:11px 18px;display:inline-flex;align-items:center;justify-content:center;gap:9px;white-space:nowrap;font-weight:600;transition:background .15s,transform .15s}
-button:hover:not(:disabled),.btn:hover{background:#20324f}
+button:disabled{cursor:not-allowed;opacity:.55}
+button,.btn{border:1px solid #bfd0e3;background:var(--surface);color:var(--text);border-radius:10px;padding:12px 20px;display:inline-flex;align-items:center;justify-content:center;gap:9px;white-space:nowrap;font-weight:500;transition:background .15s,border-color .15s,transform .15s}
+button:hover:not(:disabled),.btn:hover{background:#e9f1fb;border-color:#91afd3}
 .primary{background:var(--blue);border-color:var(--blue);color:white}
-.primary:hover:not(:disabled){background:#3474fa}
+.primary:hover:not(:disabled),.btn.primary:hover{background:#2054bc;border-color:#2054bc;color:white}
 .ghost{background:transparent;border-color:transparent;color:var(--muted)}
 .ghost:hover{color:var(--text)}
-.danger{background:#3b2230;border-color:#68414d;color:#ffb9be}
-.small{padding:7px 12px;font-size:.875rem}
+.danger{background:#fff2f3;border-color:#e8b8c0;color:var(--red)}
+.danger:hover:not(:disabled){background:#ffe4e8;border-color:#cf7182;color:#982b3b}
+.small{padding:8px 14px;font-size:.9rem}
 .wide{width:100%}
 .icon{width:21px;height:21px;vertical-align:middle;flex:none}

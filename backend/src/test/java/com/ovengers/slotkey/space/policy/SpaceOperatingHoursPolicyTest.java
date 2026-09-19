@@ -52,9 +52,9 @@ class SpaceOperatingHoursPolicyTest {
     }
 
     @Test
-    @DisplayName("운영 종료 시각이 30분 단위가 아닌 경우 종료 시각을 넘지 않는 완전한 30분 슬롯만 생성한다")
-    void generateSlots_closingNotAlignedTo30Minutes() {
-        // given: 09:00 ~ 11:45 (마지막 15분 구간은 30분 슬롯이 되지 못함)
+    @DisplayName("운영 시작 또는 종료 시각이 30분 경계가 아니면 빈 목록을 반환한다")
+    void generateSlots_notAlignedTo30Minutes_returnsEmptyList() {
+        // given: 운영시간 자체가 30분 슬롯 격자와 맞지 않음
         LocalDate date = LocalDate.of(2026, 9, 20);
         LocalTime openingTime = LocalTime.of(9, 0);
         LocalTime closingTime = LocalTime.of(11, 45);
@@ -62,10 +62,9 @@ class SpaceOperatingHoursPolicyTest {
         // when
         List<SpaceOperatingHoursPolicy.SlotWindow> slots = policy.generateSlots(date, openingTime, closingTime);
 
-        // then: 09:00~09:30, 09:30~10:00, 10:00~10:30, 10:30~11:00, 11:00~11:30 (총 5개)
-        assertThat(slots).hasSize(5);
-        assertThat(slots.get(4).start()).isEqualTo(LocalDateTime.of(2026, 9, 20, 11, 0));
-        assertThat(slots.get(4).end()).isEqualTo(LocalDateTime.of(2026, 9, 20, 11, 30));
+        // then
+        assertThat(slots).isEmpty();
+        assertThat(policy.generateSlots(date, LocalTime.of(9, 15), LocalTime.of(12, 0))).isEmpty();
     }
 
     @Test

@@ -19,7 +19,11 @@ public class SpaceOperatingHoursPolicy {
      * 운영시간(openingTime ~ closingTime)을 30분 단위 슬롯 구간 목록으로 분할 생성합니다.
      */
     public List<SlotWindow> generateSlots(LocalDate date, LocalTime openingTime, LocalTime closingTime) {
-        if (openingTime == null || closingTime == null || !openingTime.isBefore(closingTime)) {
+        if (openingTime == null
+                || closingTime == null
+                || !openingTime.isBefore(closingTime)
+                || !isMultipleOf30Minutes(openingTime)
+                || !isMultipleOf30Minutes(closingTime)) {
             return List.of();
         }
 

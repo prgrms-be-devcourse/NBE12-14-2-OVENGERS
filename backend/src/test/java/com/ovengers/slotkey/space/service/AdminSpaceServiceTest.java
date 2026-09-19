@@ -44,6 +44,49 @@ class AdminSpaceServiceTest {
     private AdminSpaceService adminSpaceService;
 
     @Test
+    @DisplayName("존재하는 공간 ID로 상세 조회하면 공간을 반환하고 감사 로그를 남기지 않는다")
+    void getSpaceDetailById_success_returnsSpaceWithoutAuditLog() {
+        // given
+        Long spaceId = 1L;
+        Space space = Space.builder()
+                .id(spaceId)
+                .name("관리자용 회의실")
+                .location("서울시 강남구")
+                .capacity(8)
+                .pricePerSlot(5000L)
+                .openingTime(LocalTime.of(9, 0))
+                .closingTime(LocalTime.of(18, 0))
+                .status(SpaceStatus.INACTIVE)
+                .version(2)
+                .build();
+        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(space));
+
+        // when
+        Space result = adminSpaceService.getSpaceDetailById(spaceId);
+
+        // then
+        assertThat(result).isSameAs(space);
+        verify(spaceRepository).findById(spaceId);
+        verifyNoInteractions(auditLogService);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 공간 ID로 상세 조회하면 SPACE_NOT_FOUND 예외가 발생하고 감사 로그를 남기지 않는다")
+    void getSpaceDetailById_notFound_throwsExceptionWithoutAuditLog() {
+        // given
+        Long spaceId = 999L;
+        given(spaceRepository.findById(spaceId)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> adminSpaceService.getSpaceDetailById(spaceId))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SPACE_NOT_FOUND);
+
+        verify(spaceRepository).findById(spaceId);
+        verifyNoInteractions(auditLogService);
+    }
+
+    @Test
     @DisplayName("공간 등록에 성공하면 저장된 공간 정보를 반환하고 REGISTER_SPACE 감사 로그를 기록한다")
     void createSpace_success() {
         // given
@@ -151,6 +194,29 @@ class AdminSpaceServiceTest {
                 null,
                 LocalTime.of(18, 0), // 시작이 종료보다 늦음
                 LocalTime.of(9, 0));
+
+        // when & then
+        assertThatThrownBy(() -> adminSpaceService.createSpace(request, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_OPERATING_HOURS);
+
+        verify(spaceRepository, never()).save(any());
+        verifyNoInteractions(auditLogService);
+    }
+
+    @Test
+    @DisplayName("30분 경계가 아닌 운영시간으로 공간 등록 시 저장과 감사 로그를 남기지 않는다")
+    void createSpace_notAlignedOperatingHours_throwsException() {
+        // given
+        SpaceCreateRequest request = new SpaceCreateRequest(
+                "회의실",
+                "강남",
+                "설명",
+                4,
+                5000L,
+                null,
+                LocalTime.of(9, 15),
+                LocalTime.of(18, 0));
 
         // when & then
         assertThatThrownBy(() -> adminSpaceService.createSpace(request, 1L))
@@ -375,6 +441,37 @@ void updateSpace_invalidOperatingHours_throwsException_andNeverLogsAudit() {
                         .isInstanceOf(BusinessException.class)
                         .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_OPERATING_HOURS);
 
+        verifyNoInteractions(auditLogService);
+    }
+
+    @Test
+    @DisplayName("openingTime만 30분 경계가 아닌 값으로 수정하면 감사 로그를 남기지 않고 기존 운영시간을 유지한다")
+    void updateSpace_notAlignedOpeningTime_throwsException_andNeverLogsAudit() {
+        // given
+        Long spaceId = 1L;
+        Space existingSpace = Space.builder()
+                .id(spaceId)
+                .name("기존 공간명")
+                .location("위치")
+                .capacity(4)
+                .pricePerSlot(3000L)
+                .openingTime(LocalTime.of(9, 0))
+                .closingTime(LocalTime.of(18, 0))
+                .status(SpaceStatus.ACTIVE)
+                .version(0)
+                .build();
+        SpaceUpdateRequest invalidRequest = new SpaceUpdateRequest(
+                null, null, null, null, null,
+                null, null, LocalTime.of(9, 15), null, null);
+
+        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(existingSpace));
+
+        // when & then
+        assertThatThrownBy(() -> adminSpaceService.updateSpace(spaceId, invalidRequest, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_OPERATING_HOURS);
+
+        assertThat(existingSpace.getOpeningTime()).isEqualTo(LocalTime.of(9, 0));
         verifyNoInteractions(auditLogService);
     }
 }

@@ -30,7 +30,7 @@ public class SpaceController {
     @GetMapping("/spaces")
     public ResponseEntity<ApiResponse<PageResponse<SpaceResponse>>> getSpacesPage(
             @PageableDefault(size = 20, direction = Sort.Direction.DESC) Pageable pageable,
-            @RequestParam(required = false) String keyword) {
+            @RequestParam(name = "keyword", required = false) String keyword) {
         Page<Space> spacePage = spaceQueryService.getSpacesPage(pageable, keyword);
         Page<SpaceResponse> responsePage = spacePage.map(SpaceResponse::from);
         return ResponseEntity.ok(ApiResponse.success(PageResponse.from(responsePage)));
@@ -38,15 +38,15 @@ public class SpaceController {
 
     @GetMapping("/spaces/{spaceId}")
     public ResponseEntity<ApiResponse<SpaceDetailResponse>> getSpaceDetailById(
-            @PathVariable Long spaceId) {
+            @PathVariable("spaceId") Long spaceId) {
         Space space = spaceQueryService.getSpaceDetailById(spaceId);
         return ResponseEntity.ok(ApiResponse.success(SpaceDetailResponse.from(space)));
     }
 
     @GetMapping("/spaces/{spaceId}/slots")
     public ResponseEntity<ApiResponse<SpaceSlotAvailabilityResponse>> getSlotAvailability(
-            @PathVariable Long spaceId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+            @PathVariable("spaceId") Long spaceId,
+            @RequestParam(name = "date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         SpaceSlotAvailabilityResponse response = slotAvailabilityService.getSlotAvailability(spaceId, date);
         return ResponseEntity.ok(ApiResponse.success(response));
     }

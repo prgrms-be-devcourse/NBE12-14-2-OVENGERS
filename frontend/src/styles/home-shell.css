@@ -1,0 +1,38 @@
+/* 메인의 야경 헤더·엔딩 예외와 전체 화면 공용 모바일 계정 메뉴. */
+html:has(.home-shell){scroll-behavior:smooth;scroll-padding-top:96px}
+.home-shell{--home-ending:#142d4e;background:#f1f6fb;color:#20334d;color-scheme:light;font-family:"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+.home-main{width:100%;margin:0;padding:0}
+.home-shell .header{position:fixed;inset:0 0 auto;height:88px;padding:0 clamp(24px,5vw,90px);border:0;background:transparent;backdrop-filter:none;color:white;transition:background .25s,color .25s,box-shadow .25s;gap:30px}
+.home-shell .header.header-scrolled{background:#f8fbfef5;backdrop-filter:blur(18px);color:#20334d;box-shadow:0 1px 0 #dce6ef}
+.home-shell .brand{font-size:1.45rem;font-weight:500;gap:9px;letter-spacing:-.03em}
+.home-shell .brand em{color:inherit}
+.home-shell .brandmark{border-radius:0;width:34px;height:34px}
+.home-shell .nav{margin-left:auto;margin-right:0;gap:24px}
+.home-shell .nav a{color:inherit;font-size:.88rem;font-weight:400;padding:10px 0}
+.home-shell .nav a:hover{border-bottom-color:currentColor}
+.home-shell .header-actions{gap:10px;font-size:.8rem}
+.home-shell .header-actions .muted{color:inherit}
+.home-shell .header-actions .badge{background:#ffffff16;border-color:#ffffff55;color:inherit;font-weight:400}
+.home-shell .header-actions .btn,.home-shell .header-actions button{background:transparent;border-color:#ffffff90;color:inherit;font-weight:400;border-radius:999px;font-size:.8rem;padding:7px 15px}
+.home-shell .header-actions .btn:hover,.home-shell .header-actions button:hover{background:#ffffff20}
+.home-shell .header-scrolled .header-actions .btn,.home-shell .header-scrolled .header-actions button,.home-shell .header-scrolled .header-actions .badge{border-color:#bacce0}
+.home-shell .header-scrolled .header-actions .btn:hover,.home-shell .header-scrolled .header-actions button:hover{background:#e6eff9}
+.footer-brand{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-size:1.1rem;font-weight:500;color:inherit}
+.home-shell .footer{background:var(--home-ending);max-width:none;margin:0;padding:24px clamp(24px,5vw,90px) 28px;border-color:#ffffff24;color:#c0d0e2;align-items:center;font-size:.875rem;line-height:1.85}
+.home-shell .footer-brand{color:#f7fbff;font-size:1.25rem}
+.home-shell .footer-brand:focus-visible{outline-color:#91caff}
+.home-shell .footer>span{text-align:right}
+@media(max-width:1100px){.home-shell .header{gap:20px}.home-shell .header-actions>.muted,.home-shell .header-actions>.badge{display:none}.home-shell .nav{gap:18px}}
+@media(max-width:850px){.home-shell .header{height:72px;padding:0 22px;gap:18px}.home-shell .header .nav{display:flex;gap:15px}.home-shell .nav a{font-size:.8rem}.home-shell .brand{font-size:1.15rem}.home-shell .brandmark{width:28px;height:28px}.home-shell .header-actions{display:none}}
+@media(max-width:480px){.home-shell .header{gap:8px;padding:0 14px}.home-shell .nav{gap:11px}.home-shell .nav a{font-size:.74rem}.home-shell .brand{gap:4px;font-size:1rem}.home-shell .brandmark{width:25px;height:25px}.home-shell .footer{flex-direction:column;align-items:flex-start;gap:18px}.home-shell .footer>span{text-align:left}}
+@media(prefers-reduced-motion:reduce){html:has(.home-shell){scroll-behavior:auto}.home-shell .header{transition:none}}
+
+.home-account-menu{display:none;position:relative;font-size:.8rem}
+.home-account-menu summary{cursor:pointer;list-style:none;border:1px solid currentColor;border-radius:20px;padding:5px 10px;white-space:nowrap}
+.home-account-menu summary::-webkit-details-marker{display:none}
+.home-account-panel{position:absolute;right:0;top:45px;min-width:180px;padding:20px;background:#f8fbfe;color:#20334d;border:1px solid #d6e3ef;border-radius:12px;box-shadow:0 8px 25px #102c4820;display:flex;flex-direction:column;gap:14px}
+.home-account-panel button{background:white;color:#20334d;border-color:#cedceb;font-size:.8rem}
+.home-account-panel a:hover{text-decoration:underline}
+.home-account-menu summary:focus-visible{outline:3px solid #6db7ff;outline-offset:4px}
+@media(max-width:850px){.home-account-menu{display:block}.home-shell .nav a[href="/reservations"],.home-shell .nav a[href="/admin/spaces"]{display:none}}
+@media(max-width:480px){.home-shell .nav a[href="/door"]{display:none}.home-account-menu{font-size:.72rem}.home-shell .nav{gap:12px}}

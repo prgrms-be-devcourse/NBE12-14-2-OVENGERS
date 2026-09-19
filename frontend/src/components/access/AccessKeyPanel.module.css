@@ -1,0 +1,11 @@
+.copyKey {
+  display:block;
+  width:100%;
+  white-space:normal;
+  cursor:pointer;
+  font-weight:400;
+  line-height:1.65;
+}
+.copyKey:hover {border-color:#2864dc;background:#f4f8ff;}
+.copyKey:focus-visible {outline:3px solid #2864dc;outline-offset:4px;}
+.feedback {min-height:1.7em;margin:-10px 0 18px;font-size:.875rem;line-height:1.7;color:#245baf;}

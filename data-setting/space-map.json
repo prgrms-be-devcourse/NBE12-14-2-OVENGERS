@@ -1,0 +1,275 @@
+[
+  {
+    "key": "pangyo-01",
+    "region": "판교",
+    "name": "[샘플] 판교 차콜 포커스룸",
+    "photo": 1,
+    "image_path": "/images/slotkey-test-data/space-01.jpg"
+  },
+  {
+    "key": "pangyo-02",
+    "region": "판교",
+    "name": "[샘플] 판교 골든 포레스트 컨퍼런스룸",
+    "photo": 2,
+    "image_path": "/images/slotkey-test-data/space-02.jpg"
+  },
+  {
+    "key": "pangyo-03",
+    "region": "판교",
+    "name": "[샘플] 판교 스노우뷰 미팅룸",
+    "photo": 3,
+    "image_path": "/images/slotkey-test-data/space-03.jpg"
+  },
+  {
+    "key": "pangyo-04",
+    "region": "판교",
+    "name": "[샘플] 판교 코랄 미팅룸",
+    "photo": 4,
+    "image_path": "/images/slotkey-test-data/space-04.jpg"
+  },
+  {
+    "key": "pangyo-05",
+    "region": "판교",
+    "name": "[샘플] 판교 클래스 세미나룸",
+    "photo": 5,
+    "image_path": "/images/slotkey-test-data/space-05.jpg"
+  },
+  {
+    "key": "pangyo-06",
+    "region": "판교",
+    "name": "[샘플] 판교 파크뷰 워크숍룸",
+    "photo": 6,
+    "image_path": "/images/slotkey-test-data/space-06.jpg"
+  },
+  {
+    "key": "pangyo-07",
+    "region": "판교",
+    "name": "[샘플] 판교 선샤인 오피스",
+    "photo": 7,
+    "image_path": "/images/slotkey-test-data/space-07.jpg"
+  },
+  {
+    "key": "pangyo-08",
+    "region": "판교",
+    "name": "[샘플] 판교 우드 커넥트룸",
+    "photo": 8,
+    "image_path": "/images/slotkey-test-data/space-08.jpg"
+  },
+  {
+    "key": "pangyo-09",
+    "region": "판교",
+    "name": "[샘플] 판교 쉐도우 라운지",
+    "photo": 9,
+    "image_path": "/images/slotkey-test-data/space-09.jpg"
+  },
+  {
+    "key": "pangyo-10",
+    "region": "판교",
+    "name": "[샘플] 판교 화이트보드 미팅룸",
+    "photo": 10,
+    "image_path": "/images/slotkey-test-data/space-10.jpg"
+  },
+  {
+    "key": "pangyo-11",
+    "region": "판교",
+    "name": "[샘플] 판교 포커스 클래스룸",
+    "photo": 11,
+    "image_path": "/images/slotkey-test-data/space-11.jpg"
+  },
+  {
+    "key": "pangyo-12",
+    "region": "판교",
+    "name": "[샘플] 판교 미드나잇 블루룸",
+    "photo": 12,
+    "image_path": "/images/slotkey-test-data/space-12.jpg"
+  },
+  {
+    "key": "pangyo-13",
+    "region": "판교",
+    "name": "[샘플] 판교 오픈 클래스룸",
+    "photo": 13,
+    "image_path": "/images/slotkey-test-data/space-13.jpg"
+  },
+  {
+    "key": "hanam-01",
+    "region": "하남",
+    "name": "[샘플] 하남 모노 미팅룸",
+    "photo": 14,
+    "image_path": "/images/slotkey-test-data/space-14.jpg"
+  },
+  {
+    "key": "hanam-02",
+    "region": "하남",
+    "name": "[샘플] 하남 그랜드 세미나홀",
+    "photo": 15,
+    "image_path": "/images/slotkey-test-data/space-15.jpg"
+  },
+  {
+    "key": "hanam-03",
+    "region": "하남",
+    "name": "[샘플] 하남 갤러리 컨퍼런스룸",
+    "photo": 16,
+    "image_path": "/images/slotkey-test-data/space-16.jpg"
+  },
+  {
+    "key": "hanam-04",
+    "region": "하남",
+    "name": "[샘플] 하남 글라스 오피스",
+    "photo": 17,
+    "image_path": "/images/slotkey-test-data/space-17.jpg"
+  },
+  {
+    "key": "hanam-05",
+    "region": "하남",
+    "name": "[샘플] 하남 우드 데스크룸",
+    "photo": 18,
+    "image_path": "/images/slotkey-test-data/space-18.jpg"
+  },
+  {
+    "key": "hanam-06",
+    "region": "하남",
+    "name": "[샘플] 하남 브릭 우드 미팅룸",
+    "photo": 19,
+    "image_path": "/images/slotkey-test-data/space-19.jpg"
+  },
+  {
+    "key": "hanam-07",
+    "region": "하남",
+    "name": "[샘플] 하남 라이트 미팅룸",
+    "photo": 20,
+    "image_path": "/images/slotkey-test-data/space-20.jpg"
+  },
+  {
+    "key": "hanam-08",
+    "region": "하남",
+    "name": "[샘플] 하남 베리 브릭룸",
+    "photo": 21,
+    "image_path": "/images/slotkey-test-data/space-21.jpg"
+  },
+  {
+    "key": "hanam-09",
+    "region": "하남",
+    "name": "[샘플] 하남 오렌지 포인트룸",
+    "photo": 22,
+    "image_path": "/images/slotkey-test-data/space-22.jpg"
+  },
+  {
+    "key": "hanam-10",
+    "region": "하남",
+    "name": "[샘플] 하남 스카이라이트 보드룸",
+    "photo": 23,
+    "image_path": "/images/slotkey-test-data/space-23.jpg"
+  },
+  {
+    "key": "hanam-11",
+    "region": "하남",
+    "name": "[샘플] 하남 그린 테이블룸",
+    "photo": 24,
+    "image_path": "/images/slotkey-test-data/space-24.jpg"
+  },
+  {
+    "key": "hanam-12",
+    "region": "하남",
+    "name": "[샘플] 하남 시티뷰 미팅룸",
+    "photo": 25,
+    "image_path": "/images/slotkey-test-data/space-25.jpg"
+  },
+  {
+    "key": "hanam-13",
+    "region": "하남",
+    "name": "[샘플] 하남 노트북 워크룸",
+    "photo": 26,
+    "image_path": "/images/slotkey-test-data/space-26.jpg"
+  },
+  {
+    "key": "gangnam-01",
+    "region": "강남",
+    "name": "[샘플] 강남 그리너리 워크라운지",
+    "photo": 27,
+    "image_path": "/images/slotkey-test-data/space-27.jpg"
+  },
+  {
+    "key": "gangnam-02",
+    "region": "강남",
+    "name": "[샘플] 강남 팀 커넥트룸",
+    "photo": 28,
+    "image_path": "/images/slotkey-test-data/space-28.jpg"
+  },
+  {
+    "key": "gangnam-03",
+    "region": "강남",
+    "name": "[샘플] 강남 쿨그레이 미팅룸",
+    "photo": 29,
+    "image_path": "/images/slotkey-test-data/space-29.jpg"
+  },
+  {
+    "key": "gangnam-04",
+    "region": "강남",
+    "name": "[샘플] 강남 우드 스퀘어룸",
+    "photo": 30,
+    "image_path": "/images/slotkey-test-data/space-30.jpg"
+  },
+  {
+    "key": "gangnam-05",
+    "region": "강남",
+    "name": "[샘플] 강남 오크 워크숍룸",
+    "photo": 31,
+    "image_path": "/images/slotkey-test-data/space-31.jpg"
+  },
+  {
+    "key": "gangnam-06",
+    "region": "강남",
+    "name": "[샘플] 강남 펜던트 라운지",
+    "photo": 32,
+    "image_path": "/images/slotkey-test-data/space-32.jpg"
+  },
+  {
+    "key": "gangnam-07",
+    "region": "강남",
+    "name": "[샘플] 강남 블루 가든룸",
+    "photo": 33,
+    "image_path": "/images/slotkey-test-data/space-33.jpg"
+  },
+  {
+    "key": "gangnam-08",
+    "region": "강남",
+    "name": "[샘플] 강남 블랙 체어 클래스룸",
+    "photo": 34,
+    "image_path": "/images/slotkey-test-data/space-34.jpg"
+  },
+  {
+    "key": "gangnam-09",
+    "region": "강남",
+    "name": "[샘플] 강남 플랜트 스크린룸",
+    "photo": 35,
+    "image_path": "/images/slotkey-test-data/space-35.jpg"
+  },
+  {
+    "key": "gangnam-10",
+    "region": "강남",
+    "name": "[샘플] 강남 플랜트 스튜디오룸",
+    "photo": 36,
+    "image_path": "/images/slotkey-test-data/space-36.jpg"
+  },
+  {
+    "key": "gangnam-11",
+    "region": "강남",
+    "name": "[샘플] 강남 블루 오디토리움",
+    "photo": 37,
+    "image_path": "/images/slotkey-test-data/space-37.jpg"
+  },
+  {
+    "key": "gangnam-12",
+    "region": "강남",
+    "name": "[샘플] 강남 데이라이트 세미나룸",
+    "photo": 38,
+    "image_path": "/images/slotkey-test-data/space-38.jpg"
+  },
+  {
+    "key": "gangnam-13",
+    "region": "강남",
+    "name": "[샘플] 강남 민트 글라스룸",
+    "photo": 39,
+    "image_path": "/images/slotkey-test-data/space-39.jpg"
+  }
+]

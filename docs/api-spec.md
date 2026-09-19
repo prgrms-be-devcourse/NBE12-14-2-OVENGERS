@@ -9,7 +9,7 @@
 - Base URL: `/api/v1` (예: `/spaces` → 실제로는 `/api/v1/spaces`)
   - 출입(§7) API도 `/api/v1`로 통일됨(2026-09-17, 기존 `/api`).
 - 인증: Access Token(JWT, `Authorization: Bearer`), Refresh Token(임의 문자열, 재발급 전용 엔드포인트에서만 사용, 쿠키 전달 시 HttpOnly/Secure/SameSite)
-- JWT 클레임은 `sub`(회원 식별자), `exp`만 포함. 역할·상태는 넣지 않고 **모든 보호 API가 요청 시점에 DB에서 재조회**한다.
+- JWT 클레임은 `id`, `email`, 만료 시각을 포함한다. 역할·상태는 넣지 않고 **모든 보호 API가 요청 시점에 DB에서 재조회**한다.
 - 인증 불필요 API: 회원가입, 로그인, 토큰 재발급, 공간 목록/상세 조회, 슬롯 가용성 조회.
 - 공통 응답: `{ status, code, message, data }` (성공 SUCCESS/OK, 실패 시 data는 항상 null)
 - 페이지네이션: `page`(0-base, 기본 0), `size`(기본 20, 최대 100) → `{ content, page, size, totalElements, totalPages }`
@@ -52,8 +52,8 @@
 - `GET /spaces` (인증 불필요): `page`, `size`, `keyword`. `status=ACTIVE`인 공간만 기본 노출
 - `GET /spaces/{spaceId}` (인증 불필요): 상세 (+ description, `version`). 오류: SPACE_NOT_FOUND(404)
 - `GET /spaces/{spaceId}/slots?date=YYYY-MM-DD`: 운영시간을 30분 단위로 쪼갠 예약 가능 여부. **참고용 스냅샷**(실제 확정 여부는 슬롯 INSERT 시점의 UNIQUE 제약으로만 판정 — 사전 조회는 화면 표시용일 뿐 규칙이 아니다)
-- `POST /admin/spaces` (PLATFORM_ADMIN): `pricePerSlot`은 100원 단위 양수만. 등록자 ID·생성 시각은 서버가 설정. audit_log 기록. 오류: VALIDATION_FAILED(400), FORBIDDEN_ROLE(403)
-- `PATCH /admin/spaces/{spaceId}` (PLATFORM_ADMIN): 부분 수정 + status(ACTIVE/INACTIVE). 가격 변경 시 `version` 증가(낙관적 비교용) — 이미 확정된 예약의 스냅샷/총액에는 영향 없음. INACTIVE로 바꿔도 기존 예약 유지, 신규 예약만 차단. 오류: SPACE_NOT_FOUND(404), FORBIDDEN_ROLE(403), VALIDATION_FAILED(400)
+- `POST /admin/spaces` (ADMIN): `pricePerSlot`은 100원 단위 양수, `openingTime`/`closingTime`은 30분 경계이며 시작이 종료보다 빨라야 한다. 등록자 ID·생성 시각은 서버가 설정하고 `audit_logs`에 기록한다. 오류: INVALID_OPERATING_HOURS(422), INVALID_PRICE_UNIT(422)
+- `PATCH /admin/spaces/{spaceId}` (ADMIN): 부분 수정 + status(ACTIVE/INACTIVE). 운영시간 부분 수정도 기존 반대편 시각과 함께 30분 경계·순서를 검증한다. 가격 변경 시 `version` 증가(낙관적 비교용) — 이미 확정된 예약의 스냅샷/총액에는 영향 없음. INACTIVE로 바꿔도 기존 예약 유지, 신규 예약만 차단. 오류: SPACE_NOT_FOUND(404), INVALID_OPERATING_HOURS(422), INVALID_PRICE_UNIT(422)
 
 ## 5. 예약 · 크레딧 (Reservation & Credit)
 
@@ -169,8 +169,8 @@
 
 | 항목 | 값 |
 | --- | --- |
-| `member.role` | USER, ADMIN (문서 본문의 MEMBER/PLATFORM_ADMIN 표기는 각각 USER/ADMIN을 뜻함) |
-| `member.status` | ACTIVE, SUSPENDED |
+| `member.role` | USER, ADMIN |
+| `member.status` | ACTIVE, SUSPENDED, WITHDRAWN |
 | `space.status` | ACTIVE, INACTIVE |
 | `reservation.status` | HELD, EXPIRED, CONFIRMED, IN_USE, COMPLETED, CANCELLED, NO_SHOW |
 | `credit_transaction.type` | SIGNUP_GRANT, ADMIN_GRANT, RESERVATION_CHARGE, REFUND, PENALTY |

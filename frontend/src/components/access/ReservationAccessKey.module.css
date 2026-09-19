@@ -1,0 +1,5 @@
+.locked.locked {background:#f0f2f5;border-color:#d5dce5;}
+.locked h2 {color:#5c6776;}
+.locked p {color:#657285;}
+.countdown.countdown {display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:58px;padding:14px 18px;background:#e2e6ec;border:1px solid #cfd6e0;color:#808a98;opacity:1;cursor:not-allowed;}
+.countdown span {color:#2864dc;font-size:1.65rem;font-weight:500;letter-spacing:.035em;font-variant-numeric:tabular-nums;}

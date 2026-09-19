@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -66,8 +67,10 @@ public class DoorAccessTokenService {
                 reservation.getMemberId()
         );
 
-        // 확정된 예약인지 확인
-        if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
+        // // 확정 또는 이용 중인 예약인지 확인
+        ReservationStatus status = reservation.getStatus();
+
+        if (status != ReservationStatus.CONFIRMED && status != ReservationStatus.IN_USE) {
             throw new BusinessException(
                     ErrorCode.RESERVATION_STATE_CONFLICT
             );
@@ -94,6 +97,8 @@ public class DoorAccessTokenService {
                                 "REISSUED"
                         )
                 );
+
+        doorAccessTokenRepository.flush();
 
         // 새로운 원문 토큰 생성
         String rawToken =
@@ -140,6 +145,14 @@ public class DoorAccessTokenService {
                 accessTokenHasher.hash(rawToken);
 
         return findByTokenHash(tokenHash);
+    }
+
+    // 원문 토큰으로 조회하되, 검증 실패를 정상적인 거절 결과로 처리할 수 있도록 Optional 반환
+    public Optional<DoorAccessToken> findOptionalByRawToken(String rawToken) {
+        String tokenHash =
+                accessTokenHasher.hash(rawToken);
+
+        return doorAccessTokenRepository.findByTokenHash(tokenHash);
     }
 
     // 특정 예약의 활성 토큰 조회
