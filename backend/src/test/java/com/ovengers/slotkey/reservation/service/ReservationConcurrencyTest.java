@@ -65,6 +65,10 @@ class ReservationConcurrencyTest {
 
     @BeforeEach
     void setUp() {
+        reservationSlotRepository.deleteAll();
+        reservationStatusHistoryRepository.deleteAll();
+        reservationRepository.deleteAll();
+
         Space space = spaceRepository.save(Space.builder()
                 .name("동시성 테스트 공간")
                 .location("서울")
