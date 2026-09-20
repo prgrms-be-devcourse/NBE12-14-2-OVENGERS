@@ -36,7 +36,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Reservation r SET r.status = :expired " +
-            "WHERE r.id IN :ids AND r.status = :held AND r.holdExpiresAt < :now")
+                    "WHERE r.id IN :ids AND r.status = :held AND r.holdExpiresAt <= :now")
     int expireHeldReservations(
             @Param("ids") List<Long> ids,
             @Param("now") LocalDateTime now,
@@ -94,7 +94,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     // ===== 배치 대상 조회 (ReservationCompletionScheduler) =====
     // 후보 id만 뽑고, 실제 전이 여부는 건별 조건부 UPDATE가 최종 판정한다.
 
-    @Query("SELECT r.id FROM Reservation r WHERE r.status = :held AND r.holdExpiresAt < :now")
+    @Query("SELECT r.id FROM Reservation r WHERE r.status = :held AND r.holdExpiresAt <= :now")
     List<Long> findExpiredHoldIds(
             @Param("now") LocalDateTime now,
             @Param("held") ReservationStatus held
