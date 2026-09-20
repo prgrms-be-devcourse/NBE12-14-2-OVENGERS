@@ -43,4 +43,29 @@ public class ReservationOccupiedSlotAdapter implements OccupiedSlotProvider {
 
         return new HashSet<>(occupiedStarts);
     }
+
+    @Override
+    public boolean hasOccupiedSlotsOutsideHours(Long spaceId, java.time.LocalTime openTime,
+            java.time.LocalTime closeTime, LocalDateTime fromTime) {
+        LocalDateTime slotStartAfter = fromTime.minusMinutes(30);
+        List<LocalDateTime> occupiedStarts = reservationSlotRepository.findOccupiedSlotStartsEndingAfter(
+                spaceId,
+                slotStartAfter,
+                fromTime,
+                ReservationStatus.HELD,
+                OCCUPIED_STATUSES);
+
+        for (LocalDateTime slotStart : occupiedStarts) {
+            java.time.LocalTime start = slotStart.toLocalTime();
+            java.time.LocalTime end = start.plusMinutes(30);
+
+            // 운영시간 밖: slotStart < openTime 이거나 slotEnd > closeTime
+            // (자정 00:00으로 넘어가는 경우는 당일 예약 정책상 24시 경계 체크)
+            if (start.isBefore(openTime) || end.isAfter(closeTime)
+                    || (end.equals(java.time.LocalTime.MIDNIGHT) && !closeTime.equals(java.time.LocalTime.MIDNIGHT))) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

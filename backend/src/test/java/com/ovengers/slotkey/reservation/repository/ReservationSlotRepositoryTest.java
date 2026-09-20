@@ -421,4 +421,153 @@ class ReservationSlotRepositoryTest extends IntegrationTestSupport {
                                 .findAllByReservationIdOrderByChangedAtAsc(futureHold.getId());
                 assertThat(histories).isEmpty();
         }
+
+        @Test
+        @DisplayName("findOccupiedSlotStartsEndingAfter는 포함 상태(CONFIRMED, IN_USE, COMPLETED, 유효 HELD)만 조회하고 제외 상태(EXPIRED, CANCELLED, NO_SHOW, 만료 HELD)는 제외한다")
+        void findOccupiedSlotStartsEndingAfter_statusFilter_includesOnlyValidOccupied() {
+                // given
+                LocalDateTime now = LocalDateTime.of(2026, 9, 20, 10, 0, 0);
+                LocalDateTime slotStartAfter = now.minusMinutes(30);
+
+                // 포함 대상 4종
+                Reservation confirmed = createReservation(ReservationStatus.CONFIRMED,
+                                LocalDateTime.of(2026, 9, 20, 11, 0), LocalDateTime.of(2026, 9, 20, 11, 30), null);
+                createSlot(confirmed.getId(), LocalDateTime.of(2026, 9, 20, 11, 0));
+
+                Reservation inUse = createReservation(ReservationStatus.IN_USE,
+                                LocalDateTime.of(2026, 9, 20, 11, 30), LocalDateTime.of(2026, 9, 20, 12, 0), null);
+                createSlot(inUse.getId(), LocalDateTime.of(2026, 9, 20, 11, 30));
+
+                Reservation completed = createReservation(ReservationStatus.COMPLETED,
+                                LocalDateTime.of(2026, 9, 20, 12, 0), LocalDateTime.of(2026, 9, 20, 12, 30), null);
+                createSlot(completed.getId(), LocalDateTime.of(2026, 9, 20, 12, 0));
+
+                Reservation validHold = createReservation(ReservationStatus.HELD,
+                                LocalDateTime.of(2026, 9, 20, 12, 30), LocalDateTime.of(2026, 9, 20, 13, 0),
+                                now.plusSeconds(1));
+                createSlot(validHold.getId(), LocalDateTime.of(2026, 9, 20, 12, 30));
+
+                // 제외 대상 4종
+                Reservation expired = createReservation(ReservationStatus.EXPIRED,
+                                LocalDateTime.of(2026, 9, 20, 13, 0), LocalDateTime.of(2026, 9, 20, 13, 30), null);
+                createSlot(expired.getId(), LocalDateTime.of(2026, 9, 20, 13, 0));
+
+                Reservation cancelled = createReservation(ReservationStatus.CANCELLED,
+                                LocalDateTime.of(2026, 9, 20, 13, 30), LocalDateTime.of(2026, 9, 20, 14, 0), null);
+                createSlot(cancelled.getId(), LocalDateTime.of(2026, 9, 20, 13, 30));
+
+                Reservation noShow = createReservation(ReservationStatus.NO_SHOW,
+                                LocalDateTime.of(2026, 9, 20, 14, 0), LocalDateTime.of(2026, 9, 20, 14, 30), null);
+                createSlot(noShow.getId(), LocalDateTime.of(2026, 9, 20, 14, 0));
+
+                Reservation expiredHold = createReservation(ReservationStatus.HELD,
+                                LocalDateTime.of(2026, 9, 20, 14, 30), LocalDateTime.of(2026, 9, 20, 15, 0), now);
+                createSlot(expiredHold.getId(), LocalDateTime.of(2026, 9, 20, 14, 30));
+
+                // when
+                List<LocalDateTime> result = reservationSlotRepository.findOccupiedSlotStartsEndingAfter(
+                                spaceId, slotStartAfter, now, ReservationStatus.HELD, OCCUPIED_STATUSES);
+
+                // then
+                assertThat(result).containsExactlyInAnyOrder(
+                                LocalDateTime.of(2026, 9, 20, 11, 0),
+                                LocalDateTime.of(2026, 9, 20, 11, 30),
+                                LocalDateTime.of(2026, 9, 20, 12, 0),
+                                LocalDateTime.of(2026, 9, 20, 12, 30));
+        }
+
+        @Test
+        @DisplayName("findOccupiedSlotStartsEndingAfter의 HELD 만료 경계: holdExpiresAt == now는 제외되고 now + 1초는 포함되며 now - 1초는 제외된다")
+        void findOccupiedSlotStartsEndingAfter_heldExpiryBoundary() {
+                // given
+                LocalDateTime now = LocalDateTime.of(2026, 9, 20, 10, 0, 0);
+                LocalDateTime slotStartAfter = now.minusMinutes(30);
+
+                // 1. now - 1초 (이미 만료)
+                Reservation pastHold = createReservation(ReservationStatus.HELD,
+                                LocalDateTime.of(2026, 9, 20, 11, 0), LocalDateTime.of(2026, 9, 20, 11, 30),
+                                now.minusSeconds(1));
+                createSlot(pastHold.getId(), LocalDateTime.of(2026, 9, 20, 11, 0));
+
+                // 2. 정확히 now (만료 경계: now < holdExpiresAt 불만족)
+                Reservation exactHold = createReservation(ReservationStatus.HELD,
+                                LocalDateTime.of(2026, 9, 20, 11, 30), LocalDateTime.of(2026, 9, 20, 12, 0), now);
+                createSlot(exactHold.getId(), LocalDateTime.of(2026, 9, 20, 11, 30));
+
+                // 3. now + 1초 (유효)
+                Reservation futureHold = createReservation(ReservationStatus.HELD,
+                                LocalDateTime.of(2026, 9, 20, 12, 0), LocalDateTime.of(2026, 9, 20, 12, 30),
+                                now.plusSeconds(1));
+                createSlot(futureHold.getId(), LocalDateTime.of(2026, 9, 20, 12, 0));
+
+                // when
+                List<LocalDateTime> result = reservationSlotRepository.findOccupiedSlotStartsEndingAfter(
+                                spaceId, slotStartAfter, now, ReservationStatus.HELD, OCCUPIED_STATUSES);
+
+                // then
+                assertThat(result).containsExactly(LocalDateTime.of(2026, 9, 20, 12, 0));
+        }
+
+        @Test
+        @DisplayName("findOccupiedSlotStartsEndingAfter의 시간 구간 경계: slotStart < now < slotEnd(진행 중), slotStart == now, slotEnd == now 검증")
+        void findOccupiedSlotStartsEndingAfter_timeSlotBoundaries() {
+                // given
+                LocalDateTime now = LocalDateTime.of(2026, 9, 20, 10, 15, 0);
+                LocalDateTime slotStartAfter = now.minusMinutes(30); // 09:45
+
+                // 1. 이미 완전히 끝난 슬롯: 09:00 ~ 09:30 (slotStart 09:00 <= 09:45) -> 제외
+                Reservation endedBefore = createReservation(ReservationStatus.CONFIRMED,
+                                LocalDateTime.of(2026, 9, 20, 9, 0), LocalDateTime.of(2026, 9, 20, 9, 30), null);
+                createSlot(endedBefore.getId(), LocalDateTime.of(2026, 9, 20, 9, 0));
+
+                // 2. slotEnd == now 경계: now가 10:00일 때 09:30 ~ 10:00 슬롯
+                LocalDateTime nowAtBoundary = LocalDateTime.of(2026, 9, 20, 10, 0, 0);
+                LocalDateTime slotStartAfterAtBoundary = nowAtBoundary.minusMinutes(30); // 09:30
+                Reservation endedJustNow = createReservation(ReservationStatus.CONFIRMED,
+                                LocalDateTime.of(2026, 9, 20, 9, 30), LocalDateTime.of(2026, 9, 20, 10, 0), null);
+                createSlot(endedJustNow.getId(), LocalDateTime.of(2026, 9, 20, 9, 30));
+
+                // slotEnd == now인 경우 slotStart (09:30) > slotStartAfter (09:30) 조건에 의해 엄격하게 제외됨
+                List<LocalDateTime> boundaryCheck = reservationSlotRepository.findOccupiedSlotStartsEndingAfter(
+                                spaceId, slotStartAfterAtBoundary, nowAtBoundary, ReservationStatus.HELD,
+                                OCCUPIED_STATUSES);
+                assertThat(boundaryCheck).doesNotContain(LocalDateTime.of(2026, 9, 20, 9, 30));
+
+                // 3. slotStart < now < slotEnd (진행 중 슬롯): 10:00 ~ 10:30 (now=10:15)
+                // slotStart (10:00) > slotStartAfter (09:45) -> 포함되어야 함!
+                Reservation running = createReservation(ReservationStatus.IN_USE,
+                                LocalDateTime.of(2026, 9, 20, 10, 0), LocalDateTime.of(2026, 9, 20, 10, 30), null);
+                createSlot(running.getId(), LocalDateTime.of(2026, 9, 20, 10, 0));
+
+                // 4. slotStart == now 경계: now가 10:30일 때 10:30 ~ 11:00 슬롯
+                LocalDateTime nowExact = LocalDateTime.of(2026, 9, 20, 10, 30, 0);
+                LocalDateTime slotStartAfterExact = nowExact.minusMinutes(30); // 10:00
+                Reservation startingJustNow = createReservation(ReservationStatus.CONFIRMED,
+                                LocalDateTime.of(2026, 9, 20, 10, 30), LocalDateTime.of(2026, 9, 20, 11, 0), null);
+                createSlot(startingJustNow.getId(), LocalDateTime.of(2026, 9, 20, 10, 30));
+
+                // when (1): now=10:15 기준 조회
+                List<LocalDateTime> resultAt1015 = reservationSlotRepository.findOccupiedSlotStartsEndingAfter(
+                                spaceId, slotStartAfter, now, ReservationStatus.HELD, OCCUPIED_STATUSES);
+
+                // then (1): now=10:15 시점에 진행 중인 10:00 슬롯과 이후 10:30 슬롯이 정상 포함됨
+                assertThat(resultAt1015).contains(
+                                LocalDateTime.of(2026, 9, 20, 10, 0),
+                                LocalDateTime.of(2026, 9, 20, 10, 30));
+                assertThat(resultAt1015).doesNotContain(
+                                LocalDateTime.of(2026, 9, 20, 9, 0),
+                                LocalDateTime.of(2026, 9, 20, 9, 30));
+
+                // when (2): nowExact=10:30 기준 조회 (slotStart == nowExact 경계값 검증)
+                List<LocalDateTime> resultAt1030 = reservationSlotRepository.findOccupiedSlotStartsEndingAfter(
+                                spaceId, slotStartAfterExact, nowExact, ReservationStatus.HELD, OCCUPIED_STATUSES);
+
+                // then (2): slotStart == nowExact인 10:30 슬롯은 포함되고, 10:00 슬롯은 slotEnd(10:30) ==
+                // nowExact이므로 제외됨
+                assertThat(resultAt1030).contains(LocalDateTime.of(2026, 9, 20, 10, 30));
+                assertThat(resultAt1030).doesNotContain(
+                                LocalDateTime.of(2026, 9, 20, 9, 0),
+                                LocalDateTime.of(2026, 9, 20, 9, 30),
+                                LocalDateTime.of(2026, 9, 20, 10, 0));
+        }
 }

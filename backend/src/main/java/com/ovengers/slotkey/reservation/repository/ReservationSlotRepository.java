@@ -38,6 +38,24 @@ public interface ReservationSlotRepository extends JpaRepository<ReservationSlot
                     @Param("heldStatus") ReservationStatus heldStatus,
                     @Param("confirmedStatuses") List<ReservationStatus> confirmedStatuses);
 
+    /**
+     * 특정 시각(fromTime) 이후에 끝나는(즉, slotStart > fromTime - 30분) 유효 점유 슬롯의 시작 시각 목록을
+     * 조회한다.
+     * 진행 중인 슬롯(slotStart < fromTime < slotEnd)을 포함하여 미래에 걸치는 모든 유효 점유 슬롯을 가져온다.
+     * 관리자가 운영시간을 변경할 때 충돌하는 슬롯이 있는지 검증하는 용도로 사용된다.
+     */
+    @Query("SELECT rs.slotStart FROM ReservationSlot rs, Reservation r " +
+                    "WHERE rs.reservationId = r.id " +
+                    "AND rs.spaceId = :spaceId " +
+                    "AND rs.slotStart > :slotStartAfter " +
+                    "AND (r.status IN (:confirmedStatuses) OR (r.status = :heldStatus AND :fromTime < r.holdExpiresAt))")
+    List<LocalDateTime> findOccupiedSlotStartsEndingAfter(
+                    @Param("spaceId") Long spaceId,
+                    @Param("slotStartAfter") LocalDateTime slotStartAfter,
+                    @Param("fromTime") LocalDateTime fromTime,
+                    @Param("heldStatus") ReservationStatus heldStatus,
+                    @Param("confirmedStatuses") List<ReservationStatus> confirmedStatuses);
+
     /** 요청한 슬롯 시작 시각들 중 이미 점유된 슬롯을 가진 예약 id들(중복 없이). */
     @Query("SELECT DISTINCT rs.reservationId FROM ReservationSlot rs " +
             "WHERE rs.spaceId = :spaceId AND rs.slotStart IN :slotStarts")
