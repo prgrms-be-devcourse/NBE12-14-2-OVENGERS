@@ -27,6 +27,8 @@ public enum ErrorCode {
     SPACE_INACTIVE(HttpStatus.UNPROCESSABLE_ENTITY, "SPACE_INACTIVE", "예약이 불가능한 공간입니다."),
     INVALID_PRICE_UNIT(HttpStatus.BAD_REQUEST, "INVALID_PRICE_UNIT", "요금은 100원 단위여야 합니다."),
     INVALID_OPERATING_HOURS(HttpStatus.BAD_REQUEST, "INVALID_OPERATING_HOURS", "운영 종료 시각은 시작 시각보다 늦어야 합니다."),
+    SPACE_OPERATING_HOURS_CONFLICT(HttpStatus.CONFLICT, "SPACE_OPERATING_HOURS_CONFLICT",
+                    "기존 예약과 충돌하여 운영시간을 수정할 수 없습니다."),
 
     // ── Reservation ─────────────────────────────────────
     RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "RESERVATION_NOT_FOUND", "존재하지 않는 예약입니다."),
