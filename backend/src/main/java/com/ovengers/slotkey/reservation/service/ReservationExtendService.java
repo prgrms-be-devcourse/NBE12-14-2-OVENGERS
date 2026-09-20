@@ -7,6 +7,9 @@ import com.ovengers.slotkey.reservation.dto.response.ReservationResponse;
 import com.ovengers.slotkey.reservation.entity.Reservation;
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
+import com.ovengers.slotkey.reservation.policy.ReservationTimePolicy;
+import com.ovengers.slotkey.space.entity.Space;
+import com.ovengers.slotkey.space.repository.SpaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +28,7 @@ import java.util.List;
 public class ReservationExtendService {
 
     private final ReservationRepository reservationRepository;
+    private final SpaceRepository spaceRepository;
     private final ReservationSlotService reservationSlotService;
     private final PricingService pricingService;
     private final CreditService creditService;
@@ -32,7 +36,16 @@ public class ReservationExtendService {
 
     @Transactional
     public ReservationResponse extend(Long memberId, Long reservationId, LocalDateTime expectedEndTime, LocalDateTime newEndTime) {
-        Reservation reservation = reservationRepository.findById(reservationId)
+        // 1. 잠금 순서(Space -> Reservation) 준수를 위해 reservationId로부터 spaceId를 먼저 투영 조회
+        Long spaceId = reservationRepository.findSpaceIdById(reservationId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
+
+        // 2. Space 공유 잠금(findByIdForShare) 획득
+        Space space = spaceRepository.findByIdForShare(spaceId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SPACE_NOT_FOUND));
+
+        // 3. 최신 예약 조회 및 비관적 배타 잠금(findByIdForUpdate) 획득
+        Reservation reservation = reservationRepository.findByIdForUpdate(reservationId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
 
         if (!reservation.getMemberId().equals(memberId)) {
@@ -48,9 +61,9 @@ public class ReservationExtendService {
         if (!reservation.getEndTime().isEqual(expectedEndTime)) {
             throw new BusinessException(ErrorCode.RESERVATION_STATE_CONFLICT, "예약 정보가 변경되었습니다. 다시 시도해주세요.");
         }
-        if (!newEndTime.isAfter(reservation.getEndTime())) {
-            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "연장 시각은 기존 종료 시각보다 늦어야 합니다.");
-        }
+
+        // 4. 연장 시간 정책 검증 (30분 단위, 동일 날짜, 운영시간 내)
+        ReservationTimePolicy.validateExtension(reservation.getEndTime(), newEndTime, space.getClosingTime());
 
         // 추가 슬롯 확보. 실패(RESERVATION_SLOT_CONFLICT) 시 전파되어 아래 크레딧 차감/UPDATE는
         // 시도조차 되지 않고, 이미 삽입 시도한 슬롯도 트랜잭션과 함께 롤백된다.

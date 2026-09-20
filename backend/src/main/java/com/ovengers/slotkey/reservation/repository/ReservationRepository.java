@@ -140,4 +140,16 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("inUse") ReservationStatus inUse,
             @Param("completed") ReservationStatus completed
     );
+
+    @Query("SELECT r.spaceId FROM Reservation r WHERE r.id = :id")
+    java.util.Optional<Long> findSpaceIdById(@Param("id") Long id);
+
+    @Query("SELECT new com.ovengers.slotkey.reservation.dto.ReservationTargetInfo(r.spaceId, r.memberId) " +
+                    "FROM Reservation r WHERE r.id = :id")
+    java.util.Optional<com.ovengers.slotkey.reservation.dto.ReservationTargetInfo> findTargetInfoById(
+                    @Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM Reservation r WHERE r.id = :id")
+    java.util.Optional<Reservation> findByIdForUpdate(@Param("id") Long id);
 }
