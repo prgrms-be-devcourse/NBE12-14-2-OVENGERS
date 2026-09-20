@@ -10,5 +10,5 @@ import java.util.Set;
  */
 public interface OccupiedSlotProvider {
 
-    Set<LocalDateTime> getOccupiedSlotStarts(Long spaceId, LocalDate date);
+    Set<LocalDateTime> getOccupiedSlotStarts(Long spaceId, LocalDate date, LocalDateTime now);
 }
