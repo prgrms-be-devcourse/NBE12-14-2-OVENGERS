@@ -15,6 +15,7 @@ import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -108,12 +109,20 @@ public class DoorAccessTokenService {
         String tokenHash =
                 accessTokenHasher.hash(rawToken);
 
-        // DB에는 해시된 토큰 저장
-        create(
-                reservation,
-                tokenHash,
-                issuedAt
-        );
+        // DB에는 해시된 토큰 저장. 같은 예약에 발급 요청이 동시에 들어오면 활성 토큰 UNIQUE 제약
+        // (active_reservation_id)이 하나만 통과시키므로, 진 요청은 500이 아니라 409로 돌려준다.
+        try {
+            create(
+                    reservation,
+                    tokenHash,
+                    issuedAt
+            );
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(
+                    ErrorCode.RESERVATION_STATE_CONFLICT,
+                    "동시에 다른 발급 요청이 처리되었습니다. 다시 시도해주세요."
+            );
+        }
 
         // 사용자에게는 원문 토큰 반환
         return DoorAccessTokenResponse.of(
