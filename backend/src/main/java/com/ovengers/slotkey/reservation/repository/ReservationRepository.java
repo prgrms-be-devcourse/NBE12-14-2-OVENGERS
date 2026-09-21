@@ -58,6 +58,20 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("cancelled") ReservationStatus cancelled
     );
 
+    /**
+     * 관리자 강제 취소의 문지기(core-domain-decisions 6-4). 조회 시점의 상태(expected)가 그대로일 때만 CANCELLED로 전이한다.
+     * 영향 행이 0이면 그 사이 다른 요청(본인 취소·체크인·배치 등)이 먼저 상태를 바꾼 것이다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Reservation r SET r.status = :cancelled, r.cancelledAt = :now " +
+            "WHERE r.id = :id AND r.status = :expected")
+    int forceCancelIfStatusIs(
+            @Param("id") Long id,
+            @Param("now") LocalDateTime now,
+            @Param("expected") ReservationStatus expected,
+            @Param("cancelled") ReservationStatus cancelled
+    );
+
     /** 체크아웃/자동 퇴실의 문지기(core-domain-decisions 8-4). IN_USE일 때만 COMPLETED로 전이한다. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Reservation r SET r.status = :completed, r.checkedOutAt = :checkedOutAt " +
