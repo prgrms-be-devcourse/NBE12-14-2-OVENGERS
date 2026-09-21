@@ -534,6 +534,11 @@ CHECK (status NOT IN ('IN_USE','COMPLETED') OR checked_in_at IS NOT NULL)
 - 같은 `Idempotency-Key`로 결제 3회 → 차감 1회
 - 연장 ↔ 신규 동시 요청 → 하나만 성공
 - 같은 예약에 연장 요청 2회 동시 → 하나만 성공
+- 같은 예약에 서로 다른 `Idempotency-Key`로 결제 N건 동시 → 정확히 1건 성공, 차감 1회, 나머지는 409
+- 같은 `Idempotency-Key`로 결제 N건 동시 → 차감 1회, 이후 같은 키 재요청은 최초 응답 그대로
+- 같은 예약에 본인 취소 N건 동시(더블 클릭) → 정확히 1건 성공, 환불 1회
+- 본인 취소 ↔ 관리자 강제 취소 동시 → 정확히 1건 성공, 환불 1회
+- 같은 예약에 도어 토큰 발급 N건 동시 → 활성 토큰 정확히 1개, 진 요청은 409(500 아님)
 
 ### 크레딧
 
@@ -541,6 +546,10 @@ CHECK (status NOT IN ('IN_USE','COMPLETED') OR checked_in_at IS NOT NULL)
 - 동시 결제 2건이 잔액을 초과 차감하지 않음
 - `SUM(credit_transaction.amount) == member.balance`
 - 50% 환불 시 `REFUND` + `PENALTY` 두 건 기록
+- - 결제 실패(잔액 부족) 후 충전하고 같은 `Idempotency-Key`로 재시도 → 성공 (실패한 요청은 키를 소진하지 않음)
+- 연장 성공 → 원 예약 단가 × 추가 슬롯 수만큼만 차감, `RESERVATION_CHARGE` 1건 / 연장 실패(슬롯 충돌·잔액 부족) → 차감·추가 슬롯 없음(롤백)
+- 연장한 예약을 시작 1시간 전까지 취소 → 연장분 포함 전액 환불
+- 강제 취소: `CONFIRMED`·`IN_USE`는 `total_amount` 전액 `REFUND`(위약금 없음, 시작 임박 포함), `HELD`는 환불 없음
 
 ### 상태 전이
 
@@ -548,12 +557,14 @@ CHECK (status NOT IN ('IN_USE','COMPLETED') OR checked_in_at IS NOT NULL)
 - `HELD` 상태에서 토큰 발급 시도 → 거절
 - 취소 후 재취소 → 409
 - 시작 이후 취소 시도 → 거절 (체크인 여부 무관)
+- 종료 상태 예약 강제 취소, 이미 강제 취소된 예약 재강제 취소 → 409, 환불 없음
 
 ### 시간 경계
 
 체크인: `start-1s` / `start` / `start+15m` / `start+15m+1s`
 재입장: `checked_in_at` / `end-1s` / `end`
 HOLD: `hold_expires_at-1s` / `hold_expires_at`
+HOLD 결제: `now == hold_expires_at`는 확정하지 않는다(`now < hold_expires_at`만 확정). 만료 쿼리의 `<=`와 경계가 맞물린다
 
 `Clock`을 주입해 대기 없이 검증한다.
 
