@@ -146,6 +146,7 @@ class ReservationExtendIntegrationTest extends ReservationIntegrationTestSupport
         assertThat(countSlotsInRange(spaceId, endTime, newEndTime)).isEqualTo(2);
     }
 
+
     @Test
     @DisplayName("연장한 예약을 시작 1시간 전 이전에 취소하면 연장분까지 포함한 총액 전액이 환불된다")
     void extendThenCancel_refundsTotalAmountIncludingExtension() {

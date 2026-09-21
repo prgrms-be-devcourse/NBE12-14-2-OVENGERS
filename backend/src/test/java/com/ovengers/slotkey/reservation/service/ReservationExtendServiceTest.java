@@ -45,6 +45,7 @@ class ReservationExtendServiceTest {
         private static final Long RESERVATION_ID = 10L;
         private static final Long SPACE_ID = 5L;
 
+
         @Mock
         private ReservationRepository reservationRepository;
         @Mock
