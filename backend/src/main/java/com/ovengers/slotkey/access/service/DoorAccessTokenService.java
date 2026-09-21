@@ -240,4 +240,89 @@ public class DoorAccessTokenService {
                         )
                 );
     }
+
+
+    // ---------- validateExtension ----------
+
+    private static final LocalDateTime EXTEND_FROM = LocalDateTime.of(2026, 9, 18, 21, 0);
+
+    @Test
+    @DisplayName("연장 종료 시각이 운영 종료 시각과 정확히 같으면 통과한다")
+    void validateExtension_untilExactlyClosing_doesNotThrow() {
+        LocalDateTime newEnd = LocalDateTime.of(2026, 9, 18, 22, 0);
+
+        assertThatCode(() -> ReservationTimePolicy.validateExtension(EXTEND_FROM, newEnd, CLOSING))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("연장 종료 시각이 운영 종료를 한 슬롯(30분)이라도 넘으면 INVALID_RESERVATION_TIME 예외가 발생한다")
+    void validateExtension_oneSlotPastClosing_throwsInvalidTime() {
+        LocalDateTime newEnd = LocalDateTime.of(2026, 9, 18, 22, 30);
+
+        assertThatThrownBy(() -> ReservationTimePolicy.validateExtension(EXTEND_FROM, newEnd, CLOSING))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_RESERVATION_TIME);
+    }
+
+    @Test
+    @DisplayName("연장 종료 시각이 30분 단위가 아니면(분이 어긋나거나 초가 있으면) INVALID_RESERVATION_TIME 예외가 발생한다")
+    void validateExtension_unalignedEndTime_throwsInvalidTime() {
+        LocalDateTime unalignedMinute = LocalDateTime.of(2026, 9, 18, 21, 15);
+        LocalDateTime withSeconds = LocalDateTime.of(2026, 9, 18, 21, 30, 10);
+
+        assertThatThrownBy(() -> ReservationTimePolicy.validateExtension(EXTEND_FROM, unalignedMinute, CLOSING))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_RESERVATION_TIME);
+        assertThatThrownBy(() -> ReservationTimePolicy.validateExtension(EXTEND_FROM, withSeconds, CLOSING))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_RESERVATION_TIME);
+    }
+
+    @Test
+    @DisplayName("연장으로 날짜가 넘어가면(자정 포함) INVALID_RESERVATION_TIME 예외가 발생한다")
+    void validateExtension_crossesDate_throwsInvalidTime() {
+        LocalDateTime midnight = LocalDateTime.of(2026, 9, 19, 0, 0);
+        LocalDateTime nextDay = LocalDateTime.of(2026, 9, 19, 10, 0);
+
+        assertThatThrownBy(() -> ReservationTimePolicy.validateExtension(EXTEND_FROM, midnight, CLOSING))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_RESERVATION_TIME);
+        assertThatThrownBy(() -> ReservationTimePolicy.validateExtension(EXTEND_FROM, nextDay, CLOSING))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_RESERVATION_TIME);
+    }
+
+    @Test
+    @DisplayName("연장 종료 시각이 기존 종료 시각과 같거나 이르면 VALIDATION_FAILED 예외가 발생한다")
+    void validateExtension_notAfterCurrentEnd_throwsValidationFailed() {
+        assertThatThrownBy(() -> ReservationTimePolicy.validateExtension(EXTEND_FROM, EXTEND_FROM, CLOSING))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+        assertThatThrownBy(() -> ReservationTimePolicy.validateExtension(
+                EXTEND_FROM, EXTEND_FROM.minusMinutes(30), CLOSING))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("연장 시각 정보가 null이면 VALIDATION_FAILED 예외가 발생한다")
+    void validateExtension_nullTime_throwsValidationFailed() {
+        assertThatThrownBy(() -> ReservationTimePolicy.validateExtension(null, EXTEND_FROM, CLOSING))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+        assertThatThrownBy(() -> ReservationTimePolicy.validateExtension(EXTEND_FROM, null, CLOSING))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("운영 시간 안에서 30분 단위로 같은 날 연장하면 예외 없이 통과한다")
+    void validateExtension_validExtension_doesNotThrow() {
+        LocalDateTime newEnd = LocalDateTime.of(2026, 9, 18, 21, 30);
+
+        assertThatCode(() -> ReservationTimePolicy.validateExtension(EXTEND_FROM, newEnd, CLOSING))
+                .doesNotThrowAnyException();
+    }
+
 }
