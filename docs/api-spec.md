@@ -136,7 +136,7 @@
 
 예약자 본인만. `now < end_time`인 경우만 가능(끝난 예약을 되살리는 것은 연장이 아니라 새 예약). 단일 트랜잭션: `end_time` 낙관적 검사(`WHERE id=:id AND end_time=:expectedEnd`) → 추가 슬롯 INSERT(UNIQUE) → 추가 금액을 **원 예약의 `price_per_slot_snapshot`** 기준으로 크레딧 차감 → `reservation.end_time` UPDATE → 상태 이력 저장. 남의 점유가 `HELD`인지 `CONFIRMED`인지는 구분하지 않는다(만료된 HELD만 예외).
 
-오류: FORBIDDEN_NOT_OWNER(403), RESERVATION_NOT_FOUND(404), RESERVATION_STATE_CONFLICT(409, 연장 슬롯 일부/전부 점유 — 응답에 가능한 최대 종료 시각 힌트 포함), INSUFFICIENT_BALANCE(422)
+오류: FORBIDDEN_NOT_OWNER(403), RESERVATION_NOT_FOUND(404), INVALID_RESERVATION_TIME(400, 30분 단위 아님·날짜 넘김·운영 종료 초과), VALIDATION_FAILED(400, 새 종료 시각이 기존보다 늦지 않음), RESERVATION_SLOT_CONFLICT(409, 연장 슬롯 일부/전부 점유 — 응답에 가능한 최대 종료 시각 힌트 포함), RESERVATION_STATE_CONFLICT(409, `expectedEndTime` 불일치·동시 요청 경합), RESERVATION_EXTEND_NOT_ALLOWED(422, 연장 불가 상태·이미 종료된 예약), INSUFFICIENT_BALANCE(422)
 
 > 실패해도 원 예약은 무손상(기존 슬롯을 건드리지 않음).
 
