@@ -39,8 +39,11 @@ class ReservationAdjacentSlotConcurrencyTest extends ReservationIntegrationTestS
             List<Long> reservationIds = jdbcTemplate.queryForList(
                     "SELECT id FROM reservation WHERE space_id = ?", Long.class, spaceId);
             assertThat(reservationIds).as("round %d: 예약 수", round).hasSize(2);
-            reservationIds.forEach(id ->
-                    assertThat(countSlots(id)).as("round %d: 예약 %d의 슬롯", round, id).isEqualTo(2));
+            for (Long reservationId : reservationIds) {
+                assertThat(countSlots(reservationId))
+                        .as("round %d: 예약 %d의 슬롯", round, reservationId)
+                        .isEqualTo(2);
+            }
 
             // 14:00, 14:30, 15:00, 15:30 — 정확히 4개, 경계 밖(13:30 이전 / 16:00 이후)에는 없다.
             assertThat(countSlotsInRange(spaceId, tomorrowAt(14, 0), tomorrowAt(16, 0))).isEqualTo(4);
