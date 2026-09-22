@@ -4,8 +4,10 @@ import com.ovengers.slotkey.global.common.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 
 @Entity
+@DynamicUpdate
 @Table(name = "member")
 @Getter
 @NoArgsConstructor
