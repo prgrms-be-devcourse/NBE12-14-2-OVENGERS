@@ -2,7 +2,7 @@
 
 import SpacePhoto from '../../components/space/SpacePhoto';
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getMyReservation, payReservation } from '../../api/reservationApi';
 import { getSpace } from '../../api/spaceApi';
 import { useAction, useAsync } from '../../hooks/useApi';
@@ -21,9 +21,10 @@ import HoldCountdown from '../../components/reservation/HoldCountdown';
 import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import { useRouteId } from '@/hooks/useRouteId';
 
 export default function PaymentPage() {
-  const { reservationId } = useParams<{ reservationId: string }>();
+  const reservationId = useRouteId('reservationId');
   const router = useRouter();
 
   // HOLD 직후 예약 화면이 붙여 준 spaceVersion.

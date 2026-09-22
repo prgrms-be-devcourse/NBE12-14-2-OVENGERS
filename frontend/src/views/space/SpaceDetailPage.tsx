@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { getSpace, getSpaceSlots } from '../../api/spaceApi';
 import { createReservation } from '../../api/reservationApi';
 import { useAsync, useAction } from '../../hooks/useApi';
@@ -23,9 +23,10 @@ import TermsAgreement from '../../components/reservation/TermsAgreement';
 import Button from '../../components/common/Button';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorMessage from '../../components/common/ErrorMessage';
+import { useRouteId } from '@/hooks/useRouteId';
 
 export default function SpaceDetailPage() {
-  const { spaceId } = useParams<{ spaceId: string }>();
+  const spaceId = useRouteId('spaceId');
   const router = useRouter();
   const { isAuthenticated } = useAuth();
 

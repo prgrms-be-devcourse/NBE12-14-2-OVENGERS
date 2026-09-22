@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   cancelReservation,
   checkOutReservation,
@@ -28,9 +28,10 @@ import ConfirmDialog from '../../components/common/ConfirmDialog';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import Toast from '../../components/common/Toast';
+import { useRouteId } from '@/hooks/useRouteId';
 
 export default function ReservationDetailPage() {
-  const { reservationId } = useParams<{ reservationId: string }>();
+  const reservationId = useRouteId('reservationId');
   const router = useRouter();
   const { member, refreshMember } = useAuth();
   const [cancelling, setCancelling] = useState(false);

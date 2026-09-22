@@ -2,7 +2,6 @@
 
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
 import { forceCancelReservation, getAdminReservation } from '../../api/adminReservationApi';
 import { useAction, useAsync } from '../../hooks/useApi';
 import { ROUTES } from '../../constants/routePaths';
@@ -20,9 +19,10 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import EmptyState from '../../components/common/EmptyState';
 import Toast from '../../components/common/Toast';
+import { useRouteId } from '@/hooks/useRouteId';
 
 export default function AdminReservationDetailPage() {
-  const { reservationId } = useParams<{ reservationId: string }>();
+  const reservationId = useRouteId('reservationId');
   const [forceCancelling, setForceCancelling] = useState(false);
   const [reason, setReason] = useState('');
   const [toast, setToast] = useState<string | null>(null);

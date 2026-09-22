@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import type { SpacePayload } from '../../api/adminSpaceApi';
 import { createSpace, getAdminSpace, updateSpace } from '../../api/adminSpaceApi';
 import { useAction, useAsync } from '../../hooks/useApi';
@@ -10,9 +10,10 @@ import { ROUTES } from '../../constants/routePaths';
 import SpaceForm from '../../components/space/SpaceForm';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorMessage from '../../components/common/ErrorMessage';
+import { useRouteId } from '@/hooks/useRouteId';
 
 export default function AdminSpaceFormPage({ mode = 'create' }: { mode?: 'create' | 'edit' }) {
-  const { spaceId } = useParams<{ spaceId: string }>();
+  const spaceId = useRouteId('spaceId');
   const router = useRouter();
   const isEdit = mode === 'edit';
 
