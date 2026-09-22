@@ -33,22 +33,31 @@ public class CreditGrantService {
         // 지급 금액 검증
         validateAmount(amount);
 
+        // 지급 대상 회원 조회
+        Member member = findMember(memberId);
+
+        // 지급 후 잔액 검증
+        validateBalanceAfterGrant(
+                member.getBalance(),
+                amount
+        );
+
         // 회원 잔액 증가
         increaseBalance(memberId, amount);
 
         // 증가된 잔액을 가진 회원 조회
-        Member member = findMember(memberId);
+        Member updatedMember = findMember(memberId);
 
         // 회원가입 크레딧 지급 내역 저장
         saveGrantTransaction(
-                member,
+                updatedMember,
                 amount,
                 CreditTransactionType.SIGNUP_GRANT,
                 null
         );
 
         // 지급 후 잔액 반환
-        return member.getBalance();
+        return updatedMember.getBalance();
     }
 
     // 관리자 크레딧 지급
@@ -64,22 +73,31 @@ public class CreditGrantService {
         // 관리자 지급 사유 검증
         validateReason(reason);
 
+        // 지급 대상 회원 조회
+        Member member = findMember(memberId);
+
+        // 지급 후 잔액 검증
+        validateBalanceAfterGrant(
+                member.getBalance(),
+                amount
+        );
+
         // 회원 잔액 증가
         increaseBalance(memberId, amount);
 
         // 증가된 잔액을 가진 회원 조회
-        Member member = findMember(memberId);
+        Member updatedMember = findMember(memberId);
 
         // 관리자 크레딧 지급 내역 저장
         saveGrantTransaction(
-                member,
+                updatedMember,
                 amount,
                 CreditTransactionType.ADMIN_GRANT,
                 reason
         );
 
         // 지급 후 잔액 반환
-        return member.getBalance();
+        return updatedMember.getBalance();
     }
 
     // 회원 잔액 증가
@@ -132,6 +150,22 @@ public class CreditGrantService {
             throw new BusinessException(
                     ErrorCode.VALIDATION_FAILED,
                     "크레딧 금액은 0보다 커야 합니다."
+            );
+        }
+    }
+
+    // 지급 후 잔액 검증
+    private void validateBalanceAfterGrant(
+            int currentBalance,
+            int amount
+    ) {
+        long balanceAfter =
+                (long) currentBalance + amount;
+
+        if (balanceAfter > Integer.MAX_VALUE) {
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "크레딧 잔액이 허용 범위를 초과합니다."
             );
         }
     }

@@ -76,7 +76,10 @@ class CreditGrantServiceTest {
         given(memberRepository.findById(memberId))
                 .willReturn(Optional.of(member));
         given(member.getBalance())
-                .willReturn(10000);
+                .willReturn(
+                        0,
+                        10000
+                );
 
         // when
         int balance = creditGrantService.grantSignupCredit(
@@ -119,7 +122,10 @@ class CreditGrantServiceTest {
         given(memberRepository.findById(memberId))
                 .willReturn(Optional.of(member));
         given(member.getBalance())
-                .willReturn(15000);
+                .willReturn(
+                        10000,
+                        15000
+                );
 
         // when
         int balance = creditGrantService.grantAdminCredit(
@@ -189,8 +195,8 @@ class CreditGrantServiceTest {
         Long memberId = 1L;
         int amount = 10000;
 
-        given(creditBalanceRepository.increase(memberId, amount))
-                .willReturn(0);
+        given(memberRepository.findById(memberId))
+                .willReturn(Optional.empty());
 
         // when
         BusinessException exception = assertThrows(
@@ -204,6 +210,45 @@ class CreditGrantServiceTest {
         // then
         assertThat(exception.getErrorCode())
                 .isEqualTo(ErrorCode.MEMBER_NOT_FOUND);
+
+        verify(creditBalanceRepository, never())
+                .increase(memberId, amount);
+
+        verify(creditTransactionRepository, never())
+                .save(any(CreditTransaction.class));
+    }
+
+    // 지급 후 잔액 최대값 초과
+    @Test
+    @DisplayName("지급 후 잔액이 int 최대값을 초과하면 지급을 거절한다")
+    void balanceOverflow_throwsException() {
+        // given
+        Long memberId = 1L;
+        int amount = 1000;
+
+        Member member = mock(Member.class);
+
+        given(memberRepository.findById(memberId))
+                .willReturn(Optional.of(member));
+        given(member.getBalance())
+                .willReturn(Integer.MAX_VALUE - 500);
+
+        // when
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> creditGrantService.grantAdminCredit(
+                        memberId,
+                        amount,
+                        "관리자 지급"
+                )
+        );
+
+        // then
+        assertThat(exception.getErrorCode())
+                .isEqualTo(ErrorCode.VALIDATION_FAILED);
+
+        verify(creditBalanceRepository, never())
+                .increase(memberId, amount);
 
         verify(creditTransactionRepository, never())
                 .save(any(CreditTransaction.class));
@@ -278,7 +323,10 @@ class CreditGrantServiceTest {
         given(memberRepository.findById(memberId))
                 .willReturn(Optional.of(member));
         given(member.getBalance())
-                .willReturn(5000);
+                .willReturn(
+                        0,
+                        5000
+                );
 
         // when
         int balance = creditGrantService.grantAdminCredit(
