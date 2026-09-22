@@ -105,37 +105,52 @@ class AdminSpaceSecurityIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("정지 및 탈퇴 회원 토큰은 관리자 공간 등록 전에 ACCOUNT_INACTIVE로 차단된다")
-    void createSpace_inactiveMember_returns403WithoutSideEffects() throws Exception {
-        for (MemberStatus status : new MemberStatus[]{MemberStatus.SUSPENDED, MemberStatus.WITHDRAWN}) {
-            Member inactiveMember = saveMember(MemberRole.ADMIN, status);
+    @DisplayName("발급 후 정지 및 탈퇴한 ADMIN의 기존 토큰은 공간 등록 권한을 유지한다")
+    void createSpace_statusChangedAfterIssue_keepsTokenAuthority() throws Exception {
+        for (MemberStatus memberStatus : new MemberStatus[]{
+                MemberStatus.SUSPENDED,
+                MemberStatus.WITHDRAWN
+        }) {
+            // 활성 상태에서 토큰 발급
+            Member admin = saveMember(MemberRole.ADMIN, MemberStatus.ACTIVE);
+            String token = bearerToken(admin);
+
+            // 발급 이후 회원 상태 변경
+            ReflectionTestUtils.setField(admin, "status", memberStatus);
+            memberRepository.saveAndFlush(admin);
+
             long spacesBefore = spaceRepository.count();
             long auditsBefore = auditLogRepository.count();
 
             mockMvc.perform(post(ADMIN_SPACES_PATH)
-                            .header(HttpHeaders.AUTHORIZATION, bearerToken(inactiveMember))
+                            .header(HttpHeaders.AUTHORIZATION, token)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(validCreateRequest()))
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.code").value("ACCOUNT_INACTIVE"));
+                    .andExpect(status().isCreated());
 
-            assertThat(spaceRepository.count()).isEqualTo(spacesBefore);
-            assertThat(auditLogRepository.count()).isEqualTo(auditsBefore);
+            assertThat(spaceRepository.count()).isEqualTo(spacesBefore + 1);
+            assertThat(auditLogRepository.count()).isEqualTo(auditsBefore + 1);
         }
     }
 
     @Test
-    @DisplayName("정지 및 탈퇴 ADMIN은 관리자 공간 상세를 조회할 수 없다")
-    void getSpaceDetail_inactiveAdmin_returns403() throws Exception {
+    @DisplayName("발급 후 정지 및 탈퇴한 ADMIN의 기존 토큰은 공간 상세 조회 권한을 유지한다")
+    void getSpaceDetail_statusChangedAfterIssue_keepsTokenAuthority() throws Exception {
         Space space = saveSpace(SpaceStatus.ACTIVE);
 
-        for (MemberStatus status : new MemberStatus[]{MemberStatus.SUSPENDED, MemberStatus.WITHDRAWN}) {
-            Member inactiveAdmin = saveMember(MemberRole.ADMIN, status);
+        for (MemberStatus memberStatus : new MemberStatus[]{
+                MemberStatus.SUSPENDED,
+                MemberStatus.WITHDRAWN
+        }) {
+            Member admin = saveMember(MemberRole.ADMIN, MemberStatus.ACTIVE);
+            String token = bearerToken(admin);
+
+            ReflectionTestUtils.setField(admin, "status", memberStatus);
+            memberRepository.saveAndFlush(admin);
 
             mockMvc.perform(get(ADMIN_SPACES_PATH + "/{spaceId}", space.getId())
-                            .header(HttpHeaders.AUTHORIZATION, bearerToken(inactiveAdmin)))
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.code").value("ACCOUNT_INACTIVE"));
+                            .header(HttpHeaders.AUTHORIZATION, token))
+                    .andExpect(status().isOk());
         }
     }
 

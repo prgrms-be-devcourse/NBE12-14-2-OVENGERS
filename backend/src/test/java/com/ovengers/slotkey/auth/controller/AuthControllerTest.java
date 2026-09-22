@@ -503,7 +503,7 @@ public class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("로그인 후 정지된 회원은 기존 액세스 토큰으로 접근할 수 없다")
+    @DisplayName("로그인 후 정지되어도 기존 액세스 토큰은 유효하지만 재발급은 거절된다")
     void t15() throws Exception {
         String email = "suspended-member@example.com";
         MvcResult loginResult = loginForTest(email);
@@ -525,11 +525,19 @@ public class AuthControllerTest {
 
         entityManager.clear();
 
+        // 기존 액세스 토큰은 만료 전까지 사용할 수 있다.
         mvc.perform(
                         get("/api/v1/members/me")
                                 .header("Authorization", "Bearer " + accessToken)
                 )
                 .andDo(print())
+                .andExpect(status().isOk());
+
+// 정지된 회원은 리프레시 토큰으로 새 토큰을 발급받을 수 없다.
+        mvc.perform(
+                        post("/api/v1/auth/refresh")
+                                .cookie(loginResult.getResponse().getCookie("refreshToken"))
+                )
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_INACTIVE"));
     }

@@ -4,8 +4,8 @@ import com.ovengers.slotkey.member.entity.Member;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import com.ovengers.slotkey.member.entity.MemberRole;
 
-import java.util.Date;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,7 +40,7 @@ class JwtProviderTest {
         when(member.getId()).thenReturn(1L);
         when(member.getEmail())
                 .thenReturn("access-lifetime@example.com");
-
+        when(member.getRole()).thenReturn(MemberRole.USER);
         // 3. 액세스 토큰 발급
         String accessToken = jwtProvider.genAccessToken(member);
 
