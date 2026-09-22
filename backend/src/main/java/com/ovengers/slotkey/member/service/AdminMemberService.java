@@ -112,7 +112,7 @@ public class AdminMemberService {
     // 회원의 최근 상태 변경(정지/복구) 감사 로그를 조회해 응답에 덧붙인다
     private AdminMemberResponse toAdminMemberResponse(Member member) {
         AuditLog lastStatusChangeLog = auditLogRepository
-                .findFirstByTargetTypeAndTargetIdAndActionInOrderByCreatedAtDesc(
+                .findFirstByTargetTypeAndTargetIdAndActionInOrderByCreatedAtDescIdDesc(
                         AuditTargetType.MEMBER,
                         member.getId(),
                         List.of(AuditAction.SUSPEND_MEMBER, AuditAction.REACTIVATE_MEMBER))

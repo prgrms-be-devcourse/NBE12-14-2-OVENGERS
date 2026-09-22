@@ -141,7 +141,7 @@ class AdminMemberServiceTest {
 
         given(
                 auditLogRepository
-                        .findFirstByTargetTypeAndTargetIdAndActionInOrderByCreatedAtDesc(
+                        .findFirstByTargetTypeAndTargetIdAndActionInOrderByCreatedAtDescIdDesc(
                                 AuditTargetType.MEMBER,
                                 memberId,
                                 List.of(
@@ -406,7 +406,7 @@ class AdminMemberServiceTest {
 
         given(
                 auditLogRepository
-                        .findFirstByTargetTypeAndTargetIdAndActionInOrderByCreatedAtDesc(
+                        .findFirstByTargetTypeAndTargetIdAndActionInOrderByCreatedAtDescIdDesc(
                                 AuditTargetType.MEMBER,
                                 memberId,
                                 List.of(
