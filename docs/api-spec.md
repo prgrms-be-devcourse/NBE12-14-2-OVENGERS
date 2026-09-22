@@ -136,7 +136,7 @@
 
 예약자 본인만. `now < end_time`인 경우만 가능(끝난 예약을 되살리는 것은 연장이 아니라 새 예약). 단일 트랜잭션: `end_time` 낙관적 검사(`WHERE id=:id AND end_time=:expectedEnd`) → 추가 슬롯 INSERT(UNIQUE) → 추가 금액을 **원 예약의 `price_per_slot_snapshot`** 기준으로 크레딧 차감 → `reservation.end_time` UPDATE → 상태 이력 저장. 남의 점유가 `HELD`인지 `CONFIRMED`인지는 구분하지 않는다(만료된 HELD만 예외).
 
-오류: FORBIDDEN_NOT_OWNER(403), RESERVATION_NOT_FOUND(404), RESERVATION_STATE_CONFLICT(409, 연장 슬롯 일부/전부 점유 — 응답에 가능한 최대 종료 시각 힌트 포함), INSUFFICIENT_BALANCE(422)
+오류: FORBIDDEN_NOT_OWNER(403), RESERVATION_NOT_FOUND(404), INVALID_RESERVATION_TIME(400, 30분 단위 아님·날짜 넘김·운영 종료 초과), VALIDATION_FAILED(400, 새 종료 시각이 기존보다 늦지 않음), RESERVATION_SLOT_CONFLICT(409, 연장 슬롯 일부/전부 점유 — 응답에 가능한 최대 종료 시각 힌트 포함), RESERVATION_STATE_CONFLICT(409, `expectedEndTime` 불일치·동시 요청 경합), RESERVATION_EXTEND_NOT_ALLOWED(422, 연장 불가 상태·이미 종료된 예약), INSUFFICIENT_BALANCE(422)
 
 > 실패해도 원 예약은 무손상(기존 슬롯을 건드리지 않음).
 
@@ -154,13 +154,13 @@
 
 - `GET /admin/reservations?page=&size=` (PLATFORM_ADMIN): 취소 예약도 목록 포함. 원소 `AdminReservationResponse` = `{ reservationId, memberId, memberEmail, spaceId, spaceName, startTime, endTime, status, totalAmount, createdAt }`. ⚠️ **`date`/`spaceId`/`status` 필터는 현재 미구현**(`AdminReservationSearchCondition`이 빈 클래스) — 프론트는 필터 UI를 비활성화하거나 구현 후 연결
 - `GET /admin/reservations/{reservationId}` (PLATFORM_ADMIN): 목록 필드 + `pricePerSlotSnapshot`, `cancelledAt`, `checkedInAt`, `checkedOutAt`, `statusHistory[]`, `accessLogs: [{ accessLogId, attemptedAt, result, reasonCode }]`
-- `POST /admin/reservations/{reservationId}/force-cancel` (PLATFORM_ADMIN): 바디 `{ "reason": "..." }` 1~500자 필수, 응답 `AdminReservationResponse`. 처리 로직은 5-4와 동일 + audit_log 기록. **관리자도 이 API 외의 경로로 타인 예약을 취소하거나 도어 토큰을 발급받을 수 없다** (핵심 차별점)
+- `POST /admin/reservations/{reservationId}/force-cancel` (PLATFORM_ADMIN): 바디 `{ "reason": "..." }` 1~500자 필수, 응답 `AdminReservationResponse`. 취소 가능 상태는 `HELD`/`CONFIRMED`/`IN_USE`(그 외 종료 상태는 409). 조회 시점 상태 기준 조건부 UPDATE(`WHERE id=:id AND status=:조회 시점 상태`) → 같은 트랜잭션에서 상태 이력(사유 포함) + 슬롯 삭제 + 활성 토큰 revoke + **크레딧 환불(`CONFIRMED`/`IN_USE`는 `total_amount` 전액 `REFUND`, 위약금 없음 / `HELD`는 환불 없음)** + audit_log 기록. 오류: RESERVATION_NOT_FOUND(404), RESERVATION_STATE_CONFLICT(409, 종료 상태이거나 동시 요청에 밀림). **관리자도 이 API 외의 경로로 타인 예약을 취소하거나 도어 토큰을 발급받을 수 없다** (핵심 차별점)
 
 ## 7. 출입 (Door Access)
 
 > 현재 구현 경로(접두사 `/api/v1`): `POST /reservations/{id}/door-token`, `PATCH /reservations/{id}/access-token/revoke`, `GET /reservations/{id}/access-logs`, `POST /door-access/verify`. **4개 모두 로그인 필요**(verify도 서버가 로그인 회원이 예약자 본인인지 확인). revoke·access-logs는 이 문서에 세부 규칙 미기재 — 담당자 확인 필요.
 
-- `POST /reservations/{reservationId}/door-token` (예약자 본인만): **발급에는 시간 제한이 없다** — `CONFIRMED`이고 `now < end_time`이면 예약 확정 직후부터 언제든 발급 가능(발급은 입장 권한이 아니라 신분증을 받는 것일 뿐, `start` 전엔 문이 열리지 않는다). 기존 활성 토큰은 먼저 폐기 후 재발급. 오류: FORBIDDEN_NOT_OWNER(403, 관리자 포함), RESERVATION_NOT_FOUND(404), RESERVATION_NOT_CONFIRMED(422)
+- `POST /reservations/{reservationId}/door-token` (예약자 본인만): **발급에는 시간 제한이 없다** — `CONFIRMED`이고 `now < end_time`이면 예약 확정 직후부터 언제든 발급 가능(발급은 입장 권한이 아니라 신분증을 받는 것일 뿐, `start` 전엔 문이 열리지 않는다). 기존 활성 토큰은 먼저 폐기 후 재발급. 오류: FORBIDDEN_NOT_OWNER(403, 관리자 포함), RESERVATION_NOT_FOUND(404), RESERVATION_NOT_CONFIRMED(422, RESERVATION_STATE_CONFLICT(409, 같은 예약의 발급 요청이 동시에 겹쳐 활성 토큰 UNIQUE 제약에 밀린 경우 — 재시도하면 새로 발급된다))
 - `POST /door-access/verify`: `{ spaceId, token }`. 검증 순서: ① 해시로 활성 토큰 조회(폐기 토큰은 즉시 거절) ② 예약 상태(`CONFIRMED` 또는 `IN_USE`) 확인, 요청 공간=예약 공간 확인 ③ 시간대 확인 — **최초 체크인: `[start_time, start_time + 15분]`(앞 여유 0분, 시작 시각 정각 허용)**, **재입장: `(checked_in_at, end_time)`(종료 시각 정각은 거절)** ④ 최초 체크인 성공 시 `CONFIRMED → IN_USE` 전이가 부수 효과로 일어남 ⑤ 성공/실패 모두 `door_access_log`에 기록. 거절도 200 + `result: DENY`로 응답. `reasonCode`: TOKEN_NOT_FOUND, TOKEN_REVOKED, RESERVATION_NOT_ACTIVE(취소/완료/노쇼), OUTSIDE_ALLOWED_TIME, SPACE_MISMATCH
 
 > **2026-09-15 정정** (`core-domain-decisions.md` §8): 기존 "발급 30분 전부터, 최초 체크인 시작 전후 30분" 규칙을 대체한다. 발급 시간 제한을 없애고, 최초 체크인은 앞 여유 0분·뒤 15분(`[start, start+15m]`)으로 변경. 15분 내 미체크인은 배치가 `NO_SHOW`로 전이시키며 슬롯은 반환되지만 환불은 없다.

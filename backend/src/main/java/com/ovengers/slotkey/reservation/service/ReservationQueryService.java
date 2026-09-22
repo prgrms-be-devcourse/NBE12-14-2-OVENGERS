@@ -16,7 +16,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import com.ovengers.slotkey.reservation.dto.response.ReservationListResponse;
 import com.ovengers.slotkey.space.entity.Space;
 import com.ovengers.slotkey.space.repository.SpaceRepository;
@@ -37,7 +36,6 @@ public class ReservationQueryService {
 
     private static final int MAX_PAGE_SIZE = 100;
     private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "startTime");
-
     private final SpaceRepository spaceRepository;
     private final ReservationRepository reservationRepository;
     private final ReservationStatusHistoryRepository reservationStatusHistoryRepository;
@@ -53,7 +51,6 @@ public class ReservationQueryService {
                 Math.min(pageable.getPageSize(), MAX_PAGE_SIZE),
                 DEFAULT_SORT
         );
-
 
         Page<Reservation> reservations = condition.status() == null
                 ? reservationRepository.findAllByMemberId(memberId, pageRequest)

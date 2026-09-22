@@ -1,10 +1,3 @@
-/*
- * tokens.css — 색 토큰과 기본 요소 스타일
- *
- * slot-key-web 프로토타입(styles.css)에서 가져온 디자인 시스템입니다.
- * 팀이 확정한 색·간격·컴포넌트 규칙을 그대로 유지하기 위해 새로 작성하지 않고 이식했습니다.
- * 값을 바꿀 때는 프로토타입이 아니라 이 파일을 기준으로 합니다.
- */
 /* 공통 디자인 토큰. 의사결정: docs/UI_DESIGN_DECISIONS.md */
 :root{
   color-scheme:light;

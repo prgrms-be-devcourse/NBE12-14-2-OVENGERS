@@ -6,6 +6,7 @@ import com.ovengers.slotkey.reservation.entity.ReservationStatus;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationSlotRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationStatusHistoryRepository;
+import com.ovengers.slotkey.reservation.service.ReservationHoldExpirationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,6 +46,9 @@ public class ReservationBatchProcessorTest {
     private DoorAccessTokenService doorAccessTokenService;
 
     @Mock
+    private ReservationHoldExpirationService reservationHoldExpirationService;
+
+    @Mock
     private Reservation completedReservation;
 
     private ReservationBatchProcessor processor;
@@ -54,8 +59,31 @@ public class ReservationBatchProcessorTest {
                 reservationRepository,
                 reservationSlotRepository,
                 reservationStatusHistoryRepository,
-                doorAccessTokenService
+                        doorAccessTokenService,
+                        reservationHoldExpirationService
         );
+    }
+
+    @Test
+    @DisplayName("expireHold는 ReservationHoldExpirationService에 위임하여 성공 결과를 반환한다")
+    void shouldDelegateToExpireHoldServiceAndReturnTrueWhenSucceeds() {
+            given(reservationHoldExpirationService.expireHold(RESERVATION_ID, NOW)).willReturn(true);
+
+            boolean result = processor.expireHold(RESERVATION_ID, NOW);
+
+            assertThat(result).isTrue();
+            verify(reservationHoldExpirationService).expireHold(RESERVATION_ID, NOW);
+    }
+
+    @Test
+    @DisplayName("expireHold는 ReservationHoldExpirationService에 위임하여 실패 결과를 반환한다")
+    void shouldDelegateToExpireHoldServiceAndReturnFalseWhenFails() {
+            given(reservationHoldExpirationService.expireHold(RESERVATION_ID, NOW)).willReturn(false);
+
+            boolean result = processor.expireHold(RESERVATION_ID, NOW);
+
+            assertThat(result).isFalse();
+            verify(reservationHoldExpirationService).expireHold(RESERVATION_ID, NOW);
     }
 
     @Test

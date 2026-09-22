@@ -1,6 +1,5 @@
 package com.ovengers.slotkey.member.service;
 
-
 import com.ovengers.slotkey.credit.service.CreditGrantService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
@@ -8,7 +7,6 @@ import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -56,12 +54,10 @@ public class MemberService {
             );
         }
 
-
         // 비밀번호 해시 생성
         String passwordHash = passwordEncoder.encode(password);
 
         Member member = new Member(email, passwordHash, nickname);
-
 
         Member savedMember;
 
@@ -79,7 +75,6 @@ public class MemberService {
 
             throw e;
         }
-
 
         // 회원가입 초기 크레딧 지급
         creditGrantService.grantSignupCredit(

@@ -39,7 +39,7 @@ public class SpaceSlotAvailabilityService {
                 space.getOpeningTime(), space.getClosingTime());
 
         LocalDateTime now = LocalDateTime.now(clock);
-        Set<LocalDateTime> occupiedSlots = occupiedSlotProvider.getOccupiedSlotStarts(spaceId, date);
+        Set<LocalDateTime> occupiedSlots = occupiedSlotProvider.getOccupiedSlotStarts(spaceId, date, now);
         boolean isSpaceActive = (space.getStatus() == SpaceStatus.ACTIVE);
 
         List<SlotResponse> slotResponses = slotWindows.stream()

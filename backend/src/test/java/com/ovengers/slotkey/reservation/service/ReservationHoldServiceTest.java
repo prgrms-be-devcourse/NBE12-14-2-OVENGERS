@@ -115,7 +115,7 @@ class ReservationHoldServiceTest {
     @Test
     @DisplayName("존재하지 않는 공간이면 SPACE_NOT_FOUND 예외가 발생한다")
     void createHold_spaceNotFound_throwsException() {
-        given(spaceRepository.findById(1L)).willReturn(Optional.empty());
+            given(spaceRepository.findByIdForShare(1L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> reservationHoldService.createHold(1L, 1L, startTime, endTime))
                 .isInstanceOf(BusinessException.class)
@@ -125,7 +125,7 @@ class ReservationHoldServiceTest {
     @Test
     @DisplayName("비활성 공간이면 SPACE_INACTIVE 예외가 발생한다")
     void createHold_inactiveSpace_throwsException() {
-        given(spaceRepository.findById(1L)).willReturn(Optional.of(inactiveSpace()));
+            given(spaceRepository.findByIdForShare(1L)).willReturn(Optional.of(inactiveSpace()));
 
         assertThatThrownBy(() -> reservationHoldService.createHold(1L, 1L, startTime, endTime))
                 .isInstanceOf(BusinessException.class)
@@ -135,7 +135,7 @@ class ReservationHoldServiceTest {
     @Test
     @DisplayName("운영시간을 벗어난 시간 요청이면 ReservationTimePolicy의 예외가 그대로 전파된다")
     void createHold_invalidTime_propagatesException() {
-        given(spaceRepository.findById(1L)).willReturn(Optional.of(activeSpace()));
+            given(spaceRepository.findByIdForShare(1L)).willReturn(Optional.of(activeSpace()));
         LocalDateTime beforeOpening = LocalDateTime.of(2026, 9, 18, 8, 0);
         LocalDateTime beforeOpeningEnd = LocalDateTime.of(2026, 9, 18, 9, 0);
 
@@ -150,7 +150,7 @@ class ReservationHoldServiceTest {
     @DisplayName("HOLD 생성에 성공하면 만료 시각(now+10분)과 가격 스냅샷이 반영된 예약을 저장하고 HELD 이력을 남긴다")
     void createHold_success_savesHeldReservationAndHistory() {
         Space space = activeSpace();
-        given(spaceRepository.findById(1L)).willReturn(Optional.of(space));
+        given(spaceRepository.findByIdForShare(1L)).willReturn(Optional.of(space));
         given(pricingService.calculateSlotCount(startTime, endTime)).willReturn(4);
         given(pricingService.calculateTotalAmount(5000, 4)).willReturn(20000);
         given(reservationSlotService.buildSlotStarts(startTime, endTime))
@@ -182,7 +182,7 @@ class ReservationHoldServiceTest {
     @Test
     @DisplayName("슬롯 확보에 실패하면 RESERVATION_SLOT_CONFLICT 예외가 그대로 전파되고 이력은 남지 않는다")
     void createHold_slotConflict_propagatesException() {
-        given(spaceRepository.findById(1L)).willReturn(Optional.of(activeSpace()));
+            given(spaceRepository.findByIdForShare(1L)).willReturn(Optional.of(activeSpace()));
         given(pricingService.calculateSlotCount(startTime, endTime)).willReturn(4);
         given(pricingService.calculateTotalAmount(5000, 4)).willReturn(20000);
         given(reservationRepository.save(any(Reservation.class)))

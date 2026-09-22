@@ -46,7 +46,7 @@ public class ReservationHoldService {
     public ReservationResponse createHold(Long memberId, Long spaceId, LocalDateTime startTime, LocalDateTime endTime) {
         LocalDateTime now = LocalDateTime.now(clock);
 
-        Space space = spaceRepository.findById(spaceId)
+        Space space = spaceRepository.findByIdForShare(spaceId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SPACE_NOT_FOUND));
         if (space.getStatus() != SpaceStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.SPACE_INACTIVE);

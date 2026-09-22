@@ -5,6 +5,7 @@ import com.ovengers.slotkey.access.dto.response.DoorAccessVerifyResponse;
 import com.ovengers.slotkey.access.entity.AccessDenyReason;
 import com.ovengers.slotkey.access.entity.DoorAccessToken;
 import com.ovengers.slotkey.access.policy.DoorAccessTimePolicy;
+import com.ovengers.slotkey.access.repository.DoorAccessTokenRepository;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.member.entity.Member;
@@ -12,10 +13,12 @@ import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.reservation.entity.Reservation;
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
 import com.ovengers.slotkey.reservation.entity.ReservationStatusHistory;
+import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationStatusHistoryRepository;
 import com.ovengers.slotkey.space.entity.Space;
 import com.ovengers.slotkey.space.repository.SpaceRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,18 +27,22 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class DoorAccessVerificationService {
 
     private final DoorAccessTokenService doorAccessTokenService;
+    private final DoorAccessTokenRepository doorAccessTokenRepository;
     private final DoorAccessLogService doorAccessLogService;
     private final DoorAccessTimePolicy doorAccessTimePolicy;
     private final MemberRepository memberRepository;
     private final SpaceRepository spaceRepository;
     private final Clock clock;
+    private final ReservationRepository reservationRepository;
     private final ReservationStatusHistoryRepository reservationStatusHistoryRepository;
+    private final jakarta.persistence.EntityManager entityManager;
 
     // 제출된 출입 토큰 검증
     @Transactional
@@ -143,29 +150,125 @@ public class DoorAccessVerificationService {
             );
         }
 
-        // 상태를 변경하기 전에 최초 체크인 여부를 저장한다.
-        boolean firstCheckIn =
-                reservation.getStatus() == ReservationStatus.CONFIRMED;
+        // =========================================================================
+        // 최종 허가 직전 current/locking read 직렬화 지점 (모든 ALLOW 경로에 적용)
+        // 잠금 순서 불변식 준수: Reservation -> DoorAccessToken
+        // 1차 캐시를 detach하여 REPEATABLE READ 및 영속성 컨텍스트 스냅샷을 우회하고 DB 최신 상태를 읽도록 보장
+        // =========================================================================
+        entityManager.detach(reservation);
+        entityManager.detach(accessToken);
 
-        // 최초 체크인 성공 시 예약 상태와 이력을 함께 변경한다.
-        if (firstCheckIn) {
-            reservation.checkIn(attemptedAt);
-
-            reservationStatusHistoryRepository.save(
-                    ReservationStatusHistory.of(
-                            reservation.getId(),
-                            loginMemberId,
-                            ReservationStatus.CONFIRMED,
-                            ReservationStatus.IN_USE,
-                            "FIRST_CHECK_IN",
-                            attemptedAt
-                    )
+        // 1. 최신 예약 상태 Locking Read
+        Reservation latestReservation = reservationRepository.findByIdForUpdate(reservation.getId())
+                .orElse(null);
+        if (latestReservation == null) {
+            log.warn("최종 허가 전 예약 잠금 조회 실패(존재하지 않음) - reservationId: {}", reservation.getId());
+            return deny(
+                    actorMember,
+                    null,
+                    requestedSpace,
+                    AccessDenyReason.RESERVATION_NOT_ACTIVE,
+                    attemptedAt
             );
+        }
+
+        if (!isActiveReservation(latestReservation)) {
+            return deny(
+                    actorMember,
+                    latestReservation,
+                    requestedSpace,
+                    AccessDenyReason.RESERVATION_NOT_ACTIVE,
+                    attemptedAt
+            );
+        }
+
+        // 2. 최신 출입 토큰 상태 Locking Read
+        DoorAccessToken latestToken = doorAccessTokenRepository.findByIdForUpdate(accessToken.getId())
+                .orElse(null);
+        if (latestToken == null || latestToken.isRevoked()) {
+            return deny(
+                    actorMember,
+                    latestReservation,
+                    requestedSpace,
+                    AccessDenyReason.TOKEN_REVOKED,
+                    attemptedAt
+            );
+        }
+
+        // 3. 최신 예약 정보로 공간 및 시간 재검증
+        if (!Objects.equals(
+                latestReservation.getSpaceId(),
+                request.getSpaceId()
+        )) {
+            return deny(
+                    actorMember,
+                    latestReservation,
+                    requestedSpace,
+                    AccessDenyReason.SPACE_MISMATCH,
+                    attemptedAt
+            );
+        }
+
+        Optional<AccessDenyReason> latestTimeDenyReason =
+                doorAccessTimePolicy.findDenyReason(
+                        attemptedAt,
+                        latestReservation.getStartTime(),
+                        latestReservation.getEndTime(),
+                        latestReservation.getCheckedInAt()
+                );
+        if (latestTimeDenyReason.isPresent()) {
+            return deny(
+                    actorMember,
+                    latestReservation,
+                    requestedSpace,
+                    latestTimeDenyReason.get(),
+                    attemptedAt
+            );
+        }
+
+        // 4. 최초 체크인 여부 판정 및 조건부 전이
+        boolean firstCheckIn = false;
+        if (latestReservation.getStatus() == ReservationStatus.CONFIRMED) {
+            int updatedRows = reservationRepository.checkInIfConfirmed(
+                    latestReservation.getId(),
+                    attemptedAt,
+                    ReservationStatus.CONFIRMED,
+                    ReservationStatus.IN_USE
+            );
+
+            if (updatedRows == 1) {
+                firstCheckIn = true;
+                reservationStatusHistoryRepository.save(
+                        ReservationStatusHistory.of(
+                                latestReservation.getId(),
+                                loginMemberId,
+                                ReservationStatus.CONFIRMED,
+                                ReservationStatus.IN_USE,
+                                "FIRST_CHECK_IN",
+                                attemptedAt
+                        )
+                );
+                latestReservation = reservationRepository.findById(latestReservation.getId())
+                        .orElse(latestReservation);
+            } else {
+                Reservation reloaded = reservationRepository.findByIdForUpdate(latestReservation.getId())
+                        .orElse(null);
+                if (reloaded == null || !isActiveReservation(reloaded)) {
+                    return deny(
+                            actorMember,
+                            reloaded,
+                            requestedSpace,
+                            AccessDenyReason.RESERVATION_NOT_ACTIVE,
+                            attemptedAt
+                    );
+                }
+                latestReservation = reloaded;
+            }
         }
 
         doorAccessLogService.createAllowLog(
                 actorMember,
-                reservation,
+                latestReservation,
                 requestedSpace,
                 attemptedAt
         );

@@ -143,17 +143,35 @@ class ReservationPaymentConfirmServiceTest {
     }
 
     @Test
-    @DisplayName("본인이 아닌 예약을 확인 요청하면 FORBIDDEN_NOT_OWNER 예외가 발생하고 크레딧을 차감하지 않는다")
-    void confirm_notOwner_throwsException() {
+    @DisplayName("본인이 아닌 예약을 확인 요청하면 공간 버전이 정확하더라도 FORBIDDEN_NOT_OWNER 예외가 발생하고 Space 잠금을 요청하지 않는다")
+    void confirm_notOwner_correctVersion_throwsForbidden_withoutSpaceLock() {
         given(idempotencyService.find("key-1", OTHER_MEMBER_ID, REQUEST_PATH, ReservationResponse.class))
                 .willReturn(Optional.empty());
-        given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(heldReservation(MEMBER_ID)));
+        given(reservationRepository.findTargetInfoById(RESERVATION_ID))
+                        .willReturn(Optional.of(new com.ovengers.slotkey.reservation.dto.ReservationTargetInfo(SPACE_ID,
+                                        MEMBER_ID)));
 
         assertThatThrownBy(() -> confirmService.confirm(OTHER_MEMBER_ID, RESERVATION_ID, 0, "key-1"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN_NOT_OWNER);
 
-        verifyNoInteractions(creditService, spaceRepository);
+        verifyNoInteractions(spaceRepository, creditService);
+}
+
+@Test
+@DisplayName("본인이 아닌 예약을 확인 요청하면 잘못된 공간 버전을 보내더라도 FORBIDDEN_NOT_OWNER가 발생하고 Space 잠금을 요청하지 않는다")
+void confirm_notOwner_wrongVersion_throwsForbidden_withoutSpaceLock() {
+        given(idempotencyService.find("key-1", OTHER_MEMBER_ID, REQUEST_PATH, ReservationResponse.class))
+                        .willReturn(Optional.empty());
+        given(reservationRepository.findTargetInfoById(RESERVATION_ID))
+                        .willReturn(Optional.of(new com.ovengers.slotkey.reservation.dto.ReservationTargetInfo(SPACE_ID,
+                                        MEMBER_ID)));
+
+        assertThatThrownBy(() -> confirmService.confirm(OTHER_MEMBER_ID, RESERVATION_ID, 999, "key-1"))
+                        .isInstanceOf(BusinessException.class)
+                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN_NOT_OWNER);
+
+        verifyNoInteractions(spaceRepository, creditService);
     }
 
     @Test
@@ -161,8 +179,10 @@ class ReservationPaymentConfirmServiceTest {
     void confirm_spaceVersionMismatch_throwsException() {
         given(idempotencyService.find("key-1", MEMBER_ID, REQUEST_PATH, ReservationResponse.class))
                 .willReturn(Optional.empty());
-        given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(heldReservation(MEMBER_ID)));
-        given(spaceRepository.findById(SPACE_ID)).willReturn(Optional.of(spaceWithVersion(1)));
+        given(reservationRepository.findTargetInfoById(RESERVATION_ID))
+                        .willReturn(Optional.of(new com.ovengers.slotkey.reservation.dto.ReservationTargetInfo(SPACE_ID,
+                                        MEMBER_ID)));
+        given(spaceRepository.findByIdForShare(SPACE_ID)).willReturn(Optional.of(spaceWithVersion(1)));
 
         assertThatThrownBy(() -> confirmService.confirm(MEMBER_ID, RESERVATION_ID, 0, "key-1"))
                 .isInstanceOf(BusinessException.class)
@@ -176,8 +196,11 @@ class ReservationPaymentConfirmServiceTest {
     void confirm_insufficientBalance_propagatesExceptionWithoutTransition() {
         given(idempotencyService.find("key-1", MEMBER_ID, REQUEST_PATH, ReservationResponse.class))
                 .willReturn(Optional.empty());
+        given(reservationRepository.findTargetInfoById(RESERVATION_ID))
+                        .willReturn(Optional.of(new com.ovengers.slotkey.reservation.dto.ReservationTargetInfo(SPACE_ID,
+                                        MEMBER_ID)));
+        given(spaceRepository.findByIdForShare(SPACE_ID)).willReturn(Optional.of(spaceWithVersion(0)));
         given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(heldReservation(MEMBER_ID)));
-        given(spaceRepository.findById(SPACE_ID)).willReturn(Optional.of(spaceWithVersion(0)));
         given(creditService.charge(MEMBER_ID, RESERVATION_ID, 10000))
                 .willThrow(new BusinessException(ErrorCode.INSUFFICIENT_BALANCE));
 
@@ -195,8 +218,11 @@ class ReservationPaymentConfirmServiceTest {
     void confirm_holdExpired_throwsException() {
         given(idempotencyService.find("key-1", MEMBER_ID, REQUEST_PATH, ReservationResponse.class))
                 .willReturn(Optional.empty());
+        given(reservationRepository.findTargetInfoById(RESERVATION_ID))
+                        .willReturn(Optional.of(new com.ovengers.slotkey.reservation.dto.ReservationTargetInfo(SPACE_ID,
+                                        MEMBER_ID)));
+        given(spaceRepository.findByIdForShare(SPACE_ID)).willReturn(Optional.of(spaceWithVersion(0)));
         given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(heldReservation(MEMBER_ID)));
-        given(spaceRepository.findById(SPACE_ID)).willReturn(Optional.of(spaceWithVersion(0)));
         given(creditService.charge(MEMBER_ID, RESERVATION_ID, 10000)).willReturn(80000);
         given(reservationRepository.confirmIfHeldAndNotExpired(
                 RESERVATION_ID, now, ReservationStatus.HELD, ReservationStatus.CONFIRMED))
@@ -217,8 +243,11 @@ class ReservationPaymentConfirmServiceTest {
         Reservation confirmed = confirmedReservation();
         given(idempotencyService.find("key-1", MEMBER_ID, REQUEST_PATH, ReservationResponse.class))
                 .willReturn(Optional.empty());
+        given(reservationRepository.findTargetInfoById(RESERVATION_ID))
+                        .willReturn(Optional.of(new com.ovengers.slotkey.reservation.dto.ReservationTargetInfo(SPACE_ID,
+                                        MEMBER_ID)));
+        given(spaceRepository.findByIdForShare(SPACE_ID)).willReturn(Optional.of(spaceWithVersion(0)));
         given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(held), Optional.of(confirmed));
-        given(spaceRepository.findById(SPACE_ID)).willReturn(Optional.of(spaceWithVersion(0)));
         given(creditService.charge(MEMBER_ID, RESERVATION_ID, 10000)).willReturn(90000);
         given(reservationRepository.confirmIfHeldAndNotExpired(
                 RESERVATION_ID, now, ReservationStatus.HELD, ReservationStatus.CONFIRMED))

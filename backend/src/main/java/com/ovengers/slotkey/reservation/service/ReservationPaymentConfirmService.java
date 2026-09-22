@@ -53,18 +53,26 @@ public class ReservationPaymentConfirmService {
             return cached.get();
         }
 
-        Reservation reservation = reservationRepository.findById(reservationId)
+        // 1. 잠금 순서(Space -> Reservation) 준수를 위해 reservationId로부터 spaceId와 memberId를 먼저
+        // 투영 조회
+        var targetInfo = reservationRepository.findTargetInfoById(reservationId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
 
-        if (!reservation.getMemberId().equals(memberId)) {
+        // 2. 비소유자의 접근을 Space 잠금 및 version 검증 전에 차단 (정보 탐색 및 불필요한 락 획득 방지)
+        if (!targetInfo.memberId().equals(memberId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN_NOT_OWNER);
         }
 
-        Space space = spaceRepository.findById(reservation.getSpaceId())
+        // 3. Space 공유 락 획득 및 버전 검증
+        Space space = spaceRepository.findByIdForShare(targetInfo.spaceId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.SPACE_NOT_FOUND));
         if (space.getVersion() != expectedSpaceVersion) {
             throw new BusinessException(ErrorCode.SPACE_VERSION_MISMATCH);
         }
+
+        // 4. Reservation 조회
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
 
         // 크레딧 차감(잔액 부족 시 BusinessException(INSUFFICIENT_BALANCE) — 여기서 전파되어
         // 트랜잭션이 롤백되므로 예약은 HOLD로 남는다).

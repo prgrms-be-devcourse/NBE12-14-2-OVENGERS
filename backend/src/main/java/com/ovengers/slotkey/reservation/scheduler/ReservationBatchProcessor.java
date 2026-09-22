@@ -7,13 +7,13 @@ import com.ovengers.slotkey.reservation.entity.ReservationStatusHistory;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationSlotRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationStatusHistoryRepository;
+import com.ovengers.slotkey.reservation.service.ReservationHoldExpirationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * 배치 전이를 예약 1건 = 트랜잭션 1개로 처리한다.
@@ -35,19 +35,15 @@ public class ReservationBatchProcessor {
     private final ReservationSlotRepository reservationSlotRepository;
     private final ReservationStatusHistoryRepository reservationStatusHistoryRepository;
     private final DoorAccessTokenService doorAccessTokenService;
+    private final ReservationHoldExpirationService reservationHoldExpirationService;
 
-    /** HELD -> EXPIRED + 슬롯 삭제(core-domain-decisions 2-3). 예약 생성 시점 정리와 같은 쿼리를 재사용한다. */
+    /**
+     * HELD -> EXPIRED + 슬롯 삭제 + 상태 이력 저장(core-domain-decisions 2-3, 3-1).
+     * 신규 예약 슬롯 확보 시의 즉시 정리와 동일한 단일 만료 서비스를 호출한다.
+     */
     @Transactional
     public boolean expireHold(Long reservationId, LocalDateTime now) {
-        List<Long> ids = List.of(reservationId);
-        int updated = reservationRepository.expireHeldReservations(
-                ids, now, ReservationStatus.HELD, ReservationStatus.EXPIRED);
-        if (updated == 0) {
-            return false;
-        }
-        reservationSlotRepository.deleteSlotsOfExpiredReservations(ids, ReservationStatus.EXPIRED);
-        saveHistory(reservationId, ReservationStatus.HELD, ReservationStatus.EXPIRED, "HOLD_EXPIRED", now);
-        return true;
+        return reservationHoldExpirationService.expireHold(reservationId, now);
     }
 
     /** CONFIRMED -> NO_SHOW + 슬롯 전부 삭제, 환불 없음(core-domain-decisions 6-3). */

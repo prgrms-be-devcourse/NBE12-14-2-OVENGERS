@@ -13,9 +13,15 @@ import java.util.Set;
 public class DefaultOccupiedSlotProvider implements OccupiedSlotProvider {
 
     @Override
-    public Set<LocalDateTime> getOccupiedSlotStarts(Long spaceId, LocalDate date) {
+    public Set<LocalDateTime> getOccupiedSlotStarts(Long spaceId, LocalDate date, LocalDateTime now) {
         // 예약 도메인 연계 전 기본 구현: 점유된 슬롯 없음(빈 Set)
         return Collections.emptySet();
+    }
+
+    @Override
+    public boolean hasOccupiedSlotsOutsideHours(Long spaceId, java.time.LocalTime openTime,
+            java.time.LocalTime closeTime, LocalDateTime fromTime) {
+        return false;
     }
 }
 

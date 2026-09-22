@@ -73,7 +73,7 @@ class SpaceSlotAvailabilityServiceTest {
         Space space = createSpace(spaceId, SpaceStatus.ACTIVE);
 
         given(spaceRepository.findById(spaceId)).willReturn(Optional.of(space));
-        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate)).willReturn(Set.of());
+        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate, fixedNow)).willReturn(Set.of());
 
         // when
         SpaceSlotAvailabilityResponse response = availabilityService.getSlotAvailability(spaceId, targetDate);
@@ -114,7 +114,8 @@ class SpaceSlotAvailabilityServiceTest {
         // 11:00 슬롯이 이미 점유됨
         LocalDateTime occupiedTime = LocalDateTime.of(2026, 9, 20, 11, 0);
         given(spaceRepository.findById(spaceId)).willReturn(Optional.of(space));
-        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate)).willReturn(Set.of(occupiedTime));
+        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate, fixedNow))
+                .willReturn(Set.of(occupiedTime));
 
         // when
         SpaceSlotAvailabilityResponse response = availabilityService.getSlotAvailability(spaceId, targetDate);
@@ -139,7 +140,8 @@ class SpaceSlotAvailabilityServiceTest {
 
         LocalDateTime occupiedTime = LocalDateTime.of(2026, 9, 20, 11, 0);
         given(spaceRepository.findById(spaceId)).willReturn(Optional.of(inactiveSpace));
-        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate)).willReturn(Set.of(occupiedTime));
+        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate, fixedNow))
+                .willReturn(Set.of(occupiedTime));
 
         // when
         SpaceSlotAvailabilityResponse response = availabilityService.getSlotAvailability(spaceId, targetDate);
@@ -157,7 +159,7 @@ class SpaceSlotAvailabilityServiceTest {
         Space space = createSpace(spaceId, SpaceStatus.ACTIVE);
 
         given(spaceRepository.findById(spaceId)).willReturn(Optional.of(space));
-        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate)).willReturn(Set.of());
+        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate, fixedNow)).willReturn(Set.of());
 
         // when
         SpaceSlotAvailabilityResponse response = availabilityService.getSlotAvailability(spaceId, targetDate);
@@ -200,7 +202,7 @@ class SpaceSlotAvailabilityServiceTest {
                 exactClock);
 
         given(spaceRepository.findById(spaceId)).willReturn(Optional.of(space));
-        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate)).willReturn(Set.of());
+        given(occupiedSlotProvider.getOccupiedSlotStarts(spaceId, targetDate, exactNow)).willReturn(Set.of());
 
         // when
         SpaceSlotAvailabilityResponse response = serviceWithExactClock.getSlotAvailability(spaceId, targetDate);
