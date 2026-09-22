@@ -77,6 +77,39 @@ BEGIN
       WHERE NOT (s.name <=> sample_name) OR NOT (s.image_path <=> sample_image);
       SET n=n+1;
     END WHILE;
+    -- 샘플 관리자 1명 생성
+IF NOT EXISTS (
+  SELECT 1
+  FROM slotkey_sample_registry
+  WHERE kind='MEMBER' AND seed_key='admin-000'
+) THEN
+  IF EXISTS (
+    SELECT 1 FROM member WHERE email='admin000@amazon.com'
+  ) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT='Admin email already belongs to an untracked member.';
+  END IF;
+
+  INSERT INTO member(
+    email, password_hash, nickname, role, status,
+    balance, created_at, updated_at
+  )
+  VALUES(
+    'admin000@amazon.com',
+    '$2b$12$kRiVg0sZNHrmMtl9Q7eIguuqTOc0vQY51A/REFpC5sUmr7zyRzM8u',
+    'AWS관리자',
+    'ADMIN',
+    'ACTIVE',
+    0,
+    NOW(6),
+    NOW(6)
+  );
+
+  SET sample_id=LAST_INSERT_ID();
+
+  INSERT INTO slotkey_sample_registry
+  VALUES('MEMBER','admin-000',sample_id);
+END IF;
     SET region_idx=region_idx+1;
   END WHILE;
   COMMIT;
