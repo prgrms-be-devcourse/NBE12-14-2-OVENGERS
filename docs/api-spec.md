@@ -165,6 +165,22 @@
 
 > **2026-09-15 정정** (`core-domain-decisions.md` §8): 기존 "발급 30분 전부터, 최초 체크인 시작 전후 30분" 규칙을 대체한다. 발급 시간 제한을 없애고, 최초 체크인은 앞 여유 0분·뒤 15분(`[start, start+15m]`)으로 변경. 15분 내 미체크인은 배치가 `NO_SHOW`로 전이시키며 슬롯은 반환되지만 환불은 없다.
 
+## 7. 관리자 감사 로그 (Admin Audit Log)
+
+- `GET /api/v1/admin/audit-logs` (ADMIN): 관리자 감사 로그 목록 조회.
+  - 쿼리 파라미터(필터):
+    - `actorMemberId` (Long): 작업자 ID
+    - `action` (AuditAction): `REGISTER_SPACE`, `MODIFY_SPACE`, `SUSPEND_MEMBER`, `REACTIVATE_MEMBER`, `FORCE_CANCEL_RESERVATION`, `GRANT_CREDIT`
+    - `targetType` (AuditTargetType): `SPACE`, `MEMBER`, `RESERVATION`
+    - `targetId` (Long): 대상 엔티티 ID
+    - `dateFrom` (LocalDate, ISO-8601): 조회 시작일 (KST 00:00:00 이상)
+    - `dateTo` (LocalDate, ISO-8601): 조회 종료일 (KST 다음 날 00:00:00 미만, 반개구간)
+    - `page` (int, default 0), `size` (int, default 20)
+  - 정렬: 클라이언트 sort는 무시하고 서버 고정 `createdAt DESC, id DESC` 적용.
+  - 응답: `ApiResponse<PageResponse<AuditLogResponse>>` (`id`, `actorMemberId`, `action`, `targetType`, `targetId`, `reason`, `beforeValue`, `afterValue`, `createdAt`)
+  - 오류: `VALIDATION_FAILED(400)` (날짜 역전 `dateFrom > dateTo` 또는 파라미터 타입 오류), `AUTHENTICATION_REQUIRED(401)`, `ACCESS_DENIED(403)` (USER), `ACCOUNT_INACTIVE(403)` (정지/탈퇴 ADMIN)
+  - 부수효과: 조회 자체는 감사 로그를 남기지 않음.
+
 ## Enum
 
 | 항목 | 값 |
@@ -175,12 +191,14 @@
 | `reservation.status` | HELD, EXPIRED, CONFIRMED, IN_USE, COMPLETED, CANCELLED, NO_SHOW |
 | `credit_transaction.type` | SIGNUP_GRANT, ADMIN_GRANT, RESERVATION_CHARGE, REFUND, PENALTY |
 | `door_access_log.result` | ALLOW, DENY |
+| `audit_log.action` | REGISTER_SPACE, MODIFY_SPACE, SUSPEND_MEMBER, REACTIVATE_MEMBER, FORCE_CANCEL_RESERVATION, GRANT_CREDIT |
+| `audit_log.target_type` | SPACE, MEMBER, RESERVATION |
 
 > ~~`payment.status`~~ 는 `payment` 테이블 삭제와 함께 제거됨(§1-1, §11). 결제 결과는 `credit_transaction`으로 표현한다.
 
 ## 팀 확인 필요 사항 (구현 착수 전 합의 권장)
 
-1. **감사 로그 조회 API**: `GET /admin/audit-logs`는 DoD에 명시되어 있지 않음. 필요 시 추가 정의(우선순위 낮음, MVP 3개 기능 범위 밖).
+1. **감사 로그 조회 API**: `GET /api/v1/admin/audit-logs` 구현 완료(2026-09-22). 서버 고정 `createdAt DESC, id DESC` 정렬, KST 반개구간 날짜 필터, Flyway V9 인덱스 `idx_audit_logs_created_id (created_at, id)` 적용.
 2. **노쇼 환불률**: 현재 확정값은 0%이며 강사 피드백에 따라 재검토 중(`core-domain-decisions.md` §13). 바뀌면 이 문서와 `credit_transaction.type` 처리 로직도 함께 갱신.
 
 > 2026-09-14 확정: 도어 토큰 발급 시작 시점은 예약 시작 30분 전부터(기획서 4-3 시나리오 "14:30"은 오타 — 14:00 시작 기준 정정값은 13:30으로 규칙과 일치). 최초 체크인 허용 구간은 시작 전후 30분(기존 15분에서 변경)으로 확정.
