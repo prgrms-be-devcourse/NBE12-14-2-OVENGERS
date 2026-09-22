@@ -15,6 +15,7 @@
 - 페이지네이션: `page`(0-base, 기본 0), `size`(기본 20, 최대 100) → `{ content, page, size, totalElements, totalPages }`
 - 시간: ISO-8601, `+09:00` 기준. 예약 시간은 **30분의 배수**만 허용. `Clock` 주입으로 서버 시각 판단.
 - `Idempotency-Key`(UUID) 헤더: **실제로 돈이 움직이는 `POST /reservations/{id}/pay`에만 필수.** `POST /reservations`(HOLD 생성)는 결제가 없으므로 대상 아님. 동일 키 재요청 시 최초 처리 결과를 그대로 반환(재처리 금지). *(2026-09-15 정정 — 기존엔 "예약 생성"에 붙어 있었음)*
+- 완전히 동시에 도착한 요청(진짜 레이스)은 예외다: 캐시 조회와 저장이 원자적이지 않아, 동시에 들어온 요청 중 일부가 캐시를 못 찾고 실제 처리 로직까지 진입할 수 있다. 이 경우 진 쪽은 정상적인 `409 RESERVATION_STATE_CONFLICT`를 받으며, 같은 키로 재시도하면 그때는 저장된 최초 응답을 그대로 돌려받는다. 크레딧 차감은 이 경우에도 정확히 1회만 일어난다(`ReservationPaymentConcurrencyTest.pay_sameKeyConcurrently_chargesOnceAndReplays`로 검증됨).
 
 ### HTTP 상태 코드 기준
 
