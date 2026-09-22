@@ -5,7 +5,8 @@
 frontend와 백엔드의 정식 API prefix는 **`/api/v1`** 로 통일한다.
 
 - 로컬 기본 URL: `http://localhost:8080/api/v1`
-- 프론트엔드 환경변수: `VITE_API_BASE_URL`
+- 프론트엔드 환경변수: `NEXT_PUBLIC_API_BASE_URL`(기본값 `/api/v1`) *(2026-09-22 정정 — Next.js App Router 전환 이후 Vite 시절 변수명이 남아있던 것을 수정)*
+- 배포 환경에 따라 API로 가는 경로가 다르다: 로컬/Next.js 서버가 있는 환경은 `next.config.ts`의 `rewrites()`(`BACKEND_ORIGIN`)가 프록시하고, 정적 export(S3+CloudFront) 배포는 CloudFront의 `/api/*` 동작이 EC2로 직접 넘긴다.
 - 각 API 모듈에는 `/reservations`처럼 prefix를 제외한 상대 경로만 둔다.
 - 공간 리소스는 단수형 `/space`가 아니라 복수형 `/spaces`를 사용한다.
 - 프록시를 쓰더라도 브라우저가 호출하는 최종 공간 경로는 `/api/v1/spaces/...`가 되게 한다.

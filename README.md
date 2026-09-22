@@ -105,12 +105,12 @@
 | Persistence | Spring Data JPA | 데이터 접근과 트랜잭션 처리 |
 | Database | MySQL | 회원·공간·예약·출입 이력 저장 |
 | Test | JUnit 5, Testcontainers | 단위 테스트 및 MySQL 통합 테스트 |
-| Frontend | React | 공간 예약 및 모의 출입 화면 |
+| Frontend | Next.js(App Router) + TypeScript | 공간 예약 및 모의 출입 화면. 배포 시 정적 export로 빌드 |
 | API Docs | Swagger UI | API 요청·응답 명세 공유 |
 | CI/CD | GitHub Actions | 빌드 및 테스트 자동화 |
-| Deployment | AWS EC2, Vercel | 백엔드·DB 및 프론트엔드 배포 |
+| Deployment | AWS EC2(백엔드) + RDS(MySQL) + S3/CloudFront(프론트엔드) | 2026-09-22 확정 — 자세한 이유는 `docs/system-architecture.md` 참고 |
 
-백엔드 배포는 마일스톤 여부에 따라 Railway를 채택할 수 있습니다.
+배포 아키텍처는 2026-09-22 AWS(EC2+RDS+S3/CloudFront)로 확정되었습니다. Railway/Vercel은 채택하지 않습니다.
 
 ## 🏗️ 시스템 아키텍처
 

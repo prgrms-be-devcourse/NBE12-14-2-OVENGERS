@@ -2,6 +2,7 @@
 
 > 출처: 기획서 5장, `데이터모델-아키텍처-결정.md` 항목 3(오케스트레이션 방향), 항목 4(경미한 결정).
 > **2026-09-15 갱신**: `docs/core-domain-decisions.md` 반영 — `payment`/외부 Mock PG 개념 삭제, 크레딧 원장(`credit_transaction`)으로 단일화. Scheduler 책임 확장(HOLD 만료, 노쇼, 자동 퇴실). 결제 실패/취소 보상 처리 설명을 §2/§6-2 기준으로 정정.
+> **2026-09-22 갱신**: 배포 아키텍처를 AWS로 확정 — 백엔드는 EC2, DB는 RDS(MySQL), 프론트엔드는 S3 정적 호스팅 + CloudFront. Vercel/Railway는 채택하지 않는다. §자세한 내용은 아래 배포 절 참고.
 
 ## 기술 스택 (5-1)
 
@@ -9,8 +10,8 @@
 | --- | --- | --- |
 | 백엔드 | Spring Boot 3.x, Spring Security 6.x, Spring Data JPA | 도메인별로 서비스 분리 |
 | DB | MySQL, Testcontainers 통합 테스트 | 유니크 제약·트랜잭션으로 동시성 검증 |
-| 프론트엔드 | React | 조회·예약·결제 확인·출입 검증 최소 화면 |
-| 인프라/배포 | Railway(백엔드·MySQL) 또는 AWS EC2, Vercel(프론트엔드) | README 기준 배포 대상은 팀 결정에 따라 갱신 |
+| 프론트엔드 | Next.js(App Router) + TypeScript | 조회·예약·결제 확인·출입 검증 최소 화면. 배포 시 정적 export(`output: 'export'`)로 빌드 |
+| 인프라/배포 | AWS EC2(백엔드) + RDS(MySQL) + S3/CloudFront(프론트엔드 정적 호스팅) | 2026-09-22 확정. Railway/Vercel은 검토만 하고 채택하지 않음 |
 | CI/CD | GitHub Actions, Swagger UI | 빌드·테스트 자동화, API 문서 |
 
 ## 전체 흐름 (5-2)
@@ -65,3 +66,14 @@ flowchart TD
 3. 조건부 상태 변경 (UPDATE 조건 + 영향받은 행 수로 성공 판단, 예: 종료된 `IN_USE`만 `COMPLETED`로, 만료된 `HELD`만 `EXPIRED`로 전이)
 4. **크레딧 차감/환급의 원자성** (외부 PG 콜백이 없으므로 "승인 실패 시 트랜잭션 전체 롤백"은 그대로 유효하지만, 취소 시 환급은 더 이상 "실패 보상 처리"가 필요 없다 — 크레딧과 예약이 같은 DB·같은 트랜잭션에 있어 "취소는 성공했는데 환불은 실패한" 중간 상태가 구조적으로 존재하지 않는다. 외부 PG였다면 필요했을 재처리 큐 자리가 사라진다. `core-domain-decisions.md` §6-2 참고) *(2026-09-15 정정 — 기존 "취소 시 Mock 환불 + 실패 재처리 이력" 서술을 대체)*
 5. 시간 경계 테스트 (`Clock`을 주입받아 체크인 시작·마감, HOLD 만료, 예약 종료의 직전/정확한 경계/직후를 고정 시각으로 테스트)
+
+
+## 배포 아키텍처와 정적 export를 택한 이유 (2026-09-22)
+
+- **구성**: 백엔드(Spring Boot)는 EC2에서 실행, DB는 RDS(MySQL). 프론트엔드는 `STATIC_EXPORT=true npm run build`로 만든 정적 파일(`out/`)을 S3에 올리고 CloudFront로 서빙한다.
+- **정적 export를 택한 이유**: Next.js를 자체 서버(Node 런타임)로 띄우려면 별도 컴퓨팅 자원과 운영 비용이 든다. 이 프로젝트의 화면은 서버 컴포넌트나 SSR이 반드시 필요한 요구사항이 없으므로, 빌드 시점에 정적 HTML로 미리 만들어 S3 + CloudFront로 서빙하면 프론트엔드용 서버를 따로 운영하지 않아도 되고 CDN 캐싱으로 응답도 빨라진다.
+- **트레이드오프 — 동적 라우트 문제**: 정적 export는 `/spaces/123`처럼 파라미터가 실제 값인 URL을 파일로 미리 만들 수 없다(가능한 모든 ID를 빌드 시점에 알 수 없음). 이를 해결하기 위해:
+  - 빌드 시 `/spaces/[spaceId]` 같은 동적 라우트는 플레이스홀더 파일(`/spaces/_.html`)로 만든다.
+  - CloudFront Function(viewer-request)이 `/spaces/123` 같은 실제 요청 URL을 `/spaces/_.html`로 리라이트해서 그 플레이스홀더 파일을 돌려준다.
+  - 화면에서는 `useRouteId` 훅이 브라우저 주소(`window.location`)에서 실제 ID(`123`)를 다시 읽어와 API 호출에 사용한다.
+- **API 호출 경로도 배포 대상에 따라 다르다**: 정적 export는 Next.js의 서버 사이드 `rewrites()`를 쓸 수 없으므로(정적 파일에는 서버가 없다), API 요청은 CloudFront의 `/api/*` 동작(behavior)이 직접 EC2 오리진으로 넘긴다. 반면 로컬 개발이나 Vercel처럼 Next.js 서버가 살아있는 환경에서는 기존처럼 `next.config.ts`의 `rewrites()`가 프록시 역할을 한다. 즉 `frontend/next.config.ts`는 `STATIC_EXPORT` 환경변수로 두 배포 방식을 모두 지원하도록 만들어져 있다.
