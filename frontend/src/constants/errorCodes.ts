@@ -28,6 +28,7 @@ export type ErrorCode =
   | 'IDEMPOTENCY_KEY_CONFLICT'
   | 'SPACE_INACTIVE'
   | 'SPACE_VERSION_MISMATCH'
+  | 'SPACE_OPERATING_HOURS_CONFLICT'
   | 'INSUFFICIENT_BALANCE'
   | 'SELF_GRANT_NOT_ALLOWED'
   | 'TARGET_IS_ADMIN'
@@ -56,6 +57,7 @@ export const ERROR_CODE: Record<ErrorCode, ErrorCode> = {
   IDEMPOTENCY_KEY_CONFLICT: 'IDEMPOTENCY_KEY_CONFLICT',
   SPACE_INACTIVE: 'SPACE_INACTIVE',
   SPACE_VERSION_MISMATCH: 'SPACE_VERSION_MISMATCH',
+  SPACE_OPERATING_HOURS_CONFLICT: 'SPACE_OPERATING_HOURS_CONFLICT',
   INSUFFICIENT_BALANCE: 'INSUFFICIENT_BALANCE',
   SELF_GRANT_NOT_ALLOWED: 'SELF_GRANT_NOT_ALLOWED',
   TARGET_IS_ADMIN: 'TARGET_IS_ADMIN',
@@ -85,6 +87,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   IDEMPOTENCY_KEY_CONFLICT: '이전 요청과 내용이 다릅니다. 처음부터 다시 시도해 주세요.',
   SPACE_INACTIVE: '현재 신규 예약을 받지 않는 공간입니다.',
   SPACE_VERSION_MISMATCH: '결제를 기다리는 동안 공간 요금이 변경되었습니다. 처음부터 다시 예약해 주세요.',
+  SPACE_OPERATING_HOURS_CONFLICT: '진행 중이거나 예정된 예약이 있어 운영시간을 줄일 수 없습니다.',
   INSUFFICIENT_BALANCE: '크레딧 잔액이 부족합니다. 예약은 결제 대기 상태로 유지되며, 만료 전까지 다시 시도할 수 있습니다.',
   SELF_GRANT_NOT_ALLOWED: '자기 자신에게는 크레딧을 지급할 수 없습니다.',
   TARGET_IS_ADMIN: '관리자 계정은 정지하거나 복구할 수 없습니다.',

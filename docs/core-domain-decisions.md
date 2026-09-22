@@ -579,7 +579,7 @@ HOLD 결제: `now == hold_expires_at`는 확정하지 않는다(`now < hold_expi
 - **관리자도** 타인 예약 취소·토큰 발급 불가
 - 일반 회원의 크레딧 지급 API 호출 거절
 - 관리자의 자기 자신 크레딧 지급 거절
-- 정지 계정의 기존 Access Token 요청 거절
+- 정지 계정의 토큰 재발급(refresh) 요청 시 ACCOUNT_INACTIVE(403) 거절 (보호 API는 Access Token 만료 전까지 유효)
 
 ### 가격
 

@@ -8,9 +8,9 @@
 | 엔터티 | 담당자 | 주요 필드 | 역할 |
 | --- |-----| --- | --- |
 | `member` | 천종원 | id, email, password_hash, nickname, role, status, **balance**, created_at | 회원/관리자. role: USER / ADMIN. status: ACTIVE / SUSPENDED / WITHDRAWN. **balance**: 크레딧 잔액(int, NOT NULL, DEFAULT 0) — 이용 한도, 결제 수단 아님 |
-| `refresh_token` | 천종원 | id, member_id, token_hash, issued_at, expires_at, revoked_at | 로그인 재발급 토큰. 원문 대신 해시 저장, 재발급 시 회전 |
+| `refresh_token` | 천종원 | id, member_id, token_hash, expires_at, revoked_at | 로그인 재발급 토큰. 원문 대신 해시 저장, 재발급 시 검증 후 새 Access Token 발급 (회전은 미구현) |
 | `spaces` | 김재철 | id, name, location, description, capacity, price_per_slot, image_path, opening_time, closing_time, status, **version** | 관리자가 등록하는 예약 대상 공간. `price_per_slot`은 100원 단위, 30분당 고정 요금. `opening_time`/`closing_time`은 30분 경계인 `TIME`(LocalTime) — "매일 반복되는 규칙"이므로 날짜 없음. **version**: 가격 등 변경에 대한 낙관적 비교용(int) |
-| `audit_logs` | 김재철 | id, actor_member_id, action, target_type, target_id, reason, before_value, after_value, created_at | 관리 작업(공간 등록/수정, 회원 정지/복구, 강제취소, 크레딧 지급) 기록. `(target_type, target_id)` 복합 인덱스 |
+| `audit_logs` | 김재철 | id, actor_member_id, action, target_type, target_id, reason, before_value, after_value, created_at | 관리 작업(공간 등록/수정, 회원 정지/복구, 강제취소, 크레딧 지급) 기록. 인덱스: `(target_type, target_id)`, V9 `idx_audit_logs_created_id (created_at, id)` |
 | `reservation` | 이태호 | id, member_id, space_id, start_time, end_time, status, price_per_slot_snapshot, total_amount, **hold_expires_at**, **checked_in_at**, **checked_out_at**, cancelled_at, created_at | status: `HELD`/`EXPIRED`/`CONFIRMED`/`IN_USE`/`COMPLETED`/`CANCELLED`/`NO_SHOW` (7개). 슬롯 확보 시 `HELD` 생성(`hold_expires_at`=+10분) → Mock 결제 성공 시 `CONFIRMED` (2단계 플로우). ~~completed_at~~은 제거되어 `checked_out_at`으로 통합(체크아웃 시각 = 완료 시각) |
 | `reservation_slot` | 이태호 | id, reservation_id, space_id, slot_start | 예약이 확보한 30분 단위 시간. **살아있는 점유일 때만 존재**(취소/노쇼/만료 시 하드 삭제). `UNIQUE(space_id, slot_start)`로 중복 점유 방지 |
 | `credit_transaction` | 미정 (구 `payment` 담당 백한비) | id, member_id, amount, type, reservation_id, balance_after, reason, created_at | **크레딧 원장(단일 진실)** — `payment` 테이블을 대체. `amount`는 부호 있음(지급/환급 +, 차감/위약금 -)이며 `SUM(amount) = member.balance`. `type`: SIGNUP_GRANT / ADMIN_GRANT / RESERVATION_CHARGE / REFUND / PENALTY. `reservation_id`는 지급 건일 경우 NULL. `reason`은 ADMIN_GRANT만 필수. `INDEX(member_id, created_at)` |
@@ -104,7 +104,7 @@ CHECK (opening_time < closing_time)          -- 자정 넘는 운영은 범위 �
 | 구분 | 대상 | 상태 |
 | --- | --- | --- |
 | 삭제 | `payment` 테이블 전체 | 반영 완료 (ERD에서 제거). DDL상 `payment` 테이블이 원래 생성된 적이 없어(V4 스켈레톤 상태) DROP할 대상 자체가 없었음 |
-| 추가 | `member.balance` (int, NOT NULL, DEFAULT 0) | ERD 반영 완료. **DDL은 보류** — `member` 테이블 자체가 아직 생성되지 않음(V1 스켈레톤). V1에 TODO로 남겨둠 |
+| 추가 | `member.balance` (int, NOT NULL, DEFAULT 0) | ERD + `V1` DDL 반영 완료 (`member` 테이블 생성 시 컬럼 포함) |
 | 추가 | `credit_transaction` 테이블 | ERD 반영 + `V6__create_credit_transaction_table.sql` 신규 작성 완료 |
 | 추가 | `reservation.hold_expires_at` (datetime, NULL 허용) | ERD + `V3` DDL 반영 완료 |
 | 추가 | `reservation.checked_in_at`, `checked_out_at` | ERD + `V3` DDL 반영 완료 |
@@ -115,9 +115,10 @@ CHECK (opening_time < closing_time)          -- 자정 넘는 운영은 범위 �
 | 변경 | `space` → `spaces` | `V8__rename_space_to_spaces.sql`로 실제 테이블명 변경 |
 | 확인 | `reservation_slot` 존재 조건, UNIQUE 제약 | 변경 없음 확인 |
 | 유지 | `door_access_token.active_reservation_id` UNIQUE | 변경 없음 |
+| 추가 | `idx_audit_logs_created_id (created_at, id)` | `V9__add_audit_logs_created_at_id_index.sql`로 감사 로그 정렬·날짜 필터 최적화 복합 인덱스 추가 |
 
 ### 이번 반영에서 함께 발견/수정한 모순
 
 - **[수정] 테이블명 정합화**: V2~V5에서 사용하던 `space` 테이블은 V8에서 `spaces`로 rename되며, 엔티티와 현재 FK는 `spaces`를 사용한다.
-- **[미해결 — 확인 필요] `member`/`payment`/`access` 테이블 미작성**: `V1`(member), `V4`(payment), `V5`(access)가 전부 빈 스켈레톤 파일이다(엔티티 클래스도 패키지 선언만 있는 빈 클래스). `payment`는 삭제 대상이라 문제가 되지 않지만, `member`는 `reservation`·`credit_transaction`이 이미 FK로 참조하고 있어 **V1이 채워지지 않으면 어떤 마이그레이션도 끝까지 적용될 수 없다.** 사용자 결정에 따라 V1은 TODO 주석만 남기고 실제 `CREATE TABLE`은 천종원님 담당으로 남겨두었다.
+- **[구현 완료 및 정리] 마이그레이션 상태**: V1(`member`, `refresh_token`)과 V5(`door_access_token`, `door_access_log`)는 정상 구현 완료되었으며, V4(`payment`)는 결제가 크레딧 원장(V6 `credit_transaction`)으로 단일화되어 의도적으로 빈 마이그레이션으로 유지된다.
 - `audit_logs`는 감사 로그 엔티티의 실제 테이블명이며, 이 문서도 동일한 이름을 사용한다.

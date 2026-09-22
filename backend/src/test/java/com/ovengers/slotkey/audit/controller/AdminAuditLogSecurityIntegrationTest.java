@@ -10,6 +10,7 @@ import com.ovengers.slotkey.member.entity.MemberRole;
 import com.ovengers.slotkey.member.entity.MemberStatus;
 import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.support.IntegrationTestSupport;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,9 @@ class AdminAuditLogSecurityIntegrationTest extends IntegrationTestSupport {
     @Autowired
     private JwtProvider jwtProvider;
 
+    @Autowired
+    private EntityManager entityManager;
+
     @BeforeEach
     void setUp() {
         auditLogRepository.deleteAllInBatch();
@@ -73,16 +77,26 @@ class AdminAuditLogSecurityIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("정지 및 탈퇴 ADMIN은 관리자 감사 로그 조회 시 403 ACCOUNT_INACTIVE로 차단된다")
-    void getAuditLogs_inactiveAdmin_returns403() throws Exception {
+    @DisplayName("이미 발급된 ADMIN Access Token은 회원 DB 상태가 비활성(SUSPENDED, WITHDRAWN)으로 변경되어도 만료 전까지 관리자 감사 로그를 정상 조회할 수 있다 (#208 무조회 계약)")
+    void getAuditLogs_inactiveAdmin_validJwt_returns200() throws Exception {
         for (MemberStatus status : new MemberStatus[]{MemberStatus.SUSPENDED, MemberStatus.WITHDRAWN}) {
-            Member inactiveAdmin = saveMember(MemberRole.ADMIN, status);
+            // 1. ACTIVE 상태의 ADMIN 생성 및 저장
+            Member admin = saveMember(MemberRole.ADMIN, MemberStatus.ACTIVE);
 
+            // 2. ACTIVE ADMIN 상태에서 Access Token 먼저 발급
+            String token = bearerToken(admin);
+
+            // 3. 같은 회원 행의 DB 상태를 SUSPENDED 또는 WITHDRAWN으로 변경 후 flush/clear
+            admin.updateStatus(status);
+            memberRepository.saveAndFlush(admin);
+            entityManager.clear();
+
+            // 4. 상태 변경 전 발급받은 동일한 토큰으로 조회 시 200 OK 검증
             mockMvc.perform(get(ADMIN_AUDIT_LOGS_PATH)
-                            .header(HttpHeaders.AUTHORIZATION, bearerToken(inactiveAdmin))
+                            .header(HttpHeaders.AUTHORIZATION, token)
                             .contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.code").value("ACCOUNT_INACTIVE"));
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("SUCCESS"));
         }
     }
 
