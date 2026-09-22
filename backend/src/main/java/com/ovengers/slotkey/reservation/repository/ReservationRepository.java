@@ -36,7 +36,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Reservation r SET r.status = :expired " +
-            "WHERE r.id IN :ids AND r.status = :held AND r.holdExpiresAt < :now")
+                    "WHERE r.id IN :ids AND r.status = :held AND r.holdExpiresAt <= :now")
     int expireHeldReservations(
             @Param("ids") List<Long> ids,
             @Param("now") LocalDateTime now,
@@ -56,6 +56,34 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("now") LocalDateTime now,
             @Param("confirmed") ReservationStatus confirmed,
             @Param("cancelled") ReservationStatus cancelled
+    );
+
+    /**
+     * 관리자 강제 취소의 문지기(core-domain-decisions 6-4). 조회 시점의 상태(expected)가 그대로일 때만 CANCELLED로 전이한다.
+     * 영향 행이 0이면 그 사이 다른 요청(본인 취소·체크인·배치 등)이 먼저 상태를 바꾼 것이다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Reservation r SET r.status = :cancelled, r.cancelledAt = :now " +
+            "WHERE r.id = :id AND r.status = :expected")
+    int forceCancelIfStatusIs(
+            @Param("id") Long id,
+            @Param("now") LocalDateTime now,
+            @Param("expected") ReservationStatus expected,
+            @Param("cancelled") ReservationStatus cancelled
+    );
+
+    /**
+     * 최초 체크인의 문지기. CONFIRMED일 때만 IN_USE로 전이하고 checked_in_at을 기록한다.
+     * 영향 행이 0이면 이미 체크인되었거나, 강제 취소/취소/노쇼 등으로 상태가 변경된 것이다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Reservation r SET r.status = :inUse, r.checkedInAt = :now " +
+            "WHERE r.id = :id AND r.status = :confirmed")
+    int checkInIfConfirmed(
+            @Param("id") Long id,
+            @Param("now") LocalDateTime now,
+            @Param("confirmed") ReservationStatus confirmed,
+            @Param("inUse") ReservationStatus inUse
     );
 
     /** 체크아웃/자동 퇴실의 문지기(core-domain-decisions 8-4). IN_USE일 때만 COMPLETED로 전이한다. */
@@ -94,7 +122,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     // ===== 배치 대상 조회 (ReservationCompletionScheduler) =====
     // 후보 id만 뽑고, 실제 전이 여부는 건별 조건부 UPDATE가 최종 판정한다.
 
-    @Query("SELECT r.id FROM Reservation r WHERE r.status = :held AND r.holdExpiresAt < :now")
+    @Query("SELECT r.id FROM Reservation r WHERE r.status = :held AND r.holdExpiresAt <= :now")
     List<Long> findExpiredHoldIds(
             @Param("now") LocalDateTime now,
             @Param("held") ReservationStatus held
@@ -140,4 +168,16 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("inUse") ReservationStatus inUse,
             @Param("completed") ReservationStatus completed
     );
+
+    @Query("SELECT r.spaceId FROM Reservation r WHERE r.id = :id")
+    java.util.Optional<Long> findSpaceIdById(@Param("id") Long id);
+
+    @Query("SELECT new com.ovengers.slotkey.reservation.dto.ReservationTargetInfo(r.spaceId, r.memberId) " +
+                    "FROM Reservation r WHERE r.id = :id")
+    java.util.Optional<com.ovengers.slotkey.reservation.dto.ReservationTargetInfo> findTargetInfoById(
+                    @Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM Reservation r WHERE r.id = :id")
+    java.util.Optional<Reservation> findByIdForUpdate(@Param("id") Long id);
 }

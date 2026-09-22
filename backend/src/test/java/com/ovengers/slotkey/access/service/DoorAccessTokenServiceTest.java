@@ -87,7 +87,7 @@ public class DoorAccessTokenServiceTest {
     void shouldIssueTokenForConfirmedReservation() {
         LocalDateTime endAt = NOW.plusHours(1);
 
-        given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
+        given(reservationRepository.findByIdForUpdate(RESERVATION_ID)).willReturn(Optional.of(reservation));
 
         given(reservation.getMemberId()).willReturn(MEMBER_ID);
 
@@ -100,7 +100,7 @@ public class DoorAccessTokenServiceTest {
                 endAt
         )).willReturn(true);
 
-        given(doorAccessTokenRepository.findByReservationIdAndRevokedAtIsNull(RESERVATION_ID)).willReturn(Optional.empty());
+        given(doorAccessTokenRepository.findByReservationIdAndRevokedAtIsNullForUpdate(RESERVATION_ID)).willReturn(Optional.empty());
 
         given(accessTokenGenerator.generate()).willReturn(RAW_TOKEN);
 
@@ -142,7 +142,7 @@ public class DoorAccessTokenServiceTest {
     void shouldRevokeActiveTokenWhenReissuing() {
         LocalDateTime endAt = NOW.plusHours(1);
 
-        given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
+        given(reservationRepository.findByIdForUpdate(RESERVATION_ID)).willReturn(Optional.of(reservation));
 
         given(reservation.getMemberId()).willReturn(MEMBER_ID);
 
@@ -155,7 +155,7 @@ public class DoorAccessTokenServiceTest {
                 endAt
         )).willReturn(true);
 
-        given(doorAccessTokenRepository.findByReservationIdAndRevokedAtIsNull(RESERVATION_ID)).willReturn(Optional.of(activeToken));
+        given(doorAccessTokenRepository.findByReservationIdAndRevokedAtIsNullForUpdate(RESERVATION_ID)).willReturn(Optional.of(activeToken));
 
         given(accessTokenGenerator.generate()).willReturn(RAW_TOKEN);
 
@@ -175,7 +175,7 @@ public class DoorAccessTokenServiceTest {
     @DisplayName("확정되지 않은 예약에는 출입 토큰을 발급할 수 없다")
     void shouldRejectIssueWhenReservationIsNotConfirmed() {
 
-        given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
+        given(reservationRepository.findByIdForUpdate(RESERVATION_ID)).willReturn(Optional.of(reservation));
 
         given(reservation.getMemberId()).willReturn(MEMBER_ID);
 
@@ -211,11 +211,11 @@ public class DoorAccessTokenServiceTest {
     @DisplayName("예약 소유자는 활성 출입 토큰을 폐기할 수 있다")
     void shouldRevokeActiveTokenByReservationOwner() {
 
-        given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
+        given(reservationRepository.findByIdForUpdate(RESERVATION_ID)).willReturn(Optional.of(reservation));
 
         given(reservation.getMemberId()).willReturn(MEMBER_ID);
 
-        given(doorAccessTokenRepository.findByReservationIdAndRevokedAtIsNull(
+        given(doorAccessTokenRepository.findByReservationIdAndRevokedAtIsNullForUpdate(
                 RESERVATION_ID
         )).willReturn(Optional.of(activeToken));
 

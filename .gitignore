@@ -115,8 +115,14 @@ HELP.md
 
 ### 로컬 도구 설정 ###
 .claude/settings.local.json
+.agents/
 .cursor/
+GEMINI.md
 CLAUDE.md
+AGENTS.md
 
 ### 배포 ###
 *.pem
+
+### 테스트용 샘플 데이터 ###
+frontend/public/images/slotkey-test-data/*

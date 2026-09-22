@@ -27,6 +27,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.ovengers.slotkey.credit.service.CreditService;   // AuditLogService import 아래
+import java.time.Clock;                                       // java.time.LocalDateTime import 위
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -48,6 +50,8 @@ public class AdminReservationService {
     private final AuditLogService auditLogService;
     private final DoorAccessTokenService doorAccessTokenService;
     private final DoorAccessLogService doorAccessLogService;
+    private final CreditService creditService;
+    private final Clock clock;
 
     /**
      * 전체 예약 조회 (페이지네이션).
@@ -96,7 +100,11 @@ public class AdminReservationService {
     /**
      * 예약 강제 취소 (관리자만, 사유 기록).
      * 상태·시간에 상관없이 CANCELLED로 전이할 수 있다.
-     * 이미 COMPLETED/EXPIRED/NO_SHOW인 경우는 상태 변경 불가(409).
+     * 이미 COMPLETED/EXPIRED/NO_SHOW/CANCELLED인 경우는 상태 변경 불가(409).
+     *
+     * 조건부 UPDATE(조회한 상태가 그대로일 때만 전이)가 문지기이며, 영향 행이 1일 때만 같은 트랜잭션에서
+     * 후속 처리를 한다(core-domain-decisions 6-4). 그래서 본인 취소·체크인·배치와 겹쳐도 환불은 최대 1회다.
+     * 결제한 예약(CONFIRMED/IN_USE)은 위약금 없이 total_amount 전액을 환불하고, 결제 전(HELD)은 환불하지 않는다.
      */
     @Transactional
     public AdminReservationResponse forceCancel(Long reservationId, String reason, Long adminMemberId) {
@@ -109,18 +117,23 @@ public class AdminReservationService {
         }
 
         ReservationStatus previousStatus = reservation.getStatus();
+        Long memberId = reservation.getMemberId();
+        int totalAmount = reservation.getTotalAmount();
+        LocalDateTime now = LocalDateTime.now(clock);
 
-        // 상태 전이
-        reservation.cancelByAdmin();
-
-        LocalDateTime now = LocalDateTime.now();
+        // 문지기: 조회 시점의 상태가 그대로일 때만 CANCELLED로 전이한다. 0행이면 그 사이 다른 요청이 먼저 상태를 바꾼 것이다.
+        int updated = reservationRepository.forceCancelIfStatusIs(
+                reservationId, now, previousStatus, ReservationStatus.CANCELLED);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.RESERVATION_STATE_CONFLICT, "다른 요청이 먼저 예약 상태를 변경했습니다.");
+        }
 
         // 상태 이력 저장
         ReservationStatusHistory history = ReservationStatusHistory.of(
-                reservation.getId(),
+                reservationId,
                 adminMemberId,
                 previousStatus,
-                reservation.getStatus(),
+                ReservationStatus.CANCELLED,
                 reason,
                 now
         );
@@ -133,6 +146,11 @@ public class AdminReservationService {
         // revokeByReservation(예약 상태 변경에 따른 시스템 경로)을 사용한다.
         doorAccessTokenService.revokeByReservation(reservationId, now, "ADMIN_FORCE_CANCEL");
 
+        // 결제한 예약은 위약금 없이 전액 환불한다. HELD는 결제한 적이 없으므로 환불하지 않는다.
+        if (previousStatus != ReservationStatus.HELD) {
+            creditService.refund(memberId, reservationId, totalAmount);
+        }
+
         // 감사 로그 기록
         auditLogService.log(
                 adminMemberId,
@@ -141,13 +159,17 @@ public class AdminReservationService {
                 reservationId,
                 reason,
                 previousStatus,
-                reservation.getStatus()
+                ReservationStatus.CANCELLED
         );
 
+        // 조건부 UPDATE가 영속성 컨텍스트를 비웠으므로 취소된 최신 상태를 다시 읽어 응답한다.
+        Reservation cancelled = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
+
         return AdminReservationResponse.from(
-                reservation,
-                findMemberEmail(reservation.getMemberId()),
-                findSpaceName(reservation.getSpaceId())
+                cancelled,
+                findMemberEmail(cancelled.getMemberId()),
+                findSpaceName(cancelled.getSpaceId())
         );
     }
 

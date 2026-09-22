@@ -40,8 +40,21 @@ class AdminSpaceServiceTest {
     @Mock
     private AuditLogService auditLogService;
 
+    @Mock
+    private OccupiedSlotProvider occupiedSlotProvider;
+
+    @Mock
+    private java.time.Clock clock;
+
     @InjectMocks
     private AdminSpaceService adminSpaceService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        java.time.Instant instant = java.time.Instant.parse("2026-09-20T10:00:00Z");
+        org.mockito.Mockito.lenient().when(clock.instant()).thenReturn(instant);
+        org.mockito.Mockito.lenient().when(clock.getZone()).thenReturn(java.time.ZoneId.of("Asia/Seoul"));
+    }
 
     @Test
     @DisplayName("존재하는 공간 ID로 상세 조회하면 공간을 반환하고 감사 로그를 남기지 않는다")
@@ -259,7 +272,7 @@ class AdminSpaceServiceTest {
                 LocalTime.of(20, 0),
                 SpaceStatus.INACTIVE);
 
-        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(existingSpace));
+        given(spaceRepository.findByIdForUpdate(spaceId)).willReturn(Optional.of(existingSpace));
 
         // when
         SpaceDetailResponse response = adminSpaceService.updateSpace(spaceId, updateRequest, adminMemberId);
@@ -332,7 +345,7 @@ class AdminSpaceServiceTest {
                 null,
                 null);
 
-        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(existingSpace));
+        given(spaceRepository.findByIdForUpdate(spaceId)).willReturn(Optional.of(existingSpace));
 
         // when
         SpaceDetailResponse response = adminSpaceService.updateSpace(spaceId, updateRequest, adminMemberId);
@@ -363,7 +376,7 @@ class AdminSpaceServiceTest {
         SpaceUpdateRequest updateRequest = new SpaceUpdateRequest(
                 null, "이름", "위치", "설명", 4, 3000L, null, null, null, null);
 
-        given(spaceRepository.findById(invalidId)).willReturn(Optional.empty());
+        given(spaceRepository.findByIdForUpdate(invalidId)).willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> adminSpaceService.updateSpace(invalidId, updateRequest, 1L))
@@ -395,7 +408,7 @@ class AdminSpaceServiceTest {
                 3050L, // 100원 단위 위반
                 null, null, null, null);
 
-        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(existingSpace));
+        given(spaceRepository.findByIdForUpdate(spaceId)).willReturn(Optional.of(existingSpace));
 
         // when & then
         assertThatThrownBy(() -> adminSpaceService.updateSpace(spaceId, invalidRequest, 1L))
@@ -403,43 +416,43 @@ class AdminSpaceServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRICE_UNIT);
 
         verifyNoInteractions(auditLogService);
-}
+    }
 
-@Test
-@DisplayName("공간 수정 시 운영 시작 시각이 종료 시각과 같거나 늦으면 INVALID_OPERATING_HOURS 예외가 발생하고 감사 로그가 호출되지 않는다")
-void updateSpace_invalidOperatingHours_throwsException_andNeverLogsAudit() {
+    @Test
+    @DisplayName("공간 수정 시 운영 시작 시각이 종료 시각과 같거나 늦으면 INVALID_OPERATING_HOURS 예외가 발생하고 감사 로그가 호출되지 않는다")
+    void updateSpace_invalidOperatingHours_throwsException_andNeverLogsAudit() {
         // given
         Long spaceId = 1L;
         Space existingSpace = Space.builder()
-                        .id(spaceId)
-                        .name("기존 공간명")
-                        .location("위치")
-                        .capacity(4)
-                        .pricePerSlot(3000L)
-                        .openingTime(LocalTime.of(9, 0))
-                        .closingTime(LocalTime.of(18, 0))
-                        .status(SpaceStatus.ACTIVE)
-                        .version(0)
-                        .build();
+                .id(spaceId)
+                .name("기존 공간명")
+                .location("위치")
+                .capacity(4)
+                .pricePerSlot(3000L)
+                .openingTime(LocalTime.of(9, 0))
+                .closingTime(LocalTime.of(18, 0))
+                .status(SpaceStatus.ACTIVE)
+                .version(0)
+                .build();
 
         SpaceUpdateRequest invalidRequest = new SpaceUpdateRequest(
-                        null,
-                        "수정 시도 공간명",
-                        null,
-                        null,
-                        null,
-                        4000L,
-                        null,
-                        LocalTime.of(20, 0), // 시작이 종료보다 늦음
-                        LocalTime.of(10, 0),
-                        null);
+                null,
+                "수정 시도 공간명",
+                null,
+                null,
+                null,
+                4000L,
+                null,
+                LocalTime.of(20, 0), // 시작이 종료보다 늦음
+                LocalTime.of(10, 0),
+                null);
 
-        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(existingSpace));
+        given(spaceRepository.findByIdForUpdate(spaceId)).willReturn(Optional.of(existingSpace));
 
         // when & then
         assertThatThrownBy(() -> adminSpaceService.updateSpace(spaceId, invalidRequest, 1L))
-                        .isInstanceOf(BusinessException.class)
-                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_OPERATING_HOURS);
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_OPERATING_HOURS);
 
         verifyNoInteractions(auditLogService);
     }
@@ -464,7 +477,7 @@ void updateSpace_invalidOperatingHours_throwsException_andNeverLogsAudit() {
                 null, null, null, null, null,
                 null, null, LocalTime.of(9, 15), null, null);
 
-        given(spaceRepository.findById(spaceId)).willReturn(Optional.of(existingSpace));
+        given(spaceRepository.findByIdForUpdate(spaceId)).willReturn(Optional.of(existingSpace));
 
         // when & then
         assertThatThrownBy(() -> adminSpaceService.updateSpace(spaceId, invalidRequest, 1L))
@@ -472,6 +485,46 @@ void updateSpace_invalidOperatingHours_throwsException_andNeverLogsAudit() {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_OPERATING_HOURS);
 
         assertThat(existingSpace.getOpeningTime()).isEqualTo(LocalTime.of(9, 0));
+        verifyNoInteractions(auditLogService);
+    }
+
+    @Test
+    @DisplayName("운영시간 축소 시 미래 유효 점유 슬롯과 충돌하면 SPACE_OPERATING_HOURS_CONFLICT 예외가 발생하고 감사 로그를 남기지 않는다")
+    void updateSpace_operatingHoursConflict_throwsException() {
+        // given
+        Long spaceId = 1L;
+        Space existingSpace = Space.builder()
+                .id(spaceId)
+                .name("기존 공간")
+                .location("위치")
+                .capacity(4)
+                .pricePerSlot(3000L)
+                .openingTime(LocalTime.of(9, 0))
+                .closingTime(LocalTime.of(22, 0))
+                .status(SpaceStatus.ACTIVE)
+                .version(0)
+                .build();
+
+        // 9:00~22:00 -> 10:00~20:00으로 축소
+        SpaceUpdateRequest shrinkRequest = new SpaceUpdateRequest(
+                null, null, null, null, null, null, null,
+                LocalTime.of(10, 0), LocalTime.of(20, 0), null);
+
+        java.time.LocalDateTime fixedNow = java.time.LocalDateTime.of(2026, 9, 20, 10, 0);
+        java.time.Clock fixedClock = java.time.Clock.fixed(fixedNow.atZone(java.time.ZoneId.of("Asia/Seoul")).toInstant(), java.time.ZoneId.of("Asia/Seoul"));
+        given(clock.instant()).willReturn(fixedClock.instant());
+        given(clock.getZone()).willReturn(fixedClock.getZone());
+
+        given(spaceRepository.findByIdForUpdate(spaceId)).willReturn(Optional.of(existingSpace));
+        given(occupiedSlotProvider.hasOccupiedSlotsOutsideHours(
+                eq(spaceId), eq(LocalTime.of(10, 0)), eq(LocalTime.of(20, 0)), any()))
+                .willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> adminSpaceService.updateSpace(spaceId, shrinkRequest, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SPACE_OPERATING_HOURS_CONFLICT);
+
         verifyNoInteractions(auditLogService);
     }
 }

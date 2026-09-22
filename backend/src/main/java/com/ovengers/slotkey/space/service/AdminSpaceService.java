@@ -17,12 +17,18 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+
 @Service
 @RequiredArgsConstructor
 public class AdminSpaceService {
 
     private final SpaceRepository spaceRepository;
     private final AuditLogService auditLogService;
+    private final OccupiedSlotProvider occupiedSlotProvider;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public Page<SpaceDetailResponse> getSpaces(SpaceStatus status, String keyword, Pageable pageable) {
@@ -57,8 +63,28 @@ public class AdminSpaceService {
 
     @Transactional
     public SpaceDetailResponse updateSpace(Long spaceId, SpaceUpdateRequest request, Long adminMemberId) {
-        Space space = spaceRepository.findById(spaceId)
+        Space space = spaceRepository.findByIdForUpdate(spaceId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SPACE_NOT_FOUND));
+
+        // 1. 후보 운영시간 계산 및 유효성(순서 및 30분 단위) 사전 검증 (실패 시 400 INVALID_OPERATING_HOURS)
+        LocalTime candidateOpening = request.openingTime() != null ? request.openingTime() : space.getOpeningTime();
+        LocalTime candidateClosing = request.closingTime() != null ? request.closingTime() : space.getClosingTime();
+        if (request.openingTime() != null || request.closingTime() != null) {
+            Space.validateOperatingHours(candidateOpening, candidateClosing);
+        }
+
+        // 2. 운영시간이 축소되는 경우 현재 이후 유효 점유 슬롯과 충돌하는지 검증 (충돌 시 409
+        // SPACE_OPERATING_HOURS_CONFLICT)
+        boolean isHoursShrunk = candidateOpening.isAfter(space.getOpeningTime())
+                || candidateClosing.isBefore(space.getClosingTime());
+        if (isHoursShrunk) {
+            LocalDateTime now = LocalDateTime.now(clock);
+            boolean hasConflict = occupiedSlotProvider.hasOccupiedSlotsOutsideHours(
+                    spaceId, candidateOpening, candidateClosing, now);
+            if (hasConflict) {
+                throw new BusinessException(ErrorCode.SPACE_OPERATING_HOURS_CONFLICT);
+            }
+        }
 
         SpaceDetailResponse beforeSnapshot = SpaceDetailResponse.from(space);
 

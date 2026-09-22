@@ -159,14 +159,6 @@ public class Reservation {
     }
 
     /**
-     * 관리자에 의한 강제 취소.
-     */
-    public void cancelByAdmin() {
-        this.status = ReservationStatus.CANCELLED;
-        this.cancelledAt = LocalDateTime.now();
-    }
-
-    /**
      * 종료된 상태인지 확인 (COMPLETED/EXPIRED/NO_SHOW/CANCELLED).
      */
     public boolean isTerminalState() {

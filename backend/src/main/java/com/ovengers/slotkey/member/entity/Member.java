@@ -43,7 +43,6 @@ public class Member extends BaseTimeEntity {
         this.status = MemberStatus.ACTIVE;
     }
 
-
     public void updateStatus(MemberStatus status) {
         this.status = status;
     }

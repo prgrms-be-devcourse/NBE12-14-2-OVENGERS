@@ -3,8 +3,6 @@ package com.ovengers.slotkey.reservation.service;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.reservation.entity.ReservationSlot;
-import com.ovengers.slotkey.reservation.entity.ReservationStatus;
-import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationSlotRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -26,7 +24,7 @@ public class ReservationSlotService {
     private static final int SLOT_MINUTES = 30;
 
     private final ReservationSlotRepository reservationSlotRepository;
-    private final ReservationRepository reservationRepository;
+    private final ReservationHoldExpirationService reservationHoldExpirationService;
     private final Clock clock;
 
     /** [start, end) 구간을 30분 단위 슬롯 시작 시각 목록으로 쪼갠다. */
@@ -65,11 +63,8 @@ public class ReservationSlotService {
             return;
         }
         LocalDateTime now = LocalDateTime.now(clock);
-        // 1) 조건부 UPDATE로 EXPIRED 전이(여전히 HELD고 만료 시각이 지난 것만)
-        reservationRepository.expireHeldReservations(
-                candidateReservationIds, now, ReservationStatus.HELD, ReservationStatus.EXPIRED);
-        // 2) 위에서 실제로 EXPIRED가 된 것들의 슬롯만 삭제(재확인 서브쿼리로 안전하게)
-        reservationSlotRepository.deleteSlotsOfExpiredReservations(
-                candidateReservationIds, ReservationStatus.EXPIRED);
+        for (Long candidateId : candidateReservationIds) {
+            reservationHoldExpirationService.expireHold(candidateId, now);
+        }
     }
 }

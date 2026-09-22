@@ -1,7 +1,6 @@
 package com.ovengers.slotkey.member.repository;
 
 import com.ovengers.slotkey.member.entity.Member;
-
 import com.ovengers.slotkey.member.entity.MemberStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,7 +13,6 @@ import java.util.Optional;
 public interface MemberRepository extends JpaRepository<Member, Long> {
     Optional<Member> findByEmail(String email);
     boolean existsByEmail(String email);
-
 
     @Query("SELECT m FROM Member m " +
             "WHERE (:status IS NULL OR m.status = :status) " +

@@ -16,7 +16,6 @@ public record MemberResponse(
 
     public MemberResponse(Member member) {
         this(
-
                 member.getId(),
                 member.getEmail(),
                 member.getNickname(),

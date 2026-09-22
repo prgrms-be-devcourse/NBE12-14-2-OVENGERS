@@ -49,6 +49,25 @@ public final class ReservationTimePolicy {
         }
     }
 
+    public static void validateExtension(LocalDateTime currentEndTime, LocalDateTime newEndTime, LocalTime closing) {
+        if (currentEndTime == null || newEndTime == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "연장 시각 정보는 필수입니다.");
+        }
+        if (!newEndTime.isAfter(currentEndTime)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "연장 시각은 기존 종료 시각보다 늦어야 합니다.");
+        }
+        if (!isSlotAligned(currentEndTime) || !isSlotAligned(newEndTime)) {
+            throw new BusinessException(ErrorCode.INVALID_RESERVATION_TIME, "예약 시간은 30분 단위여야 합니다.");
+        }
+        if (!currentEndTime.toLocalDate().equals(newEndTime.toLocalDate())) {
+            throw new BusinessException(ErrorCode.INVALID_RESERVATION_TIME, "연장은 기존 예약과 같은 날짜 내에서만 가능합니다.");
+        }
+        LocalTime newEnd = newEndTime.toLocalTime();
+        if (newEnd.isAfter(closing) || (newEnd.equals(LocalTime.MIDNIGHT) && !closing.equals(LocalTime.MIDNIGHT))) {
+            throw new BusinessException(ErrorCode.INVALID_RESERVATION_TIME, "공간 운영시간 내에서만 연장할 수 있습니다.");
+        }
+    }
+
     private static boolean isSlotAligned(LocalDateTime time) {
         return time.getMinute() % SLOT_MINUTES == 0
                 && time.getSecond() == 0

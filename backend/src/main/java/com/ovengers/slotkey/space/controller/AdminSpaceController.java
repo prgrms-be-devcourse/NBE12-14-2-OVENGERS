@@ -1,7 +1,6 @@
 package com.ovengers.slotkey.space.controller;
 
 import com.ovengers.slotkey.global.common.response.ApiResponse;
-
 import com.ovengers.slotkey.global.common.response.PageResponse;
 import com.ovengers.slotkey.global.security.AuthPrincipal;
 import com.ovengers.slotkey.space.authorization.SpaceAuthorizationService;
@@ -20,6 +19,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+
 
 @RestController
 @RequestMapping("/api/v1/admin")

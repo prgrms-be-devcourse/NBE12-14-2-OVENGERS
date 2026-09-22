@@ -29,7 +29,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 import com.ovengers.slotkey.reservation.dto.response.ReservationListResponse;
 /**
  * 본인 예약 API. SecurityConfig에서 이 경로는 anyRequest().authenticated()로 이미
@@ -112,13 +111,11 @@ public class ReservationController {
 
     /** 본인 예약 목록 (최신 시작 시각 순). */
     @GetMapping
-
     public ResponseEntity<ApiResponse<Page<ReservationListResponse>>> getMyReservations(
             @CurrentMember AuthPrincipal principal,
             @ModelAttribute ReservationSearchCondition condition,
             Pageable pageable
     ) {
-
         Page<ReservationListResponse> response =
                 reservationQueryService.getMyReservations(
                         principal.memberId(),
