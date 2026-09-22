@@ -4,9 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ovengers.slotkey.global.common.response.ApiResponse;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.global.security.jwt.JwtProvider;
-import com.ovengers.slotkey.member.entity.Member;
-import com.ovengers.slotkey.member.entity.MemberStatus;
-import com.ovengers.slotkey.member.repository.MemberRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,6 +14,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
+import com.ovengers.slotkey.member.entity.MemberRole;
 
 import java.io.IOException;
 import java.util.Map;
@@ -26,7 +24,6 @@ import java.util.Set;
 public class CustomAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtProvider jwtProvider;
-    private final MemberRepository memberRepository;
     private final ObjectMapper objectMapper;
 
     // 액세스 토큰 검사를 생략할 POST 요청
@@ -83,33 +80,16 @@ public class CustomAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // 4. 검증된 토큰에서 회원 ID 추출
-        Long memberId = extractMemberId(payload);
+        // 4. 검증된 JWT 정보로 인증 정보 생성
+        // 검증된 JWT 정보로 인증한다. 회원 DB는 조회하지 않는다.
+        AuthPrincipal principal = extractPrincipal(payload);
 
-        if (memberId == null) {
+        if (principal == null) {
             writeError(response, ErrorCode.INVALID_ACCESS_TOKEN);
             return;
         }
 
-        // 5. DB에서 현재 회원 정보 조회
-        Member member = memberRepository.findById(memberId)
-                .orElse(null);
-
-        if (member == null) {
-            writeError(response, ErrorCode.INVALID_ACCESS_TOKEN);
-            return;
-        }
-
-        // 6. 정지·탈퇴 계정 차단
-        if (member.getStatus() != MemberStatus.ACTIVE) {
-            writeError(response, ErrorCode.ACCOUNT_INACTIVE);
-            return;
-        }
-
-        // 7. 확인된 회원 정보를 AuthPrincipal에 담기
-        AuthPrincipal principal = new AuthPrincipal(member);
-
-        // 8. Spring Security에서 사용할 인증 객체 생성
+        // 5. Spring Security에서 사용할 인증 객체 생성
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(
                         principal,
@@ -117,30 +97,45 @@ public class CustomAuthenticationFilter extends OncePerRequestFilter {
                         principal.getAuthorities()
                 );
 
-        // 9. 이번 요청의 인증 결과 등록
+        // 6. 이번 요청의 인증 결과 등록
         SecurityContext context =
                 SecurityContextHolder.createEmptyContext();
 
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
 
-        // 10. 다음 필터로 이동
+        // 7. 다음 필터로 이동
         // 이후 Spring Security가 API 접근 권한을 검사한다.
         filterChain.doFilter(request, response);
     }
 
-    // JWT의 id를 Long으로 변환한다.
-    private Long extractMemberId(Map<String, Object> payload) {
+    // JWT에 필요한 정보가 없거나 형식이 잘못되면 인증하지 않는다.
+    private AuthPrincipal extractPrincipal(Map<String, Object> payload) {
         Object id = payload.get("id");
+        Object email = payload.get("email");
+        Object role = payload.get("role");
 
-        if (id == null) {
+        if (!(id instanceof Number)
+                || !(email instanceof String emailValue)
+                || emailValue.isBlank()
+                || !(role instanceof String roleValue)
+                || !(payload.get("exp") instanceof Number)) {
             return null;
         }
 
         try {
             long memberId = Long.parseLong(id.toString());
-            return memberId > 0 ? memberId : null;
-        } catch (NumberFormatException e) {
+
+            if (memberId <= 0) {
+                return null;
+            }
+
+            return new AuthPrincipal(
+                    memberId,
+                    emailValue,
+                    MemberRole.valueOf(roleValue)
+            );
+        } catch (IllegalArgumentException e) {
             return null;
         }
     }

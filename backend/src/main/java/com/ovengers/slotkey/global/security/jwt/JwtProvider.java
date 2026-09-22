@@ -21,7 +21,8 @@ public class JwtProvider {
                 expireMillis,
                 Map.of(
                         "id", member.getId(),
-                        "email", member.getEmail()
+                        "email", member.getEmail(),
+                        "role", member.getRole().name()
                 )
         );
     }

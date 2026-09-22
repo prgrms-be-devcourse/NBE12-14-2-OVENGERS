@@ -5,7 +5,6 @@ import com.ovengers.slotkey.global.common.response.ApiResponse;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.global.security.CustomAuthenticationFilter;
 import com.ovengers.slotkey.global.security.jwt.JwtProvider;
-import com.ovengers.slotkey.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,7 +22,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtProvider jwtProvider;
-    private final MemberRepository memberRepository;
     private final ObjectMapper objectMapper;
 
     @Bean
@@ -33,7 +31,6 @@ public class SecurityConfig {
         CustomAuthenticationFilter customAuthenticationFilter =
                 new CustomAuthenticationFilter(
                         jwtProvider,
-                        memberRepository,
                         objectMapper
                 );
 
