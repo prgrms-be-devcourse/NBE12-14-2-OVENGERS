@@ -8,8 +8,8 @@
 
 - Base URL: `/api/v1` (예: `/spaces` → 실제로는 `/api/v1/spaces`)
   - 출입(§7) API도 `/api/v1`로 통일됨(2026-09-17, 기존 `/api`).
-- 인증: Access Token(JWT, `Authorization: Bearer`), Refresh Token(임의 문자열, 재발급 전용 엔드포인트에서만 사용, 쿠키 전달 시 HttpOnly/Secure/SameSite)
-- JWT 클레임은 `id`, `email`, 만료 시각을 포함한다. 역할·상태는 넣지 않고 **모든 보호 API가 요청 시점에 DB에서 재조회**한다.
+- 인증: Access Token(JWT, `Authorization: Bearer`), Refresh Token(DB 저장, `POST /auth/refresh`, `POST /auth/logout`에서 HttpOnly 쿠키로 전달)
+- JWT 페이로드는 `id`, `email`, `role`, 만료 시각(`exp`)을 포함한다. 보호 API 요청 시 서명과 만료 시각을 검증하여 인증하며, **매 요청마다 회원 DB를 재조회하지 않는다**. 회원이 정지되어도 기존 Access Token은 만료 전까지 유효하지만, 토큰 재발급(`POST /auth/refresh`) 시 DB 조회를 거쳐 `ACCOUNT_INACTIVE`(403)로 차단된다.
 - 인증 불필요 API: 회원가입, 로그인, 토큰 재발급, 공간 목록/상세 조회, 슬롯 가용성 조회.
 - 공통 응답: `{ status, code, message, data }` (성공 SUCCESS/OK, 실패 시 data는 항상 null)
 - 페이지네이션: `page`(0-base, 기본 0), `size`(기본 20, 최대 100) → `{ content, page, size, totalElements, totalPages }`
@@ -23,38 +23,37 @@
 | --- | --- | --- |
 | 200 | 조회/처리 성공 | 목록·상세, 취소 성공 |
 | 201 | 생성 성공 | 예약(HOLD) 생성, 공간 등록, 도어 토큰 발급 |
-| 400 | 요청 형식 오류 | 필수 필드 누락, 형식 위반 |
+| 400 | 요청 형식 오류 | 필수 필드 누락, 형식 위반, 30분 단위 위반, 가격 단위 위반 |
 | 401 | 인증 실패 | 토큰 없음/만료/위조 |
-| 403 | 인가 실패 | 역할·소유권 불충분 |
+| 403 | 인가 실패 | 역할·소유권 불충분, 정지 계정 |
 | 404 | 자원 없음 | 존재하지 않는 spaceId/reservationId |
-| 409 | 상태 충돌 | 슬롯 중복, 이미 취소/만료된 예약에 대한 요청, 홀드 만료 후 결제 시도, `space.version` 불일치(가격 확인 실패) |
-| 422 | 정책 위반 | 크레딧 잔액 부족, 운영시간 외, 30분 배수 위반, 자기 자신에게 크레딧 지급 |
+| 409 | 상태 충돌 | 슬롯 중복, 이미 취소/만료된 예약에 대한 요청, 홀드 만료 후 결제 시도, `space.version` 불일치(가격 확인 실패), 공간 운영시간 축소 충돌 |
+| 422 | 정책 위반 | 크레딧 잔액 부족, 연장 불가 상태, 관리자 대상 정지/복구 시도, 자기 자신에게 크레딧 지급 |
 
 ## 2. 인증 (Auth)
 
 | API | 메서드/경로 | 인증 | 비고 |
 | --- | --- | --- | --- |
-| 회원가입 | `POST /auth/signup` | 불필요 | `role`은 요청으로 받지 않음, 서버가 항상 MEMBER로 생성. 가입과 동일 트랜잭션에서 `SIGNUP_GRANT` 크레딧 지급(`app.credit.signup-grant`). 오류: VALIDATION_FAILED(400), EMAIL_ALREADY_EXISTS(409) |
-| 로그인 | `POST /auth/login` | 불필요 | 오류: INVALID_CREDENTIALS(401), MEMBER_SUSPENDED(403) |
-| 토큰 재발급 | `POST /auth/refresh` | 불필요(refreshToken 바디) | 기존 토큰 즉시 폐기 후 회전. 오류: INVALID_REFRESH_TOKEN(401) |
-| 로그아웃 | `POST /auth/logout` | 필요 | 해당 Refresh Token만 폐기, Access Token은 만료까지 유효 |
+| 회원가입 | `POST /auth/signup` | 불필요 | `role`은 요청으로 받지 않음, 서버가 항상 USER로 생성. 가입과 동일 트랜잭션에서 `SIGNUP_GRANT` 크레딧 지급(`app.credit.signup-grant`). 오류: VALIDATION_FAILED(400), EMAIL_ALREADY_EXISTS(409) |
+| 로그인 | `POST /auth/login` | 불필요 | 성공 시 Access Token은 본문, Refresh Token은 HttpOnly 쿠키로 반환. 오류: INVALID_CREDENTIALS(401), ACCOUNT_INACTIVE(403) |
+| 토큰 재발급 | `POST /auth/refresh` | 불필요(refreshToken 쿠키) | 저장된 Refresh Token DB 검증 후 새 Access Token 본문 반환 (Refresh Token 회전은 미구현). 정지 계정은 재발급 차단. 오류: INVALID_REFRESH_TOKEN(401), ACCOUNT_INACTIVE(403) |
+| 로그아웃 | `POST /auth/logout` | 불필요(refreshToken 쿠키) | 해당 Refresh Token DB 폐기 후 쿠키 만료(maxAge 0) 응답. 204 No Content |
 
 ## 3. 회원 (Member)
 
 - `GET /members/me` (인증 필요): 본인 정보 조회. `balance`(크레딧 잔액) 포함
-> ⚠️ **2026-09-17 기준 아래 관리자 회원 API 3개(suspend/restore/credits)는 컨트롤러 미구현.** 현재 존재하는 회원 API는 `GET /members/me`뿐이다.
-
-- `PATCH /admin/members/{memberId}/suspend` (PLATFORM_ADMIN): `reason` 1~500자 필수, 대상은 MEMBER만, audit_log 기록. 오류: FORBIDDEN_ROLE(403), TARGET_IS_ADMIN(422), MEMBER_NOT_FOUND(404)
-- `PATCH /admin/members/{memberId}/restore` (PLATFORM_ADMIN): suspend와 동일 구조, status → ACTIVE
-- `POST /admin/members/{memberId}/credits` (PLATFORM_ADMIN): 크레딧 지급(`ADMIN_GRANT`). `amount`(양수), `reason` 1~500자 필수. **자기 자신에게는 지급 불가**(`actor_id != member_id`). **지급만 가능, 회수 없음.** `credit_transaction`과 `audit_log` 양쪽에 기록. 오류: VALIDATION_FAILED(400), FORBIDDEN_ROLE(403), SELF_GRANT_NOT_ALLOWED(422), MEMBER_NOT_FOUND(404)
+- `GET /admin/members` (ADMIN): 관리자 회원 목록 조회. 쿼리 파라미터 `status`, `keyword`, `page`, `size` 지원.
+- `PATCH /admin/members/{memberId}/suspend` (ADMIN): `reason` 1~500자 필수, 대상은 USER만, `audit_logs` 기록. 오류: FORBIDDEN_ROLE(403), TARGET_IS_ADMIN(422), MEMBER_NOT_FOUND(404)
+- `PATCH /admin/members/{memberId}/restore` (ADMIN): suspend와 동일 구조, status → ACTIVE. `audit_logs` 기록.
+- `POST /admin/members/{memberId}/credits` (ADMIN): 크레딧 지급(`ADMIN_GRANT`). `amount`(양수), `reason` 1~500자 필수. **자기 자신에게는 지급 불가**(`actor_id != member_id`). **지급만 가능, 회수 없음.** `credit_transaction`과 `audit_logs` 양쪽에 기록. 오류: VALIDATION_FAILED(400), FORBIDDEN_ROLE(403), SELF_GRANT_NOT_ALLOWED(422), MEMBER_NOT_FOUND(404)
 
 ## 4. 공간 (Space)
 
 - `GET /spaces` (인증 불필요): `page`, `size`, `keyword`. `status=ACTIVE`인 공간만 기본 노출
 - `GET /spaces/{spaceId}` (인증 불필요): 상세 (+ description, `version`). 오류: SPACE_NOT_FOUND(404)
 - `GET /spaces/{spaceId}/slots?date=YYYY-MM-DD`: 운영시간을 30분 단위로 쪼갠 예약 가능 여부. **참고용 스냅샷**(실제 확정 여부는 슬롯 INSERT 시점의 UNIQUE 제약으로만 판정 — 사전 조회는 화면 표시용일 뿐 규칙이 아니다)
-- `POST /admin/spaces` (ADMIN): `pricePerSlot`은 100원 단위 양수, `openingTime`/`closingTime`은 30분 경계이며 시작이 종료보다 빨라야 한다. 등록자 ID·생성 시각은 서버가 설정하고 `audit_logs`에 기록한다. 오류: INVALID_OPERATING_HOURS(422), INVALID_PRICE_UNIT(422)
-- `PATCH /admin/spaces/{spaceId}` (ADMIN): 부분 수정 + status(ACTIVE/INACTIVE). 운영시간 부분 수정도 기존 반대편 시각과 함께 30분 경계·순서를 검증한다. 가격 변경 시 `version` 증가(낙관적 비교용) — 이미 확정된 예약의 스냅샷/총액에는 영향 없음. INACTIVE로 바꿔도 기존 예약 유지, 신규 예약만 차단. 오류: SPACE_NOT_FOUND(404), INVALID_OPERATING_HOURS(422), INVALID_PRICE_UNIT(422)
+- `POST /admin/spaces` (ADMIN): `pricePerSlot`은 100원 단위 양수, `openingTime`/`closingTime`은 30분 경계이며 시작이 종료보다 빨라야 한다. 등록자 ID·생성 시각은 서버가 설정하고 `audit_logs`에 기록한다(`REGISTER_SPACE`). 오류: INVALID_OPERATING_HOURS(400), INVALID_PRICE_UNIT(400)
+- `PATCH /admin/spaces/{spaceId}` (ADMIN): 부분 수정 + status(ACTIVE/INACTIVE). 배타 잠금(`PESSIMISTIC_WRITE`) 하에 실행. 운영시간 부분 수정도 기존 반대편 시각과 함께 30분 경계·순서를 검증한다. 운영시간 축소 시 현재 이후의 유효 점유 슬롯(`HELD`, `CONFIRMED`, `IN_USE`, `COMPLETED`) 중 새 운영시간 밖 슬롯이 존재하면 `SPACE_OPERATING_HOURS_CONFLICT`(409)로 거절되며 Space와 Audit 모두 변경되지 않는다. 가격 변경 시 `version` 증가(비즈니스 버전) — 이미 확정된 예약의 스냅샷/총액에는 영향 없음. INACTIVE로 바꿔도 기존 예약 유지, 신규 예약만 차단. 수정 완료 시 `audit_logs`에 기록한다(`MODIFY_SPACE`). 오류: SPACE_NOT_FOUND(404), INVALID_OPERATING_HOURS(400), INVALID_PRICE_UNIT(400), SPACE_OPERATING_HOURS_CONFLICT(409)
 
 ## 5. 예약 · 크레딧 (Reservation & Credit)
 
@@ -103,15 +102,16 @@
 
 요청: 헤더 `Idempotency-Key: <UUID>`(누락 시 400), 바디 `{ "spaceVersion": 2 }`. 응답: **200**, `data` = `ReservationResponse`(`status: "CONFIRMED"`).
 
-헤더 `Idempotency-Key` 필수(돈이 움직이는 지점). 아래 전 과정을 **하나의 트랜잭션**으로 처리하며, 어느 단계에서든 실패하면 전체 롤백한다(예약은 `HOLD`로 남아 만료 전까지 재시도 가능):
+헤더 `Idempotency-Key` 필수(돈이 움직이는 지점). 멱등성 캐시 확인 후, 아래 전 과정을 **하나의 트랜잭션**으로 처리하며 어느 단계에서든 실패하면 전체 롤백한다(예약은 `HOLD`로 남아 만료 전까지 재시도 가능):
 
-1. 예약자 본인 확인
-2. 요청 바디의 `space.version`을 현재 값과 비교(값이 아니라 **버전**으로 비교 — ABA 문제 방지). 다르면 즉시 거절(409), 이후 단계 진행하지 않음
-3. 크레딧 조건부 차감 `WHERE balance >= :amount`(서버가 직접 읽은 금액으로 차감, 클라이언트가 보낸 금액은 신뢰하지 않음) → 영향 행 0이면 422(`INSUFFICIENT_BALANCE`)
-4. `WHERE id=:id AND status='HELD' AND :now < hold_expires_at` 조건부 UPDATE로 `CONFIRMED` 전이 → 영향 행 0이면 409(만료 또는 이미 처리됨; 3에서 차감한 크레딧도 함께 롤백)
-5. `credit_transaction`(`RESERVATION_CHARGE`) 기록 + 상태 이력 저장
+1. **소유권 선검증**: 잠금 순서(`Space → Reservation`) 준수를 위해 `reservationId`로부터 `spaceId`와 `memberId`를 먼저 투영 조회하여 본인 예약 여부를 검증(`FORBIDDEN_NOT_OWNER`). 비소유자의 불필요한 락 획득을 차단.
+2. **Space 공유 잠금 및 버전 검증**: `spaceId`로 Space 공유 잠금(`findByIdForShare`)을 획득하고, 요청의 `spaceVersion`과 비교. 다르면 즉시 `SPACE_VERSION_MISMATCH`(409)로 거절.
+3. **Reservation 조회**: 일반 조회(`findById`)로 예약 정보와 결제 금액 확인.
+4. **크레딧 차감**: `creditService.charge()`로 크레딧 차감(잔액 부족 시 `INSUFFICIENT_BALANCE`(422)).
+5. **조건부 상태 전이**: `confirmIfHeldAndNotExpired(reservationId, now, HELD, CONFIRMED)` 조건부 UPDATE로 유효한 HOLD에 한해 `CONFIRMED` 전이. 영향 행 0이면 `RESERVATION_STATE_CONFLICT`(409, HOLD 만료 또는 이미 처리됨)를 던져 크레딧 차감을 포함한 트랜잭션 전체를 롤백.
+6. 상태 이력 저장 및 멱등성 응답 캐시 저장.
 
-오류: RESERVATION_NOT_FOUND(404), FORBIDDEN_NOT_OWNER(403), SPACE_VERSION_MISMATCH(409), INSUFFICIENT_BALANCE(422), RESERVATION_STATE_CONFLICT(409, 만료/이미결제/취소됨)
+오류: RESERVATION_NOT_FOUND(404), FORBIDDEN_NOT_OWNER(403), SPACE_VERSION_MISMATCH(409), INSUFFICIENT_BALANCE(422), RESERVATION_STATE_CONFLICT(409, 만료/이미결제/취소됨), IDEMPOTENCY_KEY_REQUIRED(400)
 
 ### 5-3. 조회
 
@@ -135,9 +135,15 @@
 
 요청 바디: `{ "expectedEndTime": "2026-09-20T15:00:00", "newEndTime": "2026-09-20T16:00:00" }` (`expectedEndTime` = 클라이언트가 알고 있는 현재 종료 시각). 응답: **200**, `ReservationResponse`.
 
-예약자 본인만. `now < end_time`인 경우만 가능(끝난 예약을 되살리는 것은 연장이 아니라 새 예약). 단일 트랜잭션: `end_time` 낙관적 검사(`WHERE id=:id AND end_time=:expectedEnd`) → 추가 슬롯 INSERT(UNIQUE) → 추가 금액을 **원 예약의 `price_per_slot_snapshot`** 기준으로 크레딧 차감 → `reservation.end_time` UPDATE → 상태 이력 저장. 남의 점유가 `HELD`인지 `CONFIRMED`인지는 구분하지 않는다(만료된 HELD만 예외).
+예약자 본인만. `now < end_time`인 경우만 가능(끝난 예약을 되살리는 것은 연장이 아니라 새 예약). 단일 트랜잭션 처리:
+1. **spaceId 투영 조회**: 잠금 순서(`Space → Reservation`) 준수를 위해 `reservationId`로부터 `spaceId`를 먼저 투영 조회.
+2. **Space 공유 잠금**: `spaceRepository.findByIdForShare(spaceId)`로 Space 공유 잠금 획득.
+3. **Reservation 배타 잠금**: `reservationRepository.findByIdForUpdate(reservationId)`로 비관적 배타 잠금 획득.
+4. **검증**: 소유권(`memberId`), 예약 상태(`CONFIRMED` 또는 `IN_USE`), 아직 종료되지 않음(`now < endTime`), `expectedEndTime` 일치 여부 확인. 운영시간 내, 30분 단위, 동일 날짜 등 연장 시간 정책 검증.
+5. **슬롯 확보 및 크레딧 차감**: 추가 슬롯 INSERT(`secureSlots`, 충돌 시 409). 원 예약의 `price_per_slot_snapshot` 기준으로 추가 금액 크레딧 차감.
+6. **조건부 UPDATE**: `extendIfEndTimeMatches`로 종료 시각과 총액 갱신. 영향 행 0이면 409 롤백.
 
-오류: FORBIDDEN_NOT_OWNER(403), RESERVATION_NOT_FOUND(404), INVALID_RESERVATION_TIME(400, 30분 단위 아님·날짜 넘김·운영 종료 초과), VALIDATION_FAILED(400, 새 종료 시각이 기존보다 늦지 않음), RESERVATION_SLOT_CONFLICT(409, 연장 슬롯 일부/전부 점유 — 응답에 가능한 최대 종료 시각 힌트 포함), RESERVATION_STATE_CONFLICT(409, `expectedEndTime` 불일치·동시 요청 경합), RESERVATION_EXTEND_NOT_ALLOWED(422, 연장 불가 상태·이미 종료된 예약), INSUFFICIENT_BALANCE(422)
+오류: FORBIDDEN_NOT_OWNER(403), RESERVATION_NOT_FOUND(404), INVALID_RESERVATION_TIME(400, 30분 단위 아님·날짜 넘김·운영 종료 초과), VALIDATION_FAILED(400, 새 종료 시각이 기존보다 늦지 않음), RESERVATION_SLOT_CONFLICT(409, 연장 슬롯 일부/전부 점유), RESERVATION_STATE_CONFLICT(409, `expectedEndTime` 불일치·동시 요청 경합), RESERVATION_EXTEND_NOT_ALLOWED(422, 연장 불가 상태·이미 종료된 예약), INSUFFICIENT_BALANCE(422)
 
 > 실패해도 원 예약은 무손상(기존 슬롯을 건드리지 않음).
 
@@ -153,20 +159,22 @@
 
 ## 6. [관리자] 예약 관리
 
-- `GET /admin/reservations?page=&size=` (PLATFORM_ADMIN): 취소 예약도 목록 포함. 원소 `AdminReservationResponse` = `{ reservationId, memberId, memberEmail, spaceId, spaceName, startTime, endTime, status, totalAmount, createdAt }`. ⚠️ **`date`/`spaceId`/`status` 필터는 현재 미구현**(`AdminReservationSearchCondition`이 빈 클래스) — 프론트는 필터 UI를 비활성화하거나 구현 후 연결
-- `GET /admin/reservations/{reservationId}` (PLATFORM_ADMIN): 목록 필드 + `pricePerSlotSnapshot`, `cancelledAt`, `checkedInAt`, `checkedOutAt`, `statusHistory[]`, `accessLogs: [{ accessLogId, attemptedAt, result, reasonCode }]`
-- `POST /admin/reservations/{reservationId}/force-cancel` (PLATFORM_ADMIN): 바디 `{ "reason": "..." }` 1~500자 필수, 응답 `AdminReservationResponse`. 취소 가능 상태는 `HELD`/`CONFIRMED`/`IN_USE`(그 외 종료 상태는 409). 조회 시점 상태 기준 조건부 UPDATE(`WHERE id=:id AND status=:조회 시점 상태`) → 같은 트랜잭션에서 상태 이력(사유 포함) + 슬롯 삭제 + 활성 토큰 revoke + **크레딧 환불(`CONFIRMED`/`IN_USE`는 `total_amount` 전액 `REFUND`, 위약금 없음 / `HELD`는 환불 없음)** + audit_log 기록. 오류: RESERVATION_NOT_FOUND(404), RESERVATION_STATE_CONFLICT(409, 종료 상태이거나 동시 요청에 밀림). **관리자도 이 API 외의 경로로 타인 예약을 취소하거나 도어 토큰을 발급받을 수 없다** (핵심 차별점)
+- `GET /admin/reservations?page=&size=` (ADMIN): 취소 예약도 목록 포함. 원소 `AdminReservationResponse` = `{ reservationId, memberId, memberEmail, spaceId, spaceName, startTime, endTime, status, totalAmount, createdAt }`. ⚠️ **`date`/`spaceId`/`status` 필터는 현재 미구현**(`AdminReservationSearchCondition`이 빈 클래스) — 프론트는 필터 UI를 비활성화하거나 구현 후 연결
+- `GET /admin/reservations/{reservationId}` (ADMIN): 목록 필드 + `pricePerSlotSnapshot`, `cancelledAt`, `checkedInAt`, `checkedOutAt`, `statusHistory[]`, `accessLogs: [{ accessLogId, attemptedAt, result, reasonCode }]`
+- `POST /admin/reservations/{reservationId}/force-cancel` (ADMIN): 바디 `{ "reason": "..." }` 1~500자 필수, 응답 `AdminReservationResponse`. 취소 가능 상태는 `HELD`/`CONFIRMED`/`IN_USE`(그 외 종료 상태는 409). 조회 시점 상태 기준 조건부 UPDATE(`WHERE id=:id AND status=:조회 시점 상태`) → 같은 트랜잭션에서 상태 이력(사유 포함) + 슬롯 삭제 + 활성 토큰 revoke + **크레딧 환불(`CONFIRMED`/`IN_USE`는 `total_amount` 전액 `REFUND`, 위약금 없음 / `HELD`는 환불 없음)** + audit_log 기록. 오류: RESERVATION_NOT_FOUND(404), RESERVATION_STATE_CONFLICT(409, 종료 상태이거나 동시 요청에 밀림). **관리자도 이 API 외의 경로로 타인 예약을 취소하거나 도어 토큰을 발급받을 수 없다** (핵심 차별점)
 
 ## 7. 출입 (Door Access)
 
-> 현재 구현 경로(접두사 `/api/v1`): `POST /reservations/{id}/door-token`, `PATCH /reservations/{id}/access-token/revoke`, `GET /reservations/{id}/access-logs`, `POST /door-access/verify`. **4개 모두 로그인 필요**(verify도 서버가 로그인 회원이 예약자 본인인지 확인). revoke·access-logs는 이 문서에 세부 규칙 미기재 — 담당자 확인 필요.
+> 현재 구현 경로(접두사 `/api/v1`): `POST /reservations/{id}/door-token`, `PATCH /reservations/{id}/access-token/revoke`, `GET /reservations/{id}/access-logs`, `POST /door-access/verify`. **4개 모두 로그인 필요**(verify도 서버가 로그인 회원이 예약자 본인인지 확인).
 
-- `POST /reservations/{reservationId}/door-token` (예약자 본인만): **발급에는 시간 제한이 없다** — `CONFIRMED`이고 `now < end_time`이면 예약 확정 직후부터 언제든 발급 가능(발급은 입장 권한이 아니라 신분증을 받는 것일 뿐, `start` 전엔 문이 열리지 않는다). 기존 활성 토큰은 먼저 폐기 후 재발급. 오류: FORBIDDEN_NOT_OWNER(403, 관리자 포함), RESERVATION_NOT_FOUND(404), RESERVATION_NOT_CONFIRMED(422, RESERVATION_STATE_CONFLICT(409, 같은 예약의 발급 요청이 동시에 겹쳐 활성 토큰 UNIQUE 제약에 밀린 경우 — 재시도하면 새로 발급된다))
-- `POST /door-access/verify`: `{ spaceId, token }`. 검증 순서: ① 해시로 활성 토큰 조회(폐기 토큰은 즉시 거절) ② 예약 상태(`CONFIRMED` 또는 `IN_USE`) 확인, 요청 공간=예약 공간 확인 ③ 시간대 확인 — **최초 체크인: `[start_time, start_time + 15분]`(앞 여유 0분, 시작 시각 정각 허용)**, **재입장: `(checked_in_at, end_time)`(종료 시각 정각은 거절)** ④ 최초 체크인 성공 시 `CONFIRMED → IN_USE` 전이가 부수 효과로 일어남 ⑤ 성공/실패 모두 `door_access_log`에 기록. 거절도 200 + `result: DENY`로 응답. `reasonCode`: TOKEN_NOT_FOUND, TOKEN_REVOKED, RESERVATION_NOT_ACTIVE(취소/완료/노쇼), OUTSIDE_ALLOWED_TIME, SPACE_MISMATCH
+- `POST /reservations/{reservationId}/door-token` (예약자 본인만): **발급에는 시간 제한이 없다** — `CONFIRMED` 또는 `IN_USE`이고 `now < end_time`이면 예약 확정 직후부터 언제든 발급 가능(발급은 입장 권한이 아니라 신분증을 받는 것일 뿐, `start` 전엔 문이 열리지 않는다). 기존 활성 토큰은 먼저 폐기 후 재발급. 오류: FORBIDDEN_NOT_OWNER(403, 관리자 포함), RESERVATION_NOT_FOUND(404), RESERVATION_STATE_CONFLICT(409, 같은 예약의 발급 요청이 동시에 겹쳐 활성 토큰 UNIQUE 제약에 밀린 경우 — 재시도하면 새로 발급된다)
+- `PATCH /reservations/{reservationId}/access-token/revoke` (예약자 본인만): 해당 예약에 발급된 활성 출입 토큰을 즉시 폐기. 오류: FORBIDDEN_NOT_OWNER(403), RESERVATION_NOT_FOUND(404), ACTIVE_ACCESS_TOKEN_NOT_FOUND(404)
+- `GET /reservations/{reservationId}/access-logs` (예약자 본인만): 해당 예약의 출입 기록 목록 조회. 오류: FORBIDDEN_NOT_OWNER(403), RESERVATION_NOT_FOUND(404)
+- `POST /door-access/verify`: `{ spaceId, token }`. 검증 순서: ① 해시로 활성 토큰 조회(폐기 토큰은 즉시 거절) ② 예약 상태(`CONFIRMED` 또는 `IN_USE`) 확인, 요청 공간=예약 공간 확인 ③ 시간대 확인 — **최초 체크인: `[start_time, start_time + 15분]`(앞 여유 0분, 시작 시각 정각 허용)**, **재입장: `(checked_in_at, end_time)`(종료 시각 정각은 거절)** ④ 최초 체크인 성공 시 `CONFIRMED → IN_USE` 전이가 부수 효과로 일어남 ⑤ 성공/실패 모두 `door_access_log`에 기록. 거절도 200 + `result: DENY`로 응답. `reasonCode`: TOKEN_NOT_FOUND, TOKEN_REVOKED, RESERVATION_NOT_ACTIVE(취소/완료/노쇼), OUTSIDE_ALLOWED_TIME, SPACE_MISMATCH, MEMBER_MISMATCH
 
 > **2026-09-15 정정** (`core-domain-decisions.md` §8): 기존 "발급 30분 전부터, 최초 체크인 시작 전후 30분" 규칙을 대체한다. 발급 시간 제한을 없애고, 최초 체크인은 앞 여유 0분·뒤 15분(`[start, start+15m]`)으로 변경. 15분 내 미체크인은 배치가 `NO_SHOW`로 전이시키며 슬롯은 반환되지만 환불은 없다.
 
-## 7. 관리자 감사 로그 (Admin Audit Log)
+## 8. 관리자 감사 로그 (Admin Audit Log)
 
 - `GET /api/v1/admin/audit-logs` (ADMIN): 관리자 감사 로그 목록 조회.
   - 쿼리 파라미터(필터):
@@ -179,7 +187,7 @@
     - `page` (int, default 0), `size` (int, default 20)
   - 정렬: 클라이언트 sort는 무시하고 서버 고정 `createdAt DESC, id DESC` 적용.
   - 응답: `ApiResponse<PageResponse<AuditLogResponse>>` (`id`, `actorMemberId`, `action`, `targetType`, `targetId`, `reason`, `beforeValue`, `afterValue`, `createdAt`)
-  - 오류: `VALIDATION_FAILED(400)` (날짜 역전 `dateFrom > dateTo` 또는 파라미터 타입 오류), `AUTHENTICATION_REQUIRED(401)`, `ACCESS_DENIED(403)` (USER), `ACCOUNT_INACTIVE(403)` (정지/탈퇴 ADMIN)
+  - 오류: `VALIDATION_FAILED(400)` (날짜 역전 `dateFrom > dateTo` 또는 파라미터 타입 오류), `AUTHENTICATION_REQUIRED(401)`, `ACCESS_DENIED(403)` (USER)
   - 부수효과: 조회 자체는 감사 로그를 남기지 않음.
 
 ## Enum

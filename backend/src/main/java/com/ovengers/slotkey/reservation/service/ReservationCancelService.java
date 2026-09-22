@@ -21,8 +21,8 @@ import java.time.LocalDateTime;
 
 /**
  * 예약 취소(§9, 기획서 "예약 취소" 2026-09-15 갱신). 예약자 본인만 가능하며 시작 이후는
- * 취소할 수 없다(체크아웃으로만 종료). PLATFORM_ADMIN의 강제 취소는 별도 경로
- * (force-cancel, AdminReservationService)로만 처리하며 이 서비스는 다루지 않는다.
+ * 취소할 수 없다(체크아웃으로만 종료). ADMIN의 강제 취소는 별도 경로
+ * (/admin/reservations/{reservationId}/force-cancel)로만 처리하며 이 서비스는 다루지 않는다.
  *
  * 취소와 환불은 하나의 트랜잭션에서 함께 커밋된다 — "취소는 됐는데 환불은 실패"하는
  * 중간 상태가 구조적으로 없으므로 별도의 환불 재처리 큐가 필요 없다(ReservationPaymentConfirmService의

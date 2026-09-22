@@ -30,7 +30,7 @@ public class RefreshTokenService {
         // 2. DB에 저장할 해시 생성
         String tokenHash = hashRefreshToken(rawToken);
 
-        // 3. 만료 시각 설정: 발급 시점부터 7일
+        // 3. 만료 시각 설정: 발급 시점부터 1일
         LocalDateTime expiresAt = LocalDateTime.now().plusDays(1);
 
         // 4. 회원·해시·만료 시각으로 엔티티 생성

@@ -25,9 +25,9 @@ import java.util.List;
  * 하나의 트랜잭션이며, 결제는 이 단계에 없다(구 ReservationCreateService는 1단계 설계
  * 흔적이라 2단계 확정 이후 역할을 HOLD 생성으로 좁히며 이 이름으로 정리했다).
  *
- * 회원 활성 여부는 이 서비스가 다시 확인하지 않는다 — CustomAuthenticationFilter가 요청
- * 시점에 이미 DB에서 회원 상태를 재조회해 ACTIVE가 아니면 요청을 차단하므로, 여기 도달한
- * 시점의 memberId는 이미 활성 회원임이 보장된다.
+ * 회원 활성 여부는 이 서비스가 다시 확인하지 않는다 — CustomAuthenticationFilter가 Access Token
+ * 유효성을 검증한 인증된 사용자이며, 토큰 재발급(refresh) 시점에 계정 상태를 검증하므로
+ * 여기 도달한 시점의 memberId는 유효한 토큰을 보유한 회원이다.
  */
 @Service
 @RequiredArgsConstructor

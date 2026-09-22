@@ -188,15 +188,15 @@ Reservation 배타 락이 있더라도 마지막 조건부 UPDATE를 유지한�
 | 연장 최종 조건부 갱신 | `ReservationRepository.extendIfEndTimeMatches` |
 | 연장 시간 정책 | `ReservationTimePolicy.validateExtension` |
 
-## 검증 범위와 한계
+## 검증 체계와 책임
 
-`03d2d5d6` PR에 기록된 단위 테스트 결과는 다음과 같다.
+동시성 제어는 단위 테스트와 다중 스레드 DB 통합 테스트로 책임을 분리해 검증한다.
 
-- `ReservationPaymentConfirmServiceTest`: 8개 성공
-- `ReservationExtendServiceTest`: 6개 성공
-- 실패·오류·건너뜀 0
-
-이 단위 테스트는 소유권 선검증, 공유 락 호출 여부, version 불일치, 조건부 UPDATE 실패, 연장 시간 경계를 검증한다. Mock 기반 단위 테스트만으로는 실제 MySQL에서 공유·배타 락이 서로 기다리는지 증명할 수 없다. 실제 잠금 대기는 별도의 MySQL Testcontainers 다중 트랜잭션 통합 테스트 책임이며, Audit 교차 도메인 원자성도 이 PR의 범위가 아니다.
+- **단위 테스트 (`ReservationPaymentConfirmServiceTest`, `ReservationExtendServiceTest`)**:
+  - `Clock`을 고정한 상태에서 소유권 선검증, 공유 락 호출 여부, `spaceVersion` 불일치 예외(`SPACE_VERSION_MISMATCH`), 조건부 UPDATE 실패 시 롤백(`RESERVATION_STATE_CONFLICT`), 연장 시간 경계값(`ReservationTimePolicy`)을 빠르게 검증한다.
+- **다중 트랜잭션 통합 테스트 (`SpaceReservationLockIntegrationTest`)**:
+  - Mock 환경에서 검증할 수 없는 실제 MySQL 격리 수준에서의 잠금 대기를 검증한다.
+  - Testcontainers MySQL 환경에서 `CountDownLatch`와 별도 트랜잭션(`REQUIRES_NEW`) 스레드를 사용하여, Space 수정(배타 락)과 결제/연장(공유 락) 간의 상호 대기, 그리고 가격 변경 커밋 후 결제 시도의 버전 불일치 감지를 검증한다.
 
 ## 기존 슬롯 충돌 원칙
 

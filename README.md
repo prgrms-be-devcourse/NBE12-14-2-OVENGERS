@@ -212,32 +212,32 @@ erDiagram
 30분당 요금 5,000원 × 슬롯 2개(60분 이용) = 10,000원
 ```
 
-### 예약 생성
+### 예약 생성 및 결제
 
-예약 생성은 다음 순서로 처리할 예정입니다.
+예약 생성과 결제는 다음 순서로 처리합니다.
 
 ```
 [1단계] POST /reservations (결제 없음)
 회원 상태 확인
   → 공간 상태 및 운영시간 검증
-  → 요청 시간과 약관 동의 검증
+  → 요청 시간 검증
   → 현재 요금 계산
   → 만료된 HOLD 정리 → 슬롯 확보(UNIQUE) → HOLD 생성
 
 [2단계] POST /reservations/{id}/pay (Idempotency-Key 필수)
-space.version 비교 → 크레딧 차감 → CONFIRMED 전이
+소유권 선검증 → Space 공유 잠금 및 space.version 비교 → Reservation 조회 → 크레딧 차감 → 조건부 CONFIRMED 전이
 ```
 
 각 단계는 자신의 트랜잭션 안에서만 원자적입니다. 1단계에서 슬롯 확보가 실패하면 전체 롤백되고, 2단계에서 크레딧 차감이 실패하면 결제만 롤백되어 예약은 `HOLD`로 남아 만료 전까지 재시도할 수 있습니다. *(2026-09-15: `docs/core-domain-decisions.md` §2 반영 — 기존 1단계 즉시결제 흐름을 대체)*
 
-동시 예약 제어 방식은 실제 MySQL 환경에서 검증한 뒤 상세 설계와 테스트 결과를 추가할 예정입니다.
+동시 예약 및 잠금 제어 방식은 MySQL Testcontainers 다중 트랜잭션 통합 테스트(`SpaceReservationLockIntegrationTest`)를 통해 검증하며, 상세 규칙은 `docs/decisions/reservation-concurrency.md`에 정리되어 있습니다.
 
 ### 요청 멱등성
 
 결제 확정 요청(`POST /reservations/{id}/pay`)에는 `Idempotency-Key`를 사용합니다. 슬롯만 확보하는 `POST /reservations`(HOLD 생성)는 결제가 없으므로 대상이 아닙니다.
 
-- 동일 회원이 같은 키와 같은 요청을 다시 전송하면 중복 처리를 방지합니다.
-- 같은 키로 다른 요청 내용을 보내면 충돌로 처리할 예정입니다.
+- 동일 회원이 같은 키와 같은 요청을 다시 전송하면 중복 처리를 방지하고 저장된 응답을 반환합니다.
+- 같은 키로 다른 요청 내용을 보내면 `IDEMPOTENCY_KEY_CONFLICT`(409) 충돌로 처리합니다.
 - 서로 다른 키로 같은 시간을 요청하면 예약 동시성 규칙을 적용합니다.
 
 멱등성은 동일 요청의 재전송을 처리하고, 예약 동시성 제어는 서로 다른 요청 사이의 시간 중복을 처리합니다.
@@ -266,12 +266,12 @@ stateDiagram-v2
 
 ### 출입 키
 
-- 예약자 본인에게만 출입 키를 발급합니다.
-- 회원이 `ACTIVE`이고 예약이 `CONFIRMED`인 경우 발급 가능하며, **발급 자체에는 시간 제한이 없습니다**(확정 직후~종료 전 언제든). 발급은 입장 권한이 아니라 신분증을 받는 것일 뿐, 시작 시각 전엔 문이 열리지 않습니다.
-- 출입 키 원문은 발급 응답에서 한 번만 보여주고 서버에는 해시값만 저장합니다.
-- 재발급 시 기존 활성 키를 폐기하도록 설계합니다.
-- 예약 취소 직후 기존 출입 키를 사용할 수 없도록 합니다.
-- 출입 시 회원, 예약자, 공간, 예약 상태, 키 상태와 현재 시각을 확인합니다. 최초 체크인 성공은 `CONFIRMED → IN_USE` 전이의 부수 효과입니다.
+- 유효한 Access JWT를 보유한 예약자 본인에게만 출입 키를 발급합니다(발급 시 회원 DB를 재조회하지 않음).
+- 예약 상태가 `CONFIRMED` 또는 `IN_USE`이고 아직 종료되지 않은 경우(`now < endTime`) 발급 가능하며, **발급 자체에는 시간 제한이 없습니다**(확정 직후~종료 전 언제든). 발급은 입장 권한이 아니라 신분증을 받는 것일 뿐, 시작 시각 전엔 문이 열리지 않습니다.
+- 출입 토큰 원문은 발급 응답에서 한 번만 보여주고 서버에는 SHA-256 해시값만 저장합니다.
+- 재발급 시 기존 활성 토큰을 폐기합니다.
+- 예약 취소 직후 기존 출입 토큰을 사용할 수 없도록 합니다.
+- 출입 검증 시 회원, 예약자, 공간, 예약 상태, 토큰 상태와 현재 시각을 확인합니다. 최초 체크인 성공은 `CONFIRMED → IN_USE` 전이의 부수 효과입니다.
 - 종료 시 체크아웃(`POST /reservations/{id}/check-out`)으로 마감합니다. 슬롯 반환·환불 없음, 되돌릴 수 없음.
 
 최초 체크인 허용 구간은 `[시작 시각, 시작 시각 + 15분]`(앞 여유 0분), 재입장 허용 구간은 `(최초 체크인 시각, 종료 시각)`입니다. *(2026-09-15: `docs/core-domain-decisions.md` §8 확정 — 기존 "최종 API 명세 확정 후 반영" 상태에서 확정값으로 갱신)*
@@ -283,28 +283,29 @@ stateDiagram-v2
 | `ACTIVE` | 신규 예약 가능 |
 | `INACTIVE` | 신규 예약 불가 |
 
-공간을 `INACTIVE`로 변경해도 이미 확정된 예약은 유지합니다. 미래의 확정 예약과 충돌하는 운영시간 축소는 거절하도록 설계합니다.
+공간을 `INACTIVE`로 변경해도 이미 확정된 예약은 유지합니다. 운영시간 축소 시 현재 이후의 유효 점유 슬롯(`HELD`, `CONFIRMED`, `IN_USE`, `COMPLETED`) 중 새 운영시간 밖 슬롯이 존재하면 `SPACE_OPERATING_HOURS_CONFLICT`(409)로 거절되며 공간 및 감사 로그는 변경되지 않습니다.
 
 ## 🔐 인증 및 인가
 
-JWT를 검증한 뒤 DB에서 현재 회원 상태와 역할을 확인합니다. 예약 관련 작업에서는 예약 소유권과 상태를 추가로 검사합니다.
+Access JWT 페이로드에 포함된 `id`, `email`, `role`, 만료 시각을 검증하여 인증하며, 보호 API 요청마다 회원 DB를 재조회하지 않습니다. 예약 관련 작업에서는 예약 소유권과 상태를 서비스 레이어에서 추가로 검사합니다.
 
-| 작업 | 비회원 | 회원 | 플랫폼 관리자 |
+| 작업 | 비회원 | 회원 (USER) | 관리자 (ADMIN) |
 | --- | --- | --- | --- |
 | 공간 조회 | 가능 | 가능 | 가능 |
 | 본인 예약 생성·조회·취소 | 불가 | 가능 | 동일한 예약자 정책 적용 |
 | 타인 예약 조회 | 불가 | 불가 | 관리자 조회 API에서 가능 |
-| 타인 예약 취소 | 불가 | 불가 | 불가 |
+| 타인 예약 취소 | 불가 | 불가 | 불가 (관리자 force-cancel 별도) |
 | 타인 출입 키 발급 | 불가 | 불가 | 불가 |
 | 공간 등록·수정 | 불가 | 불가 | 가능 |
 | 일반 회원 정지·복구 | 불가 | 불가 | 가능 |
+| 관리자 감사 로그 조회 | 불가 | 불가 | 가능 |
 
 ### 보안 원칙
 
 - 계정 정지는 기존 예약과 결제를 자동 취소하지 않습니다.
-- 정지 처리 후 기존 Access Token으로 보호 API를 호출해도 거절하도록 합니다.
+- 계정이 정지(`SUSPENDED`)되어도 기존 Access Token은 만료 전까지 유효하지만, 토큰 재발급(`POST /api/v1/auth/refresh`) 시 회원 DB 조회를 거쳐 `ACCOUNT_INACTIVE`(403)로 차단됩니다.
 - 회원가입 요청으로 관리자 역할을 지정할 수 없도록 합니다.
-- 일반 회원의 타인 예약 접근은 자원 노출을 줄이기 위해 `404`로 처리할 예정입니다.
+- 일반 회원의 타인 예약 접근은 `FORBIDDEN_NOT_OWNER`(403)로 차단하고, 존재하지 않는 예약 접근은 `RESERVATION_NOT_FOUND`(404)로 처리합니다.
 - 관리자 계정 정지와 역할 변경은 MVP 범위에서 제외합니다.
 - 화면에서 버튼을 숨기는 것과 별개로 서버에서 권한을 검사합니다.
 - 비밀번호는 BCrypt로 해시하여 저장합니다.
@@ -315,7 +316,7 @@ JWT를 검증한 뒤 DB에서 현재 회원 상태와 역할을 확인합니다.
 
 **Base URL:** `/api/v1`
 
-인증이 필요한 API는 다음 헤더를 사용합니다. 토큰 재발급·로그아웃은 요청 본문의 Refresh Token으로 처리합니다.
+인증이 필요한 API는 다음 헤더를 사용합니다. 로그인 시 발급된 Refresh Token은 HttpOnly 쿠키로 관리되며, 토큰 재발급·로그아웃 요청 시 쿠키로 전달됩니다.
 
 ```
 Authorization: Bearer {accessToken}
@@ -325,10 +326,10 @@ Authorization: Bearer {accessToken}
 
 | 영역 | Method | Endpoint | 설명 |
 | --- | --- | --- | --- |
-| 인증 | `POST` | `/auth/signup` | 회원가입 및 자동 로그인 |
-| 인증 | `POST` | `/auth/login` | 로그인 |
-| 인증 | `POST` | `/auth/refresh` | 토큰 재발급 |
-| 인증 | `POST` | `/auth/logout` | 로그아웃 |
+| 인증 | `POST` | `/auth/signup` | 회원가입 및 자동 크레딧 지급 |
+| 인증 | `POST` | `/auth/login` | 로그인 (Access Token 본문, Refresh Token 쿠키 반환) |
+| 인증 | `POST` | `/auth/refresh` | 토큰 재발급 (Refresh Token 쿠키 검증 후 새 Access Token 발급) |
+| 인증 | `POST` | `/auth/logout` | 로그아웃 (Refresh Token 폐기 및 쿠키 만료) |
 | 회원 | `GET` | `/members/me` | 본인 정보 조회 |
 | 공간 | `GET` | `/spaces` | 공간 목록 및 날짜별 예약 현황 조회 |
 | 공간 | `GET` | `/spaces/{spaceId}` | 공간 상세 조회 |
@@ -340,25 +341,30 @@ Authorization: Bearer {accessToken}
 | 예약 | `POST` | `/reservations/{reservationId}/cancel` | 본인 예약 취소 |
 | 예약 | `POST` | `/reservations/{reservationId}/extend` | 본인 예약 연장 |
 | 예약 | `POST` | `/reservations/{reservationId}/check-out` | 체크아웃 |
-| 출입 | `POST` | `/reservations/{reservationId}/access-keys` | 출입 키 발급·재발급 |
-| 출입 | `POST` | `/access-attempts` | 최초 체크인 및 재입장 검증 |
-| 관리자 | `POST` | `/admin/members/{memberId}/credits` | 크레딧 지급 |
+| 출입 | `POST` | `/reservations/{reservationId}/door-token` | 출입 토큰 발급·재발급 |
+| 출입 | `PATCH` | `/reservations/{reservationId}/access-token/revoke` | 출입 토큰 폐기 |
+| 출입 | `GET` | `/reservations/{reservationId}/access-logs` | 출입 기록 조회 |
+| 출입 | `POST` | `/door-access/verify` | 최초 체크인 및 재입장 검증 |
 | 관리자 | `GET` | `/admin/spaces` | 전체 공간 조회 |
 | 관리자 | `POST` | `/admin/spaces` | 공간 등록 |
 | 관리자 | `GET` | `/admin/spaces/{spaceId}` | 공간 수정용 상세 조회 |
-| 관리자 | `PUT` | `/admin/spaces/{spaceId}` | 공간 정보 전체 수정 |
+| 관리자 | `PATCH` | `/admin/spaces/{spaceId}` | 공간 정보 부분 수정 |
 | 관리자 | `GET` | `/admin/reservations` | 전체 예약 조회 |
 | 관리자 | `GET` | `/admin/reservations/{reservationId}` | 예약 및 출입 이력 조회 |
 | 관리자 | `POST` | `/admin/reservations/{reservationId}/force-cancel` | 사유를 기록한 예약 강제 취소 |
-| 관리자 | `GET` | `/admin/members` | 회원 목록 및 최근 상태 변경 이력 조회 |
-| 관리자 | `PATCH` | `/admin/members/{memberId}/status` | 일반 회원 정지·복구 |
+| 관리자 | `GET` | `/admin/members` | 회원 목록 조회 |
+| 관리자 | `PATCH` | `/admin/members/{memberId}/suspend` | 일반 회원 정지 |
+| 관리자 | `PATCH` | `/admin/members/{memberId}/restore` | 정지 회원 복구 |
+| 관리자 | `POST` | `/admin/members/{memberId}/credits` | 크레딧 지급 |
+| 관리자 | `GET` | `/admin/audit-logs` | 관리자 감사 로그 목록 조회 |
+
 - 공간 조회는 비로그인 상태에서도 가능합니다.
 - 결제 확정(`/pay`) 요청에는 중복 처리를 방지하는 `Idempotency-Key` 헤더가 필수입니다(예약 생성 자체에는 결제가 없어 불필요).
-- 본인 예약 조회·취소·연장·출입 키 발급·체크아웃은 예약자 본인만 가능합니다.
+- 본인 예약 조회·취소·연장·출입 토큰 발급·체크아웃은 예약자 본인만 가능합니다.
 - 관리자 강제 취소는 별도 관리자 API에서 사유와 감사 로그를 기록하여 처리합니다.
 - 결제(크레딧 차감)는 예약 생성과 별도 단계(`/pay`)에서 처리하며, 취소 시 환급은 취소와 같은 트랜잭션에서 즉시 처리되어 별도 재처리 작업이 필요 없습니다.
 
-상세 요청·응답과 오류 코드는 Notion API 명세 및 Swagger UI에서 관리할 예정입니다.
+상세 요청·응답과 오류 코드는 `docs/api-spec.md` 및 Swagger UI에서 관리합니다.
 
 ## 🧪 테스트 전략
 
@@ -367,11 +373,11 @@ Authorization: Bearer {accessToken}
 | 계층 | 검증 대상 |
 | --- | --- |
 | 단위 테스트 | 요금 계산, 시간 조건, 상태 전이, 인가 규칙 |
-| 통합 테스트 | 트랜잭션 롤백, DB 제약 조건, 동시 예약 |
+| 통합 테스트 | 트랜잭션 롤백, DB 제약 조건, 동시 예약, 리소스 잠금 대기 |
 | API 테스트 | 인증·인가, 요청 검증, 응답 및 오류 코드 |
 | 배포 환경 검증 | 회원가입부터 예약·출입·완료까지의 전체 흐름 |
 
-시간 기반 로직에는 `Clock`을 주입하여 실제 대기 없이 경계 시각을 검증할 예정입니다.
+시간 기반 로직에는 `Clock`을 주입하여 실제 대기 없이 경계 시각을 단위 테스트에서 정밀하게 검증합니다.
 
 ### 핵심 테스트 시나리오
 
@@ -382,10 +388,10 @@ Authorization: Bearer {accessToken}
 | 요청 멱등성 | 동일 키와 요청을 재전송해도 예약과 결제가 중복 처리되지 않는지 검증 |
 | 결제 실패 | 크레딧 잔액 부족 시 결제만 롤백되고 예약은 `HOLD`로 남아 재시도할 수 있는지 검증 |
 | 요금 보존 | 공간 요금 변경 후에도 기존 예약 금액이 유지되는지 검증 |
-| 계정 정지 | 정지 직후 기존 Access Token 요청이 거절되는지 검증 |
-| 출입 키 무효화 | 예약 취소 및 키 재발급 직후 기존 키가 거절되는지 검증 |
-| 시간 경계 | 출입 키 발급·출입·예약 취소의 경계 시각 검증 |
-| 소유권 | 일반 회원과 관리자 모두 타인 예약을 취소하거나 키를 발급할 수 없는지 검증 |
+| 계정 정지 | 정지 회원의 토큰 재발급(refresh) 요청 시 ACCOUNT_INACTIVE(403)로 차단되는지 검증 |
+| 출입 토큰 무효화 | 예약 취소 및 토큰 재발급·폐기 직후 기존 토큰이 거절되는지 검증 |
+| 시간 경계 | 출입 토큰 검증·체크인 및 예약 취소의 경계 시각 검증 |
+| 소유권 | 일반 회원과 관리자 모두 타인 예약을 취소하거나 토큰을 발급할 수 없는지 검증 |
 | 상태 경합 | 취소·완료 요청이 겹쳐도 상태와 이력이 중복 변경되지 않는지 검증 |
 | 연장 동시성 | 연장과 신규 예약이 같은 슬롯을 동시에 요청해도 하나만 성공하는지 검증 |
 | 노쇼 | 시작+15분까지 미체크인이면 `NO_SHOW`로 전이하고 슬롯이 반환되는지(환불 없이) 검증 |
@@ -610,7 +616,7 @@ DDL은 Flyway로 관리합니다. `backend/src/main/resources/db/migration/`에 
 - 예약(HOLD)과 결제 확정(크레딧 차감)의 트랜잭션 범위, 연장 시 동시성 처리
 - 동일 예약 요청의 멱등성 처리
 - 예약당 활성 출입 키 제한
-- 계정 상태 변경을 즉시 반영하는 인가 구조
+- 요청별 DB 재조회 없이 토큰 재발급(refresh) 시점에 계정 상태를 검증하는 인가 구조
 - 공간 요금 변경 이후 기존 예약 금액 보존
 
 구현이 완료되면 실제 코드, 테스트 결과와 측정 조건을 근거로 문서를 갱신합니다.
