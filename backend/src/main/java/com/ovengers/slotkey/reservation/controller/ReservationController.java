@@ -36,6 +36,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springdoc.core.annotations.ParameterObject;
 /**
  * 본인 예약 API. SecurityConfig에서 이 경로는 anyRequest().authenticated()로 이미
  * 인증을 강제하므로, 여기서는 소유권 검사만 신경 쓰면 된다 — 각 서비스가
@@ -102,6 +103,7 @@ public class ReservationController {
     })
     @PostMapping
     public ResponseEntity<ApiResponse<ReservationResponse>> hold(
+            @Parameter(hidden = true)
             @CurrentMember AuthPrincipal principal,
             @Valid @RequestBody ReservationCreateRequest request
     ) {
@@ -162,6 +164,7 @@ public class ReservationController {
     })
     @PostMapping("/{reservationId}/pay")
     public ResponseEntity<ApiResponse<ReservationResponse>> pay(
+            @Parameter(hidden = true)
             @CurrentMember AuthPrincipal principal,
             @PathVariable Long reservationId,
             @Valid @RequestBody ReservationPayRequest request,
@@ -178,8 +181,39 @@ public class ReservationController {
     }
 
     /** 예약 취소 (예약자 본인만, CONFIRMED 상태에서 시작 전까지만 가능). */
+    @Operation(
+            summary = "예약 취소",
+            description = """
+                본인의 CONFIRMED 예약을 이용 시작 전에 취소합니다.
+                취소 시 확보한 슬롯을 해제하고 출입 토큰을 폐기합니다.
+                크레딧은 취소 시점에 따른 환불 정책을 적용해 처리합니다.
+                """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "예약 취소 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "FORBIDDEN_NOT_OWNER: 본인 예약이 아님",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "RESERVATION_NOT_FOUND: 예약이 존재하지 않음",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "RESERVATION_STATE_CONFLICT: 예약 상태 또는 이용 시작 시각으로 인해 취소 불가",
+                    content = @Content
+            )
+    })
     @PostMapping("/{reservationId}/cancel")
     public ResponseEntity<ApiResponse<ReservationResponse>> cancel(
+            @Parameter(hidden = true)
             @CurrentMember AuthPrincipal principal,
             @PathVariable Long reservationId
     ) {
@@ -188,8 +222,50 @@ public class ReservationController {
     }
 
     /** 예약 연장. */
+    @Operation(
+            summary = "예약 이용 시간 연장",
+            description = """
+                본인 예약의 종료 시각을 연장하고 추가 요금을 크레딧으로 결제합니다.
+                expectedEndTime에는 조회한 예약의 기존 종료 시각을 전달합니다.
+                newEndTime에는 연장할 종료 시각을 전달합니다.
+                추가 슬롯의 가용성과 운영시간, 예약 상태 및 잔액을 확인합니다.
+                """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "예약 연장 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "입력값 검증 실패 또는 예약 시간 조건 오류",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "FORBIDDEN_NOT_OWNER: 본인 예약이 아님",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "예약 또는 관련 공간이 존재하지 않음",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "추가 슬롯 충돌 또는 기존 종료 시각·예약 상태 변경으로 인한 충돌",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "422",
+                    description = "RESERVATION_EXTEND_NOT_ALLOWED / INSUFFICIENT_BALANCE: 연장 불가 또는 잔액 부족",
+                    content = @Content
+            )
+    })
     @PostMapping("/{reservationId}/extend")
     public ResponseEntity<ApiResponse<ReservationResponse>> extend(
+            @Parameter(hidden = true)
             @CurrentMember AuthPrincipal principal,
             @PathVariable Long reservationId,
             @Valid @RequestBody ReservationExtendRequest request
@@ -201,8 +277,39 @@ public class ReservationController {
     }
 
     /** 체크아웃 (IN_USE -> COMPLETED, 되돌릴 수 없음). */
+    @Operation(
+            summary = "예약 체크아웃",
+            description = """
+                본인의 IN_USE 예약을 COMPLETED 상태로 변경하고 출입 토큰을 폐기합니다.
+                체크아웃 후에는 이용 중 상태로 되돌릴 수 없습니다.
+                일찍 체크아웃하더라도 남은 이용 시간에 대한 환불은 하지 않습니다.
+                """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "체크아웃 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "FORBIDDEN_NOT_OWNER: 본인 예약이 아님",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "RESERVATION_NOT_FOUND: 예약이 존재하지 않음",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "RESERVATION_STATE_CONFLICT: 체크아웃할 수 없는 예약 상태",
+                    content = @Content
+            )
+    })
     @PostMapping("/{reservationId}/check-out")
     public ResponseEntity<ApiResponse<ReservationResponse>> checkOut(
+            @Parameter(hidden = true)
             @CurrentMember AuthPrincipal principal,
             @PathVariable Long reservationId
     ) {
@@ -211,11 +318,24 @@ public class ReservationController {
     }
 
     /** 본인 예약 목록 (최신 시작 시각 순). */
+    @Operation(
+            summary = "내 예약 목록 조회",
+            description = "로그인한 회원 본인의 예약 목록을 검색 조건에 따라 페이지 단위로 조회합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "본인 예약 목록 조회 성공",
+                    useReturnTypeSchema = true
+            )
+    })
     @GetMapping
     public ResponseEntity<ApiResponse<Page<ReservationListResponse>>> getMyReservations(
+            @Parameter(hidden = true)
             @CurrentMember AuthPrincipal principal,
+            @ParameterObject
             @ModelAttribute ReservationSearchCondition condition,
-            Pageable pageable
+            @ParameterObject Pageable pageable
     ) {
         Page<ReservationListResponse> response =
                 reservationQueryService.getMyReservations(
@@ -228,8 +348,30 @@ public class ReservationController {
     }
 
     /** 본인 예약 상세 + 상태 전이 이력. */
+    @Operation(
+            summary = "내 예약 상세 조회",
+            description = "본인 예약의 이용 시간, 금액, 현재 상태 및 상태 변경 이력을 조회합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "예약 상세 조회 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "FORBIDDEN_NOT_OWNER: 본인 예약이 아님",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "RESERVATION_NOT_FOUND: 예약이 존재하지 않음",
+                    content = @Content
+            )
+    })
     @GetMapping("/{reservationId}")
     public ResponseEntity<ApiResponse<ReservationDetailResponse>> getMyReservation(
+            @Parameter(hidden = true)
             @CurrentMember AuthPrincipal principal,
             @PathVariable Long reservationId
     ) {
