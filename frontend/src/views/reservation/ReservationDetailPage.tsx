@@ -16,6 +16,7 @@ import { CHECK_IN_DEADLINE_MINUTES, RESERVATION_STATUS } from '../../constants/e
 import { formatDateLabel, formatDateTime, formatTimeRange} from '../../utils/date';
 import { formatWon } from '../../utils/price';
 import { formatReservationNo } from '../../utils/format';
+import PaymentCelebration from '../../components/reservation/PaymentCelebration';
 import ReservationSteps from '../../components/reservation/ReservationSteps';
 import ReservationStatusBadge from '../../components/reservation/ReservationStatusBadge';
 import ReservationStatusHistory from '../../components/reservation/ReservationStatusHistory';
@@ -94,6 +95,7 @@ const endsAt = new Date(`${reservation.endTime}+09:00`);
 
   return (
     <>
+      {confirmed && <PaymentCelebration key={reservationId} reservationId={reservationId} />}
       {(confirmed || inUse || status === RESERVATION_STATUS.COMPLETED) && <ReservationSteps currentStep={3} />}
       <nav className="crumb" aria-label="현재 위치">
         <Link href={ROUTES.reservations}>내 예약</Link>

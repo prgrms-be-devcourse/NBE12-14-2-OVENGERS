@@ -3,6 +3,7 @@
 import { hasAllBookingAgreements } from '../../constants/bookingTerms';
 import TermsAgreement from '../../components/reservation/TermsAgreement';
 import ReservationSteps from '../../components/reservation/ReservationSteps';
+import { markPaymentCompleted } from '../../utils/paymentCelebration';
 import SpacePhoto from '../../components/space/SpacePhoto';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -71,6 +72,8 @@ export default function PaymentPage() {
         { spaceVersion },
         idempotencyKey,
     );
+
+    markPaymentCompleted(reservationId);
 
     // 결제 성공 후 회원 크레딧 잔액 갱신
     refreshMember().catch(() => {});
