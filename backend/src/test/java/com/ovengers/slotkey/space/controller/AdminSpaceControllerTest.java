@@ -43,6 +43,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ovengers.slotkey.space.service.SpaceImageService;
+import org.springframework.http.HttpMethod;
+import org.springframework.mock.web.MockMultipartFile;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+
 @ExtendWith(MockitoExtension.class)
 class AdminSpaceControllerTest {
 
@@ -56,6 +61,9 @@ class AdminSpaceControllerTest {
 
         @Mock
         private SpaceAuthorizationService spaceAuthorizationService;
+
+        @Mock
+        private SpaceImageService spaceImageService;
 
         @InjectMocks
         private AdminSpaceController adminSpaceController;
@@ -142,7 +150,7 @@ class AdminSpaceControllerTest {
                                 "깔끔한 회의실",
                                 6,
                                 5000L,
-                                "/img.jpg",
+                                null,
                                 LocalTime.of(9, 0),
                                 LocalTime.of(18, 0));
 
@@ -153,7 +161,7 @@ class AdminSpaceControllerTest {
                                 .description(request.description())
                                 .capacity(request.capacity())
                                 .pricePerSlot(request.pricePerSlot())
-                                .imagePath(request.imagePath())
+                                .imagePath(null)
                                 .openingTime(request.openingTime())
                                 .closingTime(request.closingTime())
                                 .status(SpaceStatus.ACTIVE)
@@ -201,6 +209,30 @@ class AdminSpaceControllerTest {
         }
 
         @Test
+        @DisplayName("공간 등록 요청 본문에 비어있지 않은 imagePath가 포함되면 400 Bad Request를 반환한다")
+        void createSpace_withNonEmptyImagePath_returnsBadRequest() throws Exception {
+                // imagePath가 비어있지 않은 요청
+                SpaceCreateRequest invalidRequest = new SpaceCreateRequest(
+                                "회의실 1",
+                                "서울시 강남구",
+                                "설명",
+                                6,
+                                5000L,
+                                "/malicious-path.jpg",
+                                LocalTime.of(9, 0),
+                                LocalTime.of(18, 0));
+
+                mockMvc.perform(post("/api/v1/admin/spaces")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(invalidRequest)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+                verifyNoInteractions(adminSpaceService);
+        }
+
+        @Test
         @DisplayName("공간 수정 요청 시 200 OK와 수정된 공간 상세를 반환한다")
         void updateSpace_returnsOk() throws Exception {
                 // given
@@ -212,7 +244,7 @@ class AdminSpaceControllerTest {
                                 "업그레이드된 회의실",
                                 8,
                                 6000L,
-                                "/new-img.jpg",
+                                null,
                                 LocalTime.of(10, 0),
                                 LocalTime.of(20, 0),
                                 SpaceStatus.ACTIVE);
@@ -224,7 +256,7 @@ class AdminSpaceControllerTest {
                                 .description(request.description())
                                 .capacity(request.capacity())
                                 .pricePerSlot(request.pricePerSlot())
-                                .imagePath(request.imagePath())
+                                .imagePath(null)
                                 .openingTime(request.openingTime())
                                 .closingTime(request.closingTime())
                                 .status(request.status())
@@ -250,6 +282,32 @@ class AdminSpaceControllerTest {
                 verify(spaceAuthorizationService).validateCanManageSpace(ADMIN_PRINCIPAL);
                 verify(adminSpaceService).updateSpace(eq(spaceId), any(SpaceUpdateRequest.class),
                                 eq(ADMIN_PRINCIPAL.memberId()));
+        }
+
+        @Test
+        @DisplayName("공간 수정 요청 본문에 비어있지 않은 imagePath가 포함되면 400 Bad Request를 반환한다")
+        void updateSpace_withNonEmptyImagePath_returnsBadRequest() throws Exception {
+                Long spaceId = 1L;
+                SpaceUpdateRequest invalidRequest = new SpaceUpdateRequest(
+                                null,
+                                "수정 회의실",
+                                "서울시 강남구",
+                                "설명",
+                                6,
+                                5000L,
+                                "/arbitrary-path.jpg",
+                                LocalTime.of(9, 0),
+                                LocalTime.of(18, 0),
+                                SpaceStatus.ACTIVE);
+
+                mockMvc.perform(patch("/api/v1/admin/spaces/{spaceId}", spaceId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(invalidRequest)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+                verifyNoInteractions(adminSpaceService);
         }
 
         @Test
@@ -342,5 +400,142 @@ class AdminSpaceControllerTest {
                                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
 
                 verifyNoInteractions(adminSpaceService);
+        }
+
+        @Test
+        @DisplayName("관리자 권한으로 사진 업로드 성공 시 200 OK와 갱신된 SpaceDetailResponse를 반환한다")
+        void uploadSpaceImage_success() throws Exception {
+                // given
+                Long spaceId = 1L;
+                MockMultipartFile file = new MockMultipartFile(
+                                "file", "photo.jpg", "image/jpeg", new byte[] { 1, 2, 3 });
+
+                SpaceDetailResponse expectedResponse = new SpaceDetailResponse(
+                                spaceId,
+                                "회의실 A",
+                                "강남",
+                                "설명",
+                                8,
+                                10000L,
+                                "/api/v1/space-images/abc-123.jpg",
+                                LocalTime.of(9, 0),
+                                LocalTime.of(22, 0),
+                                SpaceStatus.ACTIVE,
+                                0);
+
+                given(spaceImageService.uploadAndAttachSpaceImage(eq(spaceId), any(), eq(ADMIN_PRINCIPAL.memberId())))
+                                .willReturn(expectedResponse);
+
+                // when & then
+                mockMvc.perform(multipart(HttpMethod.PUT, "/api/v1/admin/spaces/{spaceId}/image", spaceId)
+                                .file(file))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                                .andExpect(jsonPath("$.data.id").value(spaceId))
+                                .andExpect(jsonPath("$.data.imagePath").value("/api/v1/space-images/abc-123.jpg"));
+
+                verify(spaceAuthorizationService).validateCanManageSpace(ADMIN_PRINCIPAL);
+                verify(spaceImageService).uploadAndAttachSpaceImage(eq(spaceId), any(), eq(ADMIN_PRINCIPAL.memberId()));
+        }
+
+        @Test
+        @DisplayName("일반 사용자가 사진 업로드 시 403 Forbidden을 반환한다")
+        void uploadSpaceImage_accessDenied_forUserRole() throws Exception {
+                // given
+                Long spaceId = 1L;
+                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                                USER_PRINCIPAL, null, USER_PRINCIPAL.getAuthorities());
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                willThrow(new BusinessException(ErrorCode.ACCESS_DENIED))
+                                .given(spaceAuthorizationService).validateCanManageSpace(USER_PRINCIPAL);
+
+                MockMultipartFile file = new MockMultipartFile(
+                                "file", "photo.jpg", "image/jpeg", new byte[] { 1, 2, 3 });
+
+                // when & then
+                mockMvc.perform(multipart(HttpMethod.PUT, "/api/v1/admin/spaces/{spaceId}/image", spaceId)
+                                .file(file))
+                                .andExpect(status().isForbidden())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+
+                verifyNoInteractions(spaceImageService);
+        }
+
+        @Test
+        @DisplayName("존재하지 않는 공간에 사진 업로드 시 404 Not Found를 반환한다")
+        void uploadSpaceImage_spaceNotFound() throws Exception {
+                // given
+                Long nonExistentSpaceId = 999L;
+                MockMultipartFile file = new MockMultipartFile(
+                                "file", "photo.jpg", "image/jpeg", new byte[] { 1, 2, 3 });
+
+                willThrow(new BusinessException(ErrorCode.SPACE_NOT_FOUND))
+                                .given(spaceImageService).uploadAndAttachSpaceImage(eq(nonExistentSpaceId), any(), any());
+
+                // when & then
+                mockMvc.perform(multipart(HttpMethod.PUT, "/api/v1/admin/spaces/{spaceId}/image", nonExistentSpaceId)
+                                .file(file))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("SPACE_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("빈 파일 업로드 시 400 Bad Request와 IMAGE_FILE_EMPTY를 반환한다")
+        void uploadSpaceImage_emptyFile() throws Exception {
+                // given
+                Long spaceId = 1L;
+                MockMultipartFile file = new MockMultipartFile(
+                                "file", "empty.jpg", "image/jpeg", new byte[0]);
+
+                willThrow(new BusinessException(ErrorCode.IMAGE_FILE_EMPTY))
+                                .given(spaceImageService).uploadAndAttachSpaceImage(eq(spaceId), any(), any());
+
+                // when & then
+                mockMvc.perform(multipart(HttpMethod.PUT, "/api/v1/admin/spaces/{spaceId}/image", spaceId)
+                                .file(file))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("IMAGE_FILE_EMPTY"));
+        }
+
+        @Test
+        @DisplayName("지원하지 않는 포맷이나 위조 서명 업로드 시 400 Bad Request와 INVALID_IMAGE_FORMAT을 반환한다")
+        void uploadSpaceImage_invalidFormat() throws Exception {
+                // given
+                Long spaceId = 1L;
+                MockMultipartFile file = new MockMultipartFile(
+                                "file", "script.sh", "text/plain", new byte[] { 1, 2, 3 });
+
+                willThrow(new BusinessException(ErrorCode.INVALID_IMAGE_FORMAT))
+                                .given(spaceImageService).uploadAndAttachSpaceImage(eq(spaceId), any(), any());
+
+                // when & then
+                mockMvc.perform(multipart(HttpMethod.PUT, "/api/v1/admin/spaces/{spaceId}/image", spaceId)
+                                .file(file))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("INVALID_IMAGE_FORMAT"));
+        }
+
+        @Test
+        @DisplayName("용량 초과 파일 업로드 시 413 Payload Too Large와 IMAGE_SIZE_EXCEEDED를 반환한다")
+        void uploadSpaceImage_sizeExceeded() throws Exception {
+                // given
+                Long spaceId = 1L;
+                MockMultipartFile file = new MockMultipartFile(
+                                "file", "large.jpg", "image/jpeg", new byte[] { 1, 2, 3 });
+
+                willThrow(new BusinessException(ErrorCode.IMAGE_SIZE_EXCEEDED))
+                                .given(spaceImageService).uploadAndAttachSpaceImage(eq(spaceId), any(), any());
+
+                // when & then
+                mockMvc.perform(multipart(HttpMethod.PUT, "/api/v1/admin/spaces/{spaceId}/image", spaceId)
+                                .file(file))
+                                .andExpect(status().isPayloadTooLarge())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("IMAGE_SIZE_EXCEEDED"));
         }
 }

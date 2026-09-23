@@ -66,7 +66,7 @@ class SpaceTest {
         }
 
         @Test
-        @DisplayName("가격 외의 정보(이름, 위치, 설명, 인원, 이미지, 운영시간, 상태)만 수정 시 version이 유지된다")
+        @DisplayName("가격 외의 정보(이름, 위치, 설명, 인원, 운영시간, 상태)만 수정 시 version이 유지된다")
         void updateDetail_nonPriceFieldsChanged_versionMaintained() {
                 // given
                 Space space = createDefaultSpace();
@@ -90,11 +90,25 @@ class SpaceTest {
                 assertThat(space.getLocation()).isEqualTo("역삼역 2번 출구");
                 assertThat(space.getDescription()).isEqualTo("새로운 설명");
                 assertThat(space.getCapacity()).isEqualTo(8);
-                assertThat(space.getImagePath()).isEqualTo("/images/room-b.jpg");
+                assertThat(space.getImagePath()).isEqualTo("/images/room-a.jpg"); // updateDetail로는 imagePath가 변경되지 않음
                 assertThat(space.getOpeningTime()).isEqualTo(LocalTime.of(10, 0));
                 assertThat(space.getClosingTime()).isEqualTo(LocalTime.of(20, 0));
                 assertThat(space.getStatus()).isEqualTo(SpaceStatus.INACTIVE);
                 assertThat(space.getPricePerSlot()).isEqualTo(5000L);
+                assertThat(space.getVersion()).isEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("updateImagePath로 대표 사진 변경 시 imagePath가 변경되고 version은 유지된다")
+        void updateImagePath_imagePathChanged_versionMaintained() {
+                // given
+                Space space = createDefaultSpace();
+
+                // when
+                space.updateImagePath("/api/v1/space-images/new-image.jpg");
+
+                // then
+                assertThat(space.getImagePath()).isEqualTo("/api/v1/space-images/new-image.jpg");
                 assertThat(space.getVersion()).isEqualTo(0);
         }
 

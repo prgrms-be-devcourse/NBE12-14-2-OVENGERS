@@ -110,7 +110,7 @@ class AdminSpaceServiceTest {
                 "최대 10인 회의실",
                 10,
                 5000L,
-                "/images/conf.jpg",
+                null,
                 LocalTime.of(9, 0),
                 LocalTime.of(22, 0));
 
@@ -121,7 +121,7 @@ class AdminSpaceServiceTest {
                 .description(request.description())
                 .capacity(request.capacity())
                 .pricePerSlot(request.pricePerSlot())
-                .imagePath(request.imagePath())
+                .imagePath(null)
                 .openingTime(request.openingTime())
                 .closingTime(request.closingTime())
                 .status(SpaceStatus.ACTIVE)
@@ -267,7 +267,7 @@ class AdminSpaceServiceTest {
                 "새 설명",
                 8,
                 4000L, // 가격 변경: 3000 -> 4000
-                "/new-image.jpg",
+                null,
                 LocalTime.of(10, 0),
                 LocalTime.of(20, 0),
                 SpaceStatus.INACTIVE);
