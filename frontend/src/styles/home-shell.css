@@ -24,12 +24,40 @@ html:has(.home-shell){scroll-behavior:smooth;scroll-padding-top:96px}
 @media(max-width:480px){.home-shell .header{gap:8px;padding:0 14px}.home-shell .nav{gap:11px}.home-shell .nav a{font-size:.74rem}.home-shell .brand{gap:4px;font-size:1rem}.home-shell .brandmark{width:25px;height:25px}.home-shell .footer{flex-direction:column;align-items:flex-start;gap:18px}.home-shell .footer>span{text-align:left}}
 @media(prefers-reduced-motion:reduce){html:has(.home-shell){scroll-behavior:auto}.home-shell .header{transition:none}}
 
-.home-account-menu{display:none;position:relative;font-size:.8rem}
-.home-account-menu summary{cursor:pointer;list-style:none;border:1px solid currentColor;border-radius:20px;padding:5px 10px;white-space:nowrap}
+.home-account-menu{display:block;position:relative;font-size:.88rem;flex-shrink:0}
+.home-account-menu summary{cursor:pointer;list-style:none;border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px;display:flex;align-items:center;gap:8px;white-space:nowrap}
 .home-account-menu summary::-webkit-details-marker{display:none}
-.home-account-panel{position:absolute;right:0;top:45px;min-width:180px;padding:20px;background:#f8fbfe;color:#20334d;border:1px solid #d6e3ef;border-radius:12px;box-shadow:0 8px 25px #102c4820;display:flex;flex-direction:column;gap:14px}
-.home-account-panel button{background:white;color:#20334d;border-color:#cedceb;font-size:.8rem}
-.home-account-panel a:hover{text-decoration:underline}
+.home-account-menu summary:hover{background:#2b64df0a}
+.home-account-menu[open] .account-chevron{transform:rotate(180deg)}
+.home-account-panel{position:absolute;right:0;top:calc(100% + 12px);width:240px;max-width:calc(100vw - 28px);padding:8px;background:#f8fbfe;color:#20334d;border:1px solid #d6e3ef;border-radius:12px;box-shadow:0 8px 25px #102c4820;display:flex;flex-direction:column}
+.account-identity{padding:16px 12px;margin-bottom:6px;border-bottom:1px solid #d6e3ef;display:flex;flex-direction:column;gap:8px;overflow-wrap:anywhere}
+.account-identity strong{font-size:.95rem;font-weight:600}
+.home-account-panel a,.home-account-panel button{padding:12px;min-height:44px;border:0;border-radius:6px;text-align:left;font-size:.9rem;color:#20334d;background:transparent;width:100%}
+.home-account-panel a:hover,.home-account-panel button:hover{background:#e9f1ff}
+.home-account-panel a.active{color:#245eda;background:#e9f1ff}
+.account-signout{border-top:1px solid #d6e3ef;margin-top:6px;padding-top:6px}
 .home-account-menu summary:focus-visible{outline:3px solid #6db7ff;outline-offset:4px}
-@media(max-width:850px){.home-account-menu{display:block}.home-shell .nav a[href="/reservations"],.home-shell .nav a[href="/admin/spaces"]{display:none}}
-@media(max-width:480px){.home-shell .nav a[href="/door"]{display:none}.home-account-menu{font-size:.72rem}.home-shell .nav{gap:12px}}
+.account-mobile-credit,.guest-account-menu{display:none}
+.home-shell .home-account-menu summary{border-color:#ffffff80;color:white}
+.home-shell .home-account-menu summary:hover{background:#ffffff20}
+@media(max-width:1100px){.home-shell .account-mobile-credit{display:block}}
+@media(max-width:850px){.guest-account-menu,.account-mobile-credit{display:block}.home-account-menu{font-size:.8rem}.home-account-menu summary{padding:9px;gap:6px}}
+@media(max-width:480px){.header .nav a[href="/door"],.home-shell .header .nav a[href="/door"]{display:block}.header .nav,.home-shell .header .nav{gap:10px}.home-account-menu summary>svg:first-child{display:none}.home-account-menu summary{padding:8px;gap:5px}}
+@media(max-width:360px){.header .brand>span{display:none}}
+
+/* Separate navigation from account information while keeping a shared baseline. */
+.header .nav a,.header .header-credit,.header .home-account-menu summary{font-size:.9rem;font-weight:400;min-height:44px;line-height:1.4;display:flex;align-items:center}
+.header .nav a{padding:10px 0}
+.header .header-credit{white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums}
+.header .home-account-menu summary{border:1px solid var(--line);border-radius:10px;padding:10px 12px;gap:8px}
+.header .home-account-menu summary:hover{background:transparent;color:var(--blue)}
+.account-trigger-label{display:block;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.home-shell .header .nav a,.home-shell .header .header-credit,.home-shell .header .home-account-menu summary{color:white;font-size:.9rem}
+.home-shell .header .home-account-menu summary{border-color:#ffffff55;background:#102c4814}
+.home-shell .header .home-account-menu summary:hover{color:white;background:#ffffff18;border-color:#ffffff90}
+.header .header-credit,.home-shell .header .header-credit{font-size:.82rem}
+.home-shell .header{background:linear-gradient(180deg,rgba(9,27,49,.65) 0%,rgba(9,27,49,.34) 60%,rgba(9,27,49,0) 100%)}
+@media(min-width:851px){.header .nav{position:relative;padding-right:28px}.header .nav::after{content:"";position:absolute;right:0;top:50%;height:22px;width:1px;background:var(--line);transform:translateY(-50%)}.home-shell .header .nav::after{background:#ffffff45}.header .home-account-menu{margin-left:4px}}
+@media(max-width:1100px){.home-shell .header-credit{display:none}}
+@media(max-width:850px){.header .nav a,.header .home-account-menu summary,.home-shell .header .nav a,.home-shell .header .home-account-menu summary{font-size:.82rem}.account-trigger-label{max-width:100px}}
+@media(max-width:480px){.header .nav a,.header .home-account-menu summary,.home-shell .header .nav a,.home-shell .header .home-account-menu summary{font-size:.76rem}.account-trigger-label{max-width:64px}.header .home-account-menu summary{padding:8px;gap:5px}}
