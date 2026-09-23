@@ -490,6 +490,31 @@ dialog .modal-actions{flex-wrap:wrap}
   .terms-dialog-actions{flex-wrap:wrap;gap:16px}.terms-dialog-actions>button{width:100%}
 }
 
+/* Shared booking progress: consistent breathing room at every step. */
+.payment-steps{display:flex;max-width:1040px;gap:0;margin:16px auto 64px;padding:0;align-items:center}
+.payment-steps li{flex:1;min-width:0;gap:16px;align-items:center;flex-direction:row}
+.payment-steps li:last-child{flex:0 0 auto}
+.payment-steps li>span{width:44px;height:44px;flex:0 0 44px}
+.payment-steps li b{padding:0;white-space:nowrap}
+.payment-steps li:not(:last-child):after{position:static;flex:1;min-width:24px;height:1px;margin:0 28px 0 12px;background:#c3d3e5}
+@media(max-width:600px){
+  .payment-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;margin:8px auto 40px;gap:16px}
+  .payment-steps li{flex-direction:column;align-items:center;gap:12px}
+  .payment-steps li>span{width:38px;height:38px;flex-basis:38px}
+  .payment-steps li b{font-size:.83rem}
+  .payment-steps li:not(:last-child):after{position:absolute;top:19px;left:calc(50% + 27px);right:calc(-50% + 11px);min-width:0;margin:0}
+}
+
+
+
+
+/* Keep the booking steps below the site header while scrolling. */
+.booking-progress{position:sticky;top:86px;z-index:9;background:var(--bg);padding:20px 0;margin:0 0 44px;border-bottom:1px solid var(--line)}
+.booking-progress .payment-steps{margin:0 auto}
+@media(min-width:851px){.container:has(.booking-progress) .sticky{top:190px}}
+@media(max-width:850px){.booking-progress{top:72px}}
+@media(max-width:600px){.booking-progress{padding:14px 0;margin-bottom:28px}}
+
 .terms-list{display:grid;gap:12px}
 .terms-version{font-size:.85rem;color:var(--muted)}
 .terms-dialog-content section+section{margin-top:28px}

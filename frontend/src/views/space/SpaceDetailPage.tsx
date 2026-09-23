@@ -18,6 +18,7 @@ import { calculateTotal, formatPricePerSlot } from '../../utils/price';
 import { MetaBadge } from '../../components/common/Badge';
 import SpacePhoto from '../../components/space/SpacePhoto';
 import SlotPicker from '../../components/space/SlotPicker';
+import ReservationSteps from '../../components/reservation/ReservationSteps';
 import PriceSummary from '../../components/reservation/PriceSummary';
 import Button from '../../components/common/Button';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -95,6 +96,7 @@ export default function SpaceDetailPage() {
 
   return (
     <>
+      <ReservationSteps currentStep={1} />
       <nav className="crumb" aria-label="현재 위치">
         <Link href={ROUTES.spaces}>오피스 찾기</Link>
         <span>›</span>

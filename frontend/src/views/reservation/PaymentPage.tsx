@@ -2,6 +2,7 @@
 
 import { hasAllBookingAgreements } from '../../constants/bookingTerms';
 import TermsAgreement from '../../components/reservation/TermsAgreement';
+import ReservationSteps from '../../components/reservation/ReservationSteps';
 import SpacePhoto from '../../components/space/SpacePhoto';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -143,28 +144,7 @@ export default function PaymentPage() {
 
   return (
       <div className="payment-page">
-        <ol
-            className="payment-steps"
-            aria-label="예약 진행 단계"
-        >
-          <li className="done">
-            <span>✓</span>
-            <b>예약 정보</b>
-          </li>
-
-          <li
-              className="active"
-              aria-current="step"
-          >
-            <span>2</span>
-            <b>결제하기</b>
-          </li>
-
-          <li>
-            <span>3</span>
-            <b>예약 완료</b>
-          </li>
-        </ol>
+        <ReservationSteps currentStep={2} />
 
         <div className="payment-heading">
           <p className="page-kicker">
