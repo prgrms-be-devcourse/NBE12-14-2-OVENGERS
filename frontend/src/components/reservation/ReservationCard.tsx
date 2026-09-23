@@ -24,7 +24,11 @@ export default function ReservationCard({ reservation }: { reservation: Reservat
         </div>
         <h3>{reservation.spaceName}</h3>
         <p>
-          {formatDateLabel(reservation.date)} · {formatTimeRange(reservation.startTime, reservation.endTime)}
+          {formatDateLabel(reservation.date)} ·{' '}
+          {formatTimeRange(
+            reservation.startTime.slice(11, 16),
+            reservation.endTime.slice(11, 16),
+          )}
         </p>
       </div>
       <div className="booking-right">
