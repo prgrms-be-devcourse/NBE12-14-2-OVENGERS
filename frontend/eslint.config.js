@@ -11,6 +11,7 @@ const config = [
   ...nextCoreWebVitals,
   ...nextTypeScript,
   {
+    files: ['**/*.{js,jsx,ts,tsx}'],
     rules: {
       'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/use-memo': 'warn',
