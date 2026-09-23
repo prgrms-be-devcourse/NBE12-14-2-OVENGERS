@@ -29,6 +29,12 @@ public enum ErrorCode {
     INVALID_OPERATING_HOURS(HttpStatus.BAD_REQUEST, "INVALID_OPERATING_HOURS", "운영 종료 시각은 시작 시각보다 늦어야 합니다."),
     SPACE_OPERATING_HOURS_CONFLICT(HttpStatus.CONFLICT, "SPACE_OPERATING_HOURS_CONFLICT",
                     "기존 예약과 충돌하여 운영시간을 수정할 수 없습니다."),
+    IMAGE_FILE_EMPTY(HttpStatus.BAD_REQUEST, "IMAGE_FILE_EMPTY", "업로드할 이미지 파일이 비어 있습니다."),
+    INVALID_IMAGE_FORMAT(HttpStatus.BAD_REQUEST, "INVALID_IMAGE_FORMAT", "지원하지 않거나 올바르지 않은 이미지 형식입니다. (JPEG, PNG만 지원)"),
+    IMAGE_SIZE_EXCEEDED(HttpStatus.PAYLOAD_TOO_LARGE, "IMAGE_SIZE_EXCEEDED", "이미지 파일 크기는 최대 5MB까지 가능합니다."),
+    IMAGE_DIMENSIONS_EXCEEDED(HttpStatus.BAD_REQUEST, "IMAGE_DIMENSIONS_EXCEEDED", "이미지 해상도는 최대 4096x4096까지 가능합니다."),
+    IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "IMAGE_NOT_FOUND", "요청한 이미지를 찾을 수 없습니다."),
+    IMAGE_STORAGE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "IMAGE_STORAGE_ERROR", "이미지 저장 처리에 실패했습니다."),
 
     // ── Reservation ─────────────────────────────────────
     RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "RESERVATION_NOT_FOUND", "존재하지 않는 예약입니다."),

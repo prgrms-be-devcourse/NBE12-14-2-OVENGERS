@@ -1,8 +1,16 @@
+server:
+  tomcat:
+    max-swallow-size: 10MB
+
 spring:
   application:
     name: slotkey
   profiles:
     active: local
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -30,3 +38,9 @@ app:
 
   credit:
     signup-grant: 50000
+
+  # 공간 대표 이미지 영구 저장 경로
+  # - spring.servlet.multipart.location 은 업로드 처리 중 임시 파싱 디렉터리입니다.
+  # - app.space-image.storage-root 는 영구 보관용 디렉터리이며 배포 환경에서는 재시작 후에도 유지되는 지속 디스크여야 합니다.
+  space-image:
+    storage-root: ${SPACE_IMAGE_STORAGE_ROOT:./data/space-images}

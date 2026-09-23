@@ -31,4 +31,13 @@ public class GlobalExceptionHandler {
                 .status(ErrorCode.VALIDATION_FAILED.getHttpStatus())
                 .body(ApiResponse.fail(ErrorCode.VALIDATION_FAILED, message));
     }
+
+    /** 파일/요청 크기 초과 처리 (413) */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceededException(
+            org.springframework.web.multipart.MaxUploadSizeExceededException e) {
+        return ResponseEntity
+                .status(ErrorCode.IMAGE_SIZE_EXCEEDED.getHttpStatus())
+                .body(ApiResponse.fail(ErrorCode.IMAGE_SIZE_EXCEEDED));
+    }
 }

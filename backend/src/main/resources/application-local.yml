@@ -9,3 +9,5 @@ app:
     cookie:
       secure: false
       same-site: Lax
+  space-image:
+    storage-root: ./data/space-images

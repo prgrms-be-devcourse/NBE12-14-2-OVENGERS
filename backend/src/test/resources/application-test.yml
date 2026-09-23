@@ -10,3 +10,7 @@ custom:
   jwt:
     secret-key: slotkey-test-only-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz
     expire-millis: 300000
+
+app:
+  space-image:
+    storage-root: build/tmp/space-images
