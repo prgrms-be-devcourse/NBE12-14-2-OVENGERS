@@ -1,3 +1,5 @@
+import SpacePhoto from '../space/SpacePhoto';
+import { formatDateLabel } from '../../utils/date';
 import type { ReservationSummary } from '../../types/api';
 import Button from '../common/Button';
 import Input from '../common/Input';
@@ -26,6 +28,8 @@ export default function DoorVerifyForm({
   onSubmit,
   loading,
 }: DoorVerifyFormProps) {
+  const selected = reservations.find((item) => String(item.reservationId) === value.reservationId);
+  const timeLabel = (time: string) => time.includes('T') ? time.slice(11, 16) : time.slice(0, 5);
   const update = (patch: DoorVerifyFormValue) => onChange({ ...value, ...patch });
 
   return (
@@ -50,6 +54,16 @@ export default function DoorVerifyForm({
         value={value.reservationId ?? ''}
         onChange={(event) => update({ reservationId: event.target.value, accessKey: '' })}
       />
+      {selected ? (
+        <div className="door-reservation-preview" aria-live="polite">
+          <SpacePhoto key={selected.reservationId} src={selected.spaceImagePath} alt={selected.spaceName} />
+          <div>
+            <h2>{selected.spaceName}</h2>
+            <p>{formatDateLabel(selected.date || selected.startTime.slice(0, 10))}</p>
+            <p>{timeLabel(selected.startTime)}–{timeLabel(selected.endTime)}</p>
+          </div>
+        </div>
+      ) : <p className="form-help">예약을 선택하면 공간 사진과 이용 시간이 표시됩니다.</p>}
       <Input
         label="출입 키"
         required

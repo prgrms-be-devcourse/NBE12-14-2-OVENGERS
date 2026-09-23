@@ -128,7 +128,7 @@ export const MEMBER_STATUS_OPTIONS: SelectOption[] = [
 ];
 
 /** 예약 시 동의하는 약관 버전. 서버가 예약에 함께 저장합니다. */
-export const TERMS_VERSION = 'v1.0';
+export const TERMS_VERSION = 'v1.1';
 
 /** 예약(HOLD)이 결제 대기 상태로 유지되는 시간(분). core-domain-decisions.md 2-1. */
 export const HOLD_DURATION_MINUTES = 10;

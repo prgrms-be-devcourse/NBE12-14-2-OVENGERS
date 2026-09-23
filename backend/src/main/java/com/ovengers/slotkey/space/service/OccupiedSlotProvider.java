@@ -20,4 +20,10 @@ public interface OccupiedSlotProvider {
      * 걸치는 슬롯이 존재하는지 확인한다.
      */
     boolean hasOccupiedSlotsOutsideHours(Long spaceId, LocalTime openTime, LocalTime closeTime, LocalDateTime fromTime);
+
+    /**
+     * 지정한 시간 범위 [startInclusive, endExclusive) 안에 유효 점유 슬롯이 하나라도 있는 공간들의
+     * id 집합을 반환한다. 공간 목록(오피스 찾기) 조회에서 "이 시간대에 예약 가능한 공간만" 필터링할 때 쓴다.
+     */
+    java.util.Set<Long> getOccupiedSpaceIds(LocalDateTime startInclusive, LocalDateTime endExclusive, LocalDateTime now);
 }

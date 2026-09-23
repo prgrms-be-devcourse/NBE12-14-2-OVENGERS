@@ -45,7 +45,14 @@ public enum ErrorCode {
     ACCESS_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "ACCESS_TOKEN_NOT_FOUND", "출입 토큰을 찾을 수 없습니다."),
     ACTIVE_ACCESS_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "ACTIVE_ACCESS_TOKEN_NOT_FOUND", "활성 출입 토큰을 찾을 수 없습니다."),
     ACCESS_LOG_NOT_FOUND(HttpStatus.NOT_FOUND, "ACCESS_LOG_NOT_FOUND", "출입 기록을 찾을 수 없습니다."),
-    ACCESS_DENY_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "ACCESS_DENY_REASON_REQUIRED", "출입 거절 사유는 필수입니다.");
+    ACCESS_DENY_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "ACCESS_DENY_REASON_REQUIRED", "출입 거절 사유는 필수입니다."),
+
+    // ── Inquiry (Q&A) ──────────────────────────────────
+    INQUIRY_NOT_FOUND(HttpStatus.NOT_FOUND, "INQUIRY_NOT_FOUND", "존재하지 않는 문의입니다."),
+    INQUIRY_ALREADY_ANSWERED(HttpStatus.UNPROCESSABLE_ENTITY, "INQUIRY_ALREADY_ANSWERED", "이미 답변이 등록된 문의는 수정할 수 없습니다."),
+
+    // ── Space 검색 ─────────────────────────────────────
+    INVALID_TIME_RANGE(HttpStatus.BAD_REQUEST, "INVALID_TIME_RANGE", "시작 시각은 종료 시각보다 빨라야 합니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

@@ -2,6 +2,7 @@ package com.ovengers.slotkey.space.controller;
 
 import com.ovengers.slotkey.global.common.response.ApiResponse;
 import com.ovengers.slotkey.global.common.response.PageResponse;
+import com.ovengers.slotkey.space.dto.request.SpaceSearchCondition;
 import com.ovengers.slotkey.space.dto.response.SpaceDetailResponse;
 import com.ovengers.slotkey.space.dto.response.SpaceResponse;
 import com.ovengers.slotkey.space.dto.response.SpaceSlotAvailabilityResponse;
@@ -23,6 +24,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springdoc.core.annotations.ParameterObject;
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 @Tag(name = "공간", description = "비회원도 이용할 수 있는 공간 및 슬롯 조회 API")
 @RestController
@@ -37,7 +39,9 @@ public class SpaceController {
             summary = "공간 목록 조회",
             description = """
                 공간 목록을 페이지 단위로 조회합니다.
-                keyword로 검색할 수 있습니다.
+                검색어, 지역, 최소·최대 가격으로 필터링할 수 있습니다.
+                날짜와 시작·종료 시간을 모두 지정하면 해당 시간대에 예약 가능한 공간을 조회합니다.
+                조회 이후 예약 가능 여부는 달라질 수 있으며, 실제 예약 생성 시 다시 확인합니다.
                 page는 0부터 시작하며, 기본 페이지 크기는 20입니다.
                 """
     )
@@ -54,11 +58,42 @@ public class SpaceController {
             @PageableDefault(size = 20, direction = Sort.Direction.DESC)
             Pageable pageable,
 
-            @Parameter(description = "공간 검색어", example = "판교")
+            @Parameter(description = "공간 검색어", example = "미팅룸")
             @RequestParam(name = "keyword", required = false)
-            String keyword
+            String keyword,
+
+            @Parameter(description = "지역", example = "판교")
+            @RequestParam(name = "location", required = false)
+            String location,
+
+            @Parameter(description = "최소 가격")
+            @RequestParam(name = "minPrice", required = false)
+            Long minPrice,
+
+            @Parameter(description = "최대 가격")
+            @RequestParam(name = "maxPrice", required = false)
+            Long maxPrice,
+
+            @Parameter(description = "예약 가능 여부를 조회할 날짜", example = "2026-10-01")
+            @RequestParam(name = "date", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate date,
+
+            @Parameter(description = "조회할 시작 시간", example = "09:00:00")
+            @RequestParam(name = "startTime", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.TIME)
+            LocalTime startTime,
+
+            @Parameter(description = "조회할 종료 시간", example = "10:00:00")
+            @RequestParam(name = "endTime", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.TIME)
+            LocalTime endTime
     ) {
-        Page<Space> spacePage = spaceQueryService.getSpacesPage(pageable, keyword);
+        SpaceSearchCondition condition = new SpaceSearchCondition(
+                keyword, location, minPrice, maxPrice, date, startTime, endTime
+        );
+        Page<Space> spacePage =
+                spaceQueryService.getSpacesPage(pageable, condition);
         Page<SpaceResponse> responsePage = spacePage.map(SpaceResponse::from);
         return ResponseEntity.ok(ApiResponse.success(PageResponse.from(responsePage)));
     }

@@ -458,3 +458,72 @@ dialog .modal-actions{flex-wrap:wrap}
   .spacecard > .cardbody > .row {
     flex-shrink: 0;
   }
+
+/* Agreement overview and dedicated reading dialog. */
+.payment-terms{margin:24px 0;padding-top:20px;border-top:1px solid var(--line)}
+.terms-summary-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:16px}
+.terms-summary-heading h3{margin:0}
+.terms-summary-heading>span{font-size:.8rem;color:var(--muted)}
+.terms-summary-button{display:flex;justify-content:space-between;width:100%;gap:16px;text-align:left;white-space:normal;background:var(--surface);padding:16px}
+.terms-summary-button>span{min-width:0}
+.terms-summary-button strong{display:block;font-size:.9rem;font-weight:600}
+.terms-summary-button small{display:block;margin-top:6px;font-weight:400;color:var(--muted)}
+.terms-summary-button svg{flex:none}
+.terms-dialog{width:min(800px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);padding:0;background:var(--surface);overflow:hidden}
+.terms-dialog[open]{display:flex;flex-direction:column}
+.terms-dialog-header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:28px 32px 20px;border-bottom:1px solid var(--line);flex-shrink:0}
+.terms-dialog-header h2{font-size:1.4rem;margin:0 0 8px}
+.terms-dialog-header p{margin:0;font-size:.9rem;color:var(--muted)}
+.terms-dialog-content{min-height:0;max-height:50dvh;overflow-y:auto;overscroll-behavior:contain;padding:28px 32px;line-height:1.85;scrollbar-gutter:stable}
+.terms-dialog-content h4{font-size:1rem;margin:28px 0 10px}
+.terms-dialog-content h4:first-child{margin-top:0}
+.terms-dialog-content p{margin:0 0 16px}
+.terms-dialog-content:focus-visible{outline:2px solid var(--blue);outline-offset:-4px}
+.terms-dialog-footer{padding:18px 32px 24px;border-top:1px solid var(--line);flex-shrink:0}
+.terms-dialog-footer .form-help{margin:0 0 12px}
+.terms-dialog-actions{display:flex;justify-content:space-between;align-items:center;gap:20px}
+.terms-dialog-actions .check{margin:0;line-height:1.6;color:var(--text)}
+.terms-dialog-actions input{flex:none}
+@media(max-width:600px){
+  .terms-dialog-header{padding:20px;gap:12px}.terms-dialog-header h2{font-size:1.15rem}
+  .terms-dialog-content{padding:20px}.terms-dialog-footer{padding:16px 20px}
+  .terms-dialog-actions{flex-wrap:wrap;gap:16px}.terms-dialog-actions>button{width:100%}
+}
+
+.door-reservation-preview{display:flex;gap:16px;align-items:center;margin:0 0 24px;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.door-reservation-preview img,.door-reservation-preview .photo-placeholder{width:112px;height:88px;flex:none;border-radius:8px;object-fit:cover}
+.door-photo-placeholder{display:grid;place-items:center;background:var(--raised);color:var(--muted);font-size:.8rem}
+.door-reservation-preview>div:last-child{min-width:0;overflow-wrap:anywhere}
+.door-reservation-preview h2{font-size:1rem;margin:0 0 4px}
+.door-reservation-preview p{margin:0;color:var(--muted);font-size:.875rem}
+@media(max-width:420px){.door-reservation-preview{gap:12px}.door-reservation-preview img,.door-reservation-preview .photo-placeholder{width:80px;height:80px}}
+
+
+/* Shared booking progress: consistent breathing room at every step. */
+.payment-steps{display:flex;max-width:1040px;gap:0;margin:16px auto 64px;padding:0;align-items:center}
+.payment-steps li{flex:1;min-width:0;gap:16px;align-items:center;flex-direction:row}
+.payment-steps li:last-child{flex:0 0 auto}
+.payment-steps li>span{width:44px;height:44px;flex:0 0 44px}
+.payment-steps li b{padding:0;white-space:nowrap}
+.payment-steps li:not(:last-child):after{position:static;flex:1;min-width:24px;height:1px;margin:0 28px 0 12px;background:#c3d3e5}
+@media(max-width:600px){
+  .payment-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;margin:8px auto 40px;gap:16px}
+  .payment-steps li{flex-direction:column;align-items:center;gap:12px}
+  .payment-steps li>span{width:38px;height:38px;flex-basis:38px}
+  .payment-steps li b{font-size:.83rem}
+  .payment-steps li:not(:last-child):after{position:absolute;top:19px;left:calc(50% + 27px);right:calc(-50% + 11px);min-width:0;margin:0}
+}
+
+
+
+
+/* Keep the booking steps below the site header while scrolling. */
+.booking-progress{position:sticky;top:86px;z-index:9;background:var(--bg);padding:20px 0;margin:0 0 44px;border-bottom:1px solid var(--line)}
+.booking-progress .payment-steps{margin:0 auto}
+@media(min-width:851px){.container:has(.booking-progress) .sticky{top:190px}}
+@media(max-width:850px){.booking-progress{top:72px}}
+@media(max-width:600px){.booking-progress{padding:14px 0;margin-bottom:28px}}
+
+.terms-list{display:grid;gap:12px}
+.terms-version{font-size:.85rem;color:var(--muted)}
+.terms-dialog-content section+section{margin-top:28px}

@@ -8,6 +8,11 @@ export interface SpaceListParams {
   keyword?: string;
   status?: SpaceStatus | '';
   date?: string;
+  location?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  startTime?: string;
+  endTime?: string;
 }
 
 /** 공간 목록. 비회원도 조회할 수 있습니다(FR-SPACE-01). */
@@ -16,10 +21,10 @@ export function getSpaces({
   size = 20,
   keyword,
   status,
-  date,
+  date, location, minPrice, maxPrice, startTime, endTime,
 }: SpaceListParams = {}): Promise<Page<Space>> {
   return api.get<Page<Space>>(API_ROUTES.spaces.list, {
-    query: { page, size, keyword, status, date },
+    query: { page, size, keyword, status, date, location, minPrice, maxPrice, startTime, endTime },
     auth: false,
   });
 }

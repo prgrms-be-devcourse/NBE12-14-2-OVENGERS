@@ -68,4 +68,16 @@ public class ReservationOccupiedSlotAdapter implements OccupiedSlotProvider {
         }
         return false;
     }
+
+    @Override
+    public Set<Long> getOccupiedSpaceIds(LocalDateTime startInclusive, LocalDateTime endExclusive, LocalDateTime now) {
+        List<Long> spaceIds = reservationSlotRepository.findOccupiedSpaceIds(
+                startInclusive,
+                endExclusive,
+                now,
+                ReservationStatus.HELD,
+                OCCUPIED_STATUSES);
+
+        return new HashSet<>(spaceIds);
+    }
 }

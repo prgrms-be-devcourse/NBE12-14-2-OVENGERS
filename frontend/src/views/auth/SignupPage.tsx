@@ -53,7 +53,6 @@ export default function SignupPage() {
           <h2>좋은 공간에서<br />시작하는 새로운 일</h2>
           <p>나에게 맞는 공간을 찾고<br />필요한 시간만큼 이용하세요.</p>
         </div>
-        <small className="auth-image-note">건축 이미지 예시</small>
       </div>
 
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
