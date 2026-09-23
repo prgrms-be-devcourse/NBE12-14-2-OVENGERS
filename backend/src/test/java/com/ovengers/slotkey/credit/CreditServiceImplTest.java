@@ -133,7 +133,10 @@ class CreditServiceImplTest {
         given(reservationRepository.findById(reservationId))
                 .willReturn(Optional.of(reservation));
         given(member.getBalance())
-                .willReturn(13000);
+                .willReturn(
+                        10000,
+                        13000
+                );
 
         // when
         int balance = creditService.refund(
@@ -327,8 +330,8 @@ class CreditServiceImplTest {
         Long reservationId = 10L;
         int amount = 3000;
 
-        given(creditBalanceRepository.increase(memberId, amount))
-                .willReturn(0);
+        given(memberRepository.findById(memberId))
+                .willReturn(Optional.empty());
 
         // when
         BusinessException exception = assertThrows(
@@ -343,6 +346,46 @@ class CreditServiceImplTest {
         // then
         assertThat(exception.getErrorCode())
                 .isEqualTo(ErrorCode.MEMBER_NOT_FOUND);
+
+        verify(creditBalanceRepository, never())
+                .increase(memberId, amount);
+
+        verify(creditTransactionRepository, never())
+                .save(any(CreditTransaction.class));
+    }
+
+    // 환불 후 잔액 최대값 초과
+    @Test
+    @DisplayName("환불 후 잔액이 int 최대값을 초과하면 환불을 거절한다")
+    void refund_balanceOverflow_throwsException() {
+        // given
+        Long memberId = 1L;
+        Long reservationId = 10L;
+        int amount = 1000;
+
+        Member member = mock(Member.class);
+
+        given(memberRepository.findById(memberId))
+                .willReturn(Optional.of(member));
+        given(member.getBalance())
+                .willReturn(Integer.MAX_VALUE - 500);
+
+        // when
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> creditService.refund(
+                        memberId,
+                        reservationId,
+                        amount
+                )
+        );
+
+        // then
+        assertThat(exception.getErrorCode())
+                .isEqualTo(ErrorCode.VALIDATION_FAILED);
+
+        verify(creditBalanceRepository, never())
+                .increase(memberId, amount);
 
         verify(creditTransactionRepository, never())
                 .save(any(CreditTransaction.class));

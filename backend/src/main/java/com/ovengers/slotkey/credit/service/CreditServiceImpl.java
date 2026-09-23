@@ -73,6 +73,15 @@ public class CreditServiceImpl implements CreditService {
     ) {
         validateAmount(amount);
 
+        // 환불 전 회원 조회
+        Member member = findMember(memberId);
+
+        // 환불 후 잔액 검증
+        validateBalanceAfterRefund(
+                member.getBalance(),
+                amount
+        );
+
         // 잔액 증가
         int updatedRows =
                 creditBalanceRepository.increase(memberId, amount);
@@ -83,18 +92,18 @@ public class CreditServiceImpl implements CreditService {
             );
         }
 
-        // ID로 회원 / 예약 조회
-        Member member = findMember(memberId);
+        // 증가된 잔액을 가진 회원 / 예약 조회
+        Member updatedMember = findMember(memberId);
         Reservation reservation = findReservation(reservationId);
 
         saveTransaction(
-                member,
+                updatedMember,
                 amount,
                 CreditTransactionType.REFUND,
                 reservation
         );
 
-        return member.getBalance();
+        return updatedMember.getBalance();
     }
 
     // 예약 취소 위약금 차감
@@ -173,6 +182,22 @@ public class CreditServiceImpl implements CreditService {
             throw new BusinessException(
                     ErrorCode.VALIDATION_FAILED,
                     "크레딧 금액은 0보다 커야 합니다."
+            );
+        }
+    }
+
+    // 환불 후 잔액 검증
+    private void validateBalanceAfterRefund(
+            int currentBalance,
+            int amount
+    ) {
+        long balanceAfter =
+                (long) currentBalance + amount;
+
+        if (balanceAfter > Integer.MAX_VALUE) {
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "크레딧 잔액이 허용 범위를 초과합니다."
             );
         }
     }
