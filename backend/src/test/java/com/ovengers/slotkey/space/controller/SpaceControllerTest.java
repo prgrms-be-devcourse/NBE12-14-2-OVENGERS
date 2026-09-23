@@ -5,6 +5,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.global.error.GlobalExceptionHandler;
+import com.ovengers.slotkey.space.dto.request.SpaceSearchCondition;
 import com.ovengers.slotkey.space.dto.response.SlotResponse;
 import com.ovengers.slotkey.space.dto.response.SpaceSlotAvailabilityResponse;
 import com.ovengers.slotkey.space.entity.Space;
@@ -93,7 +94,9 @@ class SpaceControllerTest {
                 List<Space> spaces = List.of(createSpace(1L, "회의실 A"), createSpace(2L, "회의실 B"));
                 Page<Space> page = new PageImpl<>(spaces, pageable, spaces.size());
 
-                given(spaceQueryService.getSpacesPage(any(Pageable.class), eq(null))).willReturn(page);
+                SpaceSearchCondition expectedCondition =
+                                new SpaceSearchCondition(null, null, null, null, null, null, null);
+                given(spaceQueryService.getSpacesPage(any(Pageable.class), eq(expectedCondition))).willReturn(page);
 
                 // when & then
                 mockMvc.perform(get("/api/v1/spaces")
@@ -113,13 +116,13 @@ class SpaceControllerTest {
                                 .andExpect(jsonPath("$.data.totalPages").value(1));
 
                 ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-                verify(spaceQueryService).getSpacesPage(pageableCaptor.capture(), eq(null));
+                verify(spaceQueryService).getSpacesPage(pageableCaptor.capture(), eq(expectedCondition));
                 assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(20);
         }
 
         @Test
-        @DisplayName("GET /api/v1/spaces 요청 시 keyword, page, size 파라미터가 서비스에 올바르게 전달된다")
-        void getSpacesPage_withKeywordAndPaging_success() throws Exception {
+        @DisplayName("GET /api/v1/spaces 요청 시 keyword, location, 가격 범위, page, size 파라미터가 서비스에 올바르게 전달된다")
+        void getSpacesPage_withFiltersAndPaging_success() throws Exception {
                 // given
                 Pageable pageable = PageRequest.of(1, 10);
                 List<Space> spaces = List.of(
@@ -131,11 +134,16 @@ class SpaceControllerTest {
                 );
                 Page<Space> page = new PageImpl<>(spaces, pageable, 15);
 
-                given(spaceQueryService.getSpacesPage(any(Pageable.class), eq("강남"))).willReturn(page);
+                SpaceSearchCondition expectedCondition =
+                                new SpaceSearchCondition("강남", "강남", 3000L, 8000L, null, null, null);
+                given(spaceQueryService.getSpacesPage(any(Pageable.class), eq(expectedCondition))).willReturn(page);
 
                 // when & then
                 mockMvc.perform(get("/api/v1/spaces")
                                 .param("keyword", "강남")
+                                .param("location", "강남")
+                                .param("minPrice", "3000")
+                                .param("maxPrice", "8000")
                                 .param("page", "1")
                                 .param("size", "10")
                                 .contentType(MediaType.APPLICATION_JSON))
@@ -149,9 +157,34 @@ class SpaceControllerTest {
                                 .andExpect(jsonPath("$.data.totalPages").value(2));
 
                 ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-                verify(spaceQueryService).getSpacesPage(pageableCaptor.capture(), eq("강남"));
+                verify(spaceQueryService).getSpacesPage(pageableCaptor.capture(), eq(expectedCondition));
                 assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(1);
                 assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(10);
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/spaces 요청 시 date/startTime/endTime이 서비스에 올바르게 전달된다")
+        void getSpacesPage_withTimeFilter_success() throws Exception {
+                // given
+                Pageable pageable = PageRequest.of(0, 20);
+                List<Space> spaces = List.of(createSpace(1L, "회의실 A"));
+                Page<Space> page = new PageImpl<>(spaces, pageable, spaces.size());
+
+                SpaceSearchCondition expectedCondition = new SpaceSearchCondition(
+                                null, null, null, null,
+                                LocalDate.of(2026, 9, 23), LocalTime.of(14, 0), LocalTime.of(15, 0));
+                given(spaceQueryService.getSpacesPage(any(Pageable.class), eq(expectedCondition))).willReturn(page);
+
+                // when & then
+                mockMvc.perform(get("/api/v1/spaces")
+                                .param("date", "2026-09-23")
+                                .param("startTime", "14:00:00")
+                                .param("endTime", "15:00:00")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.data.content.length()").value(1));
+
+                verify(spaceQueryService).getSpacesPage(any(Pageable.class), eq(expectedCondition));
         }
 
         @Test

@@ -75,6 +75,21 @@ public interface ReservationSlotRepository extends JpaRepository<ReservationSlot
             @Param("ids") List<Long> ids,
             @Param("expired") ReservationStatus expired);
 
+    /**
+     * 지정한 시간 범위 [startInclusive, endExclusive) 안에서 유효 점유 슬롯을 가진 공간 id 목록(중복 없이).
+     * space 도메인의 "이 시간대에 예약 가능한 공간" 필터(OccupiedSlotProvider 포트)가 사용한다.
+     */
+    @Query("SELECT DISTINCT rs.spaceId FROM ReservationSlot rs, Reservation r " +
+                    "WHERE rs.reservationId = r.id " +
+                    "AND rs.slotStart >= :startInclusive AND rs.slotStart < :endExclusive " +
+                    "AND (r.status IN (:confirmedStatuses) OR (r.status = :heldStatus AND :now < r.holdExpiresAt))")
+    List<Long> findOccupiedSpaceIds(
+                    @Param("startInclusive") LocalDateTime startInclusive,
+                    @Param("endExclusive") LocalDateTime endExclusive,
+                    @Param("now") LocalDateTime now,
+                    @Param("heldStatus") ReservationStatus heldStatus,
+                    @Param("confirmedStatuses") List<ReservationStatus> confirmedStatuses);
+
     /** 특정 예약의 슬롯 목록을 조회한다. */
     List<ReservationSlot> findAllByReservationId(Long reservationId);
 

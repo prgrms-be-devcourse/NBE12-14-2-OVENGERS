@@ -23,5 +23,11 @@ public class DefaultOccupiedSlotProvider implements OccupiedSlotProvider {
             java.time.LocalTime closeTime, LocalDateTime fromTime) {
         return false;
     }
+
+    @Override
+    public java.util.Set<Long> getOccupiedSpaceIds(LocalDateTime startInclusive, LocalDateTime endExclusive,
+            LocalDateTime now) {
+        return Collections.emptySet();
+    }
 }
 

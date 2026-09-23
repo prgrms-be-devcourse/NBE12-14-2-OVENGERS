@@ -50,6 +50,9 @@
 ## 4. 공간 (Space)
 
 - `GET /spaces` (인증 불필요): `page`, `size`, `keyword`. `status=ACTIVE`인 공간만 기본 노출
+  - **2026-09-23 추가(오피스 찾기 필터)**: `location`(문자열, 부분일치), `minPrice`/`maxPrice`(Long, `pricePerSlot` 범위)
+    - **주의**: `location`은 지역 전용 컬럼이 아니라 공간의 상세 위치 문자열이다(`data-setting/sql/setup.sql` 샘플 기준 값은 정확히 `판교` / `하남` / `강남` 셋 중 하나 — **`한남`이 아니라 `하남`**이니 프론트 드롭다운 값은 이 세 값을 그대로 써야 한다). 그 외 수동 등록된 공간은 `서울시 강남구 테헤란로`처럼 상세 주소가 들어있을 수 있어 부분일치로 매치된다.
+  - **2026-09-23 추가(시간대 가용성 필터)**: `date`+`startTime`+`endTime`(HH:mm:ss)을 셋 다 지정하면 그 시간대에 점유된 슬롯이 하나도 없는 공간만 반환(참고용 스냅샷 — 실제 예약 가능 여부는 예약 생성 시점에 재검증). 셋 중 하나라도 빠지면 시간 필터는 적용되지 않는다. `startTime >= endTime`이면 `INVALID_TIME_RANGE`(400)
 - `GET /spaces/{spaceId}` (인증 불필요): 상세 (+ description, `version`). 오류: SPACE_NOT_FOUND(404)
 - `GET /spaces/{spaceId}/slots?date=YYYY-MM-DD`: 운영시간을 30분 단위로 쪼갠 예약 가능 여부. **참고용 스냅샷**(실제 확정 여부는 슬롯 INSERT 시점의 UNIQUE 제약으로만 판정 — 사전 조회는 화면 표시용일 뿐 규칙이 아니다)
 - `POST /admin/spaces` (ADMIN): `pricePerSlot`은 100원 단위 양수, `openingTime`/`closingTime`은 30분 경계이며 시작이 종료보다 빨라야 한다. 등록자 ID·생성 시각은 서버가 설정하고 `audit_logs`에 기록한다(`REGISTER_SPACE`). 오류: INVALID_OPERATING_HOURS(400), INVALID_PRICE_UNIT(400)
@@ -190,6 +193,27 @@
   - 오류: `VALIDATION_FAILED(400)` (날짜 역전 `dateFrom > dateTo` 또는 파라미터 타입 오류), `AUTHENTICATION_REQUIRED(401)`, `ACCESS_DENIED(403)` (USER)
   - 부수효과: 조회 자체는 감사 로그를 남기지 않음.
 
+## 9. 문의 (Inquiry, Q&A) — 2026-09-23 신규(MVP 3대 기능 외 추가 기능)
+
+> 문의 1건당 답변 1건(1:1)으로 단순화한다. 재질문/스레드형 재답변은 범위 밖.
+
+### 9-1. 회원용
+
+- `POST /inquiries` (인증 필요): 문의 생성. 요청 `{ title, content }`(title 최대 200자, content 최대 2000자, 둘 다 필수). 응답 201
+- `GET /inquiries` (인증 필요): 본인 문의 목록. `page`, `size`
+- `GET /inquiries/{inquiryId}` (인증 필요): 본인 문의 상세. 오류: `INQUIRY_NOT_FOUND`(404), `FORBIDDEN_NOT_OWNER`(403, 남의 문의 접근)
+- `PATCH /inquiries/{inquiryId}` (인증 필요): 본인 문의 수정. `status`가 `WAITING`일 때만 가능. 요청 바디는 생성과 동일. 오류: `INQUIRY_NOT_FOUND`(404), `FORBIDDEN_NOT_OWNER`(403), `INQUIRY_ALREADY_ANSWERED`(422, 이미 답변된 문의 수정 시도)
+
+### 9-2. 관리자용
+
+- `GET /admin/inquiries` (ADMIN): 전체 문의 목록. 쿼리 파라미터 `status`(WAITING/ANSWERED, 선택), `page`, `size`
+- `GET /admin/inquiries/{inquiryId}` (ADMIN): 문의 상세. 오류: `INQUIRY_NOT_FOUND`(404)
+- `POST /admin/inquiries/{inquiryId}/answer` (ADMIN): 답변 등록. 요청 `{ content }`(최대 2000자, 필수). 성공 시 `status`가 `ANSWERED`로 전이되고 이후 회원은 수정 불가. 오류: `INQUIRY_NOT_FOUND`(404)
+
+### 응답 필드 (`InquiryResponse`)
+
+`id`, `memberId`, `title`, `content`, `status`, `answerContent`, `answeredByMemberId`, `answeredAt`, `createdAt`
+
 ## Enum
 
 | 항목 | 값 |
@@ -202,6 +226,7 @@
 | `door_access_log.result` | ALLOW, DENY |
 | `audit_log.action` | REGISTER_SPACE, MODIFY_SPACE, SUSPEND_MEMBER, REACTIVATE_MEMBER, FORCE_CANCEL_RESERVATION, GRANT_CREDIT |
 | `audit_log.target_type` | SPACE, MEMBER, RESERVATION |
+| `inquiry.status` | WAITING, ANSWERED |
 
 > ~~`payment.status`~~ 는 `payment` 테이블 삭제와 함께 제거됨(§1-1, §11). 결제 결과는 `credit_transaction`으로 표현한다.
 
