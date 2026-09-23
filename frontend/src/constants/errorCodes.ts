@@ -33,6 +33,8 @@ export type ErrorCode =
   | 'SELF_GRANT_NOT_ALLOWED'
   | 'TARGET_IS_ADMIN'
   | 'RESERVATION_NOT_CONFIRMED'
+  | 'INQUIRY_NOT_FOUND'
+  | 'INQUIRY_ALREADY_ANSWERED'
   | 'NETWORK_ERROR';
 
 export const ERROR_CODE: Record<ErrorCode, ErrorCode> = {
@@ -62,10 +64,14 @@ export const ERROR_CODE: Record<ErrorCode, ErrorCode> = {
   SELF_GRANT_NOT_ALLOWED: 'SELF_GRANT_NOT_ALLOWED',
   TARGET_IS_ADMIN: 'TARGET_IS_ADMIN',
   RESERVATION_NOT_CONFIRMED: 'RESERVATION_NOT_CONFIRMED',
+  INQUIRY_NOT_FOUND: 'INQUIRY_NOT_FOUND',
+  INQUIRY_ALREADY_ANSWERED: 'INQUIRY_ALREADY_ANSWERED',
   NETWORK_ERROR: 'NETWORK_ERROR',
 };
 
 const MESSAGES: Record<ErrorCode, string> = {
+  INQUIRY_NOT_FOUND: '문의를 찾을 수 없습니다. 목록에서 다시 확인해 주세요.',
+  INQUIRY_ALREADY_ANSWERED: '이미 답변이 등록된 문의입니다. 최신 내용을 확인해 주세요.',
   VALIDATION_FAILED: '입력한 내용을 다시 확인해 주세요.',
   INVALID_CREDENTIALS: '이메일 또는 비밀번호가 올바르지 않습니다.',
   INVALID_REFRESH_TOKEN: '로그인이 만료되었습니다. 다시 로그인해 주세요.',

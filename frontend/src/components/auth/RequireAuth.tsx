@@ -21,7 +21,7 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!shouldRedirect) return;
-    router.replace(`${ROUTES.login}?redirect=${encodeURIComponent(pathname)}`);
+    router.replace(`${ROUTES.login}?redirect=${encodeURIComponent(pathname + window.location.search)}`);
   }, [shouldRedirect, pathname, router]);
 
   if (initializing) return <LoadingSpinner label="로그인 상태를 확인하고 있습니다…" />;

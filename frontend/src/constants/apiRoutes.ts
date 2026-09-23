@@ -23,6 +23,10 @@ export const API_ROUTES = {
     detail: (spaceId: number | string) => `/spaces/${spaceId}`,
     slots: (spaceId: number | string) => `/spaces/${spaceId}/slots`,
   },
+  inquiries: {
+    list: '/inquiries',
+    detail: (id: number | string) => `/inquiries/${id}`,
+  },
   reservations: {
     // 예약 생성 = 슬롯 확보(HOLD). 결제는 아직 일어나지 않는다(api-spec.md 5-1).
     create: '/reservations',
@@ -41,6 +45,9 @@ export const API_ROUTES = {
     verify: '/door-access/verify',
   },
   admin: {
+    inquiries: '/admin/inquiries',
+    inquiry: (id: number | string) => `/admin/inquiries/${id}`,
+    inquiryAnswer: (id: number | string) => `/admin/inquiries/${id}/answer`,
     spaces: '/admin/spaces',
     space: (spaceId: number | string) => `/admin/spaces/${spaceId}`,
     reservations: '/admin/reservations',
