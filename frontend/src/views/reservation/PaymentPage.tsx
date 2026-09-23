@@ -1,5 +1,7 @@
 'use client';
 
+import { hasAllBookingAgreements } from '../../constants/bookingTerms';
+import TermsAgreement from '../../components/reservation/TermsAgreement';
 import SpacePhoto from '../../components/space/SpacePhoto';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -33,6 +35,9 @@ export default function PaymentPage() {
   const { member, refreshMember } = useAuth();
   const { key: idempotencyKey } = useIdempotencyKey();
 
+  const [agreementState, setAgreementState] = useState<{ reservationId: string; ids: string[] }>({ reservationId: '', ids: [] });
+  const acceptedIds = agreementState.reservationId === String(reservationId) ? agreementState.ids : [];
+  const agreed = hasAllBookingAgreements(acceptedIds);
   const [locallyExpired, setLocallyExpired] = useState(false);
 
   const handleExpire = useCallback(
@@ -53,7 +58,7 @@ export default function PaymentPage() {
   } = useAsync(fetchReservation, [fetchReservation]);
 
   const pay = useAction(async () => {
-    if (!reservation) return;
+    if (!reservation || !agreed || locallyExpired) return;
 
     const spaceVersion =
         spaceVersionParam !== null
@@ -134,7 +139,7 @@ export default function PaymentPage() {
       member.balance < reservation.totalAmount;
 
   const paymentDisabled =
-      locallyExpired || insufficient;
+      locallyExpired || insufficient || !agreed;
 
   return (
       <div className="payment-page">
@@ -423,6 +428,12 @@ export default function PaymentPage() {
               </p>
             </div>
 
+            <TermsAgreement
+              key={reservationId}
+              acceptedIds={acceptedIds}
+              onChange={(ids) => setAgreementState({ reservationId: String(reservationId), ids })}
+              disabled={pay.loading || locallyExpired}
+            />
             <ErrorMessage error={pay.error} />
 
             {insufficient && (

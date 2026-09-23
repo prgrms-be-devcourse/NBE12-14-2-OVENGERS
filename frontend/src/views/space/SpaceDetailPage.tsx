@@ -19,7 +19,6 @@ import { MetaBadge } from '../../components/common/Badge';
 import SpacePhoto from '../../components/space/SpacePhoto';
 import SlotPicker from '../../components/space/SlotPicker';
 import PriceSummary from '../../components/reservation/PriceSummary';
-import TermsAgreement from '../../components/reservation/TermsAgreement';
 import Button from '../../components/common/Button';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorMessage from '../../components/common/ErrorMessage';
@@ -31,7 +30,6 @@ export default function SpaceDetailPage() {
   const { isAuthenticated } = useAuth();
 
   const [date, setDate] = useState(today());
-  const [agreed, setAgreed] = useState(false);
 
   const fetchSpace = useCallback(() => getSpace(spaceId), [spaceId]);
   const { data: space, loading: spaceLoading, error: spaceError } = useAsync(fetchSpace, [fetchSpace]);
@@ -93,9 +91,7 @@ export default function SpaceDetailPage() {
       ? '현재 신규 예약을 받지 않는 공간입니다.'
       : !selection.hasSelection
         ? '이용할 시간을 선택해 주세요.'
-        : !agreed
-          ? '이용 약관에 동의해 주세요.'
-          : null;
+        : null;
 
   return (
     <>
@@ -177,7 +173,6 @@ export default function SpaceDetailPage() {
 
           {isAuthenticated ? (
             <>
-              <TermsAgreement checked={agreed} onChange={setAgreed} disabled={submitting} />
               <ErrorMessage error={submitError} />
               <Button
                 variant="primary"

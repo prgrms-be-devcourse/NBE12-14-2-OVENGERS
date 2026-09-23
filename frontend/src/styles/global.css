@@ -458,3 +458,38 @@ dialog .modal-actions{flex-wrap:wrap}
   .spacecard > .cardbody > .row {
     flex-shrink: 0;
   }
+
+/* Agreement overview and dedicated reading dialog. */
+.payment-terms{margin:24px 0;padding-top:20px;border-top:1px solid var(--line)}
+.terms-summary-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:16px}
+.terms-summary-heading h3{margin:0}
+.terms-summary-heading>span{font-size:.8rem;color:var(--muted)}
+.terms-summary-button{display:flex;justify-content:space-between;width:100%;gap:16px;text-align:left;white-space:normal;background:var(--surface);padding:16px}
+.terms-summary-button>span{min-width:0}
+.terms-summary-button strong{display:block;font-size:.9rem;font-weight:600}
+.terms-summary-button small{display:block;margin-top:6px;font-weight:400;color:var(--muted)}
+.terms-summary-button svg{flex:none}
+.terms-dialog{width:min(800px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);padding:0;background:var(--surface);overflow:hidden}
+.terms-dialog[open]{display:flex;flex-direction:column}
+.terms-dialog-header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:28px 32px 20px;border-bottom:1px solid var(--line);flex-shrink:0}
+.terms-dialog-header h2{font-size:1.4rem;margin:0 0 8px}
+.terms-dialog-header p{margin:0;font-size:.9rem;color:var(--muted)}
+.terms-dialog-content{min-height:0;max-height:50dvh;overflow-y:auto;overscroll-behavior:contain;padding:28px 32px;line-height:1.85;scrollbar-gutter:stable}
+.terms-dialog-content h4{font-size:1rem;margin:28px 0 10px}
+.terms-dialog-content h4:first-child{margin-top:0}
+.terms-dialog-content p{margin:0 0 16px}
+.terms-dialog-content:focus-visible{outline:2px solid var(--blue);outline-offset:-4px}
+.terms-dialog-footer{padding:18px 32px 24px;border-top:1px solid var(--line);flex-shrink:0}
+.terms-dialog-footer .form-help{margin:0 0 12px}
+.terms-dialog-actions{display:flex;justify-content:space-between;align-items:center;gap:20px}
+.terms-dialog-actions .check{margin:0;line-height:1.6;color:var(--text)}
+.terms-dialog-actions input{flex:none}
+@media(max-width:600px){
+  .terms-dialog-header{padding:20px;gap:12px}.terms-dialog-header h2{font-size:1.15rem}
+  .terms-dialog-content{padding:20px}.terms-dialog-footer{padding:16px 20px}
+  .terms-dialog-actions{flex-wrap:wrap;gap:16px}.terms-dialog-actions>button{width:100%}
+}
+
+.terms-list{display:grid;gap:12px}
+.terms-version{font-size:.85rem;color:var(--muted)}
+.terms-dialog-content section+section{margin-top:28px}
