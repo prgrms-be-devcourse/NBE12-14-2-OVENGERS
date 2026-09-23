@@ -24,8 +24,8 @@ export function getAdminSpace(spaceId: number | string): Promise<Space> {
   return api.get<Space>(API_ROUTES.admin.space(spaceId));
 }
 
-/** 폼이 숫자로 정규화한 뒤 넘깁니다. */
-export type SpacePayload = Omit<SpaceFormValues, 'capacity' | 'pricePerSlot'> & {
+/** 폼이 숫자로 정규화한 뒤 넘깁니다. 이미지는 전용 PUT API를 사용하므로 제외합니다. */
+export type SpacePayload = Omit<SpaceFormValues, 'capacity' | 'pricePerSlot' | 'imagePath'> & {
   capacity: number;
   pricePerSlot: number;
 };
@@ -40,4 +40,14 @@ export function createSpace(payload: SpacePayload): Promise<Space> {
  */
 export function updateSpace(spaceId: number | string, payload: SpacePayload): Promise<Space> {
   return api.patch<Space>(API_ROUTES.admin.space(spaceId), payload);
+}
+
+/**
+ * 공간 대표 이미지 업로드.
+ * PUT /api/v1/admin/spaces/{spaceId}/image 로 multipart/form-data 전송합니다.
+ */
+export function uploadSpaceImage(spaceId: number | string, file: File): Promise<Space> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.put<Space>(API_ROUTES.admin.spaceImage(spaceId), formData);
 }
