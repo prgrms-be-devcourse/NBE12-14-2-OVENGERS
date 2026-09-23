@@ -19,6 +19,9 @@ import com.ovengers.slotkey.global.common.response.ApiResponse;
 import org.springframework.beans.factory.annotation.Value;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 
 @Tag(name = "인증", description = "회원가입, 로그인, 토큰 재발급 및 로그아웃 API")
 @RestController
@@ -44,6 +47,58 @@ public class AuthController {
                 가입 성공 시 회원 정보를 반환합니다. 로그인은 별도로 진행해야 합니다.
                 """
     )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "201",
+                    description = "회원가입 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "필수 입력값 누락, 입력 형식 오류 또는 비밀번호 확인 불일치",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = {
+                                    @ExampleObject(
+                                            name = "입력값 검증 실패",
+                                            value = """
+                                                {
+                                                  "status": "FAIL",
+                                                  "code": "VALIDATION_FAILED",
+                                                  "message": "비밀번호 확인을 입력해주세요."
+                                                }
+                                                """
+                                    ),
+                                    @ExampleObject(
+                                            name = "비밀번호 확인 불일치",
+                                            value = """
+                                                {
+                                                  "status": "FAIL",
+                                                  "code": "PASSWORD_CONFIRM_MISMATCH",
+                                                  "message": "비밀번호가 일치하지 않습니다."
+                                                }
+                                                """
+                                    )
+                            }
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "이미 가입된 이메일",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(
+                                    value = """
+                                        {
+                                          "status": "FAIL",
+                                          "code": "EMAIL_ALREADY_EXISTS",
+                                          "message": "이미 사용 중인 이메일입니다."
+                                        }
+                                        """
+                            )
+                    )
+            )
+    })
     @PostMapping("/signup")
     public ResponseEntity<ApiResponse<SignupResponse>> signup(
             @RequestBody @Valid SignupRequest request
