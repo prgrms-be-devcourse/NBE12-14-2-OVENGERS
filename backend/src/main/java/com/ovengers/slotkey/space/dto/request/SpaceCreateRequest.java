@@ -3,6 +3,7 @@ package com.ovengers.slotkey.space.dto.request;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.ovengers.slotkey.space.entity.Space;
 import com.ovengers.slotkey.space.entity.SpaceStatus;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -53,6 +54,10 @@ public record SpaceCreateRequest(
         @JsonFormat(pattern = "HH:mm")
         LocalTime closingTime
 ) {
+    @AssertTrue(message = "공간 사진은 별도 사진 업로드 API(PUT /api/v1/admin/spaces/{id}/image)로만 등록할 수 있습니다. imagePath를 비워두세요.")
+    public boolean isImagePathEmpty() {
+        return imagePath == null || imagePath.isBlank();
+    }
     public Space toEntity() {
         Space.validateOperatingHours(openingTime, closingTime);
         Space.validatePricePerSlot(pricePerSlot);
@@ -63,7 +68,7 @@ public record SpaceCreateRequest(
                 .description(description)
                 .capacity(capacity)
                 .pricePerSlot(pricePerSlot)
-                .imagePath(imagePath)
+                .imagePath(null)
                 .openingTime(openingTime)
                 .closingTime(closingTime)
                 .status(SpaceStatus.ACTIVE)

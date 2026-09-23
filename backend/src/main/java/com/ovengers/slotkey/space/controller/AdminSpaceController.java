@@ -48,6 +48,7 @@ public class AdminSpaceController {
 
     private final AdminSpaceService adminSpaceService;
     private final SpaceAuthorizationService spaceAuthorizationService;
+    private final com.ovengers.slotkey.space.service.SpaceImageService spaceImageService;
 
     @Operation(
             summary = "관리자 공간 목록 조회",
@@ -174,6 +175,16 @@ public class AdminSpaceController {
             @AuthenticationPrincipal AuthPrincipal authPrincipal) {
         spaceAuthorizationService.validateCanManageSpace(authPrincipal);
         SpaceDetailResponse response = adminSpaceService.updateSpace(spaceId, request, authPrincipal.memberId());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PutMapping(value = "/spaces/{spaceId}/image", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<SpaceDetailResponse>> uploadSpaceImage(
+            @PathVariable("spaceId") Long spaceId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @AuthenticationPrincipal AuthPrincipal authPrincipal) {
+        spaceAuthorizationService.validateCanManageSpace(authPrincipal);
+        SpaceDetailResponse response = spaceImageService.uploadAndAttachSpaceImage(spaceId, file, authPrincipal.memberId());
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

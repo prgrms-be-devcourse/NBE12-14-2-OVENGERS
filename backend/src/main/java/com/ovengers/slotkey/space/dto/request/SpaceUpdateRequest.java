@@ -3,6 +3,7 @@ package com.ovengers.slotkey.space.dto.request;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.ovengers.slotkey.space.entity.SpaceStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 
@@ -49,4 +50,9 @@ public record SpaceUpdateRequest(
 
         @Schema(description = "변경할 공간 상태", example = "ACTIVE")
         SpaceStatus status
-) {}
+) {
+    @AssertTrue(message = "공간 사진은 별도 사진 업로드 API(PUT /api/v1/admin/spaces/{id}/image)로만 수정할 수 있습니다. imagePath를 비워두세요.")
+    public boolean isImagePathEmpty() {
+        return imagePath == null || imagePath.isBlank();
+    }
+}

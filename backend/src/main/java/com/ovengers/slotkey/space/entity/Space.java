@@ -104,9 +104,7 @@ public class Space {
             }
             this.pricePerSlot = request.pricePerSlot();
         }
-        if (request.imagePath() != null) {
-            this.imagePath = request.imagePath();
-        }
+        // Note: imagePath는 updateDetail로 직접 수정하지 않고, uploadAndAttachSpaceImage(updateImagePath)로만 변경된다.
         if (request.openingTime() != null && request.closingTime() != null) {
             validateOperatingHours(request.openingTime(), request.closingTime());
             this.openingTime = request.openingTime();
@@ -125,5 +123,13 @@ public class Space {
 
     public void updateStatus(SpaceStatus status) {
         this.status = status;
+    }
+
+    /**
+     * 대표 이미지 경로를 수정한다.
+     * 사진 변경은 결제 전후 가격 일치 검증용 낙관적 잠금 버전(version)을 변경하지 않는다.
+     */
+    public void updateImagePath(String imagePath) {
+        this.imagePath = imagePath;
     }
 }
