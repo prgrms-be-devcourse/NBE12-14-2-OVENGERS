@@ -58,8 +58,9 @@ export const API_ROUTES = {
     memberRestore: (memberId: number | string) => `/admin/members/${memberId}/restore`,
     // 크레딧 지급(ADMIN_GRANT). 회수 없음, 자기 자신 지급 불가(core-domain-decisions.md 1-3).
     memberCredit: (memberId: number | string) => `/admin/members/${memberId}/credits`,
+    spaceImage: (spaceId: number | string) => `/admin/spaces/${spaceId}/image`,
   },
 };
 
 /** 인증 헤더를 붙이지 않는 경로 (비회원도 호출 가능) */
-export const PUBLIC_PATH_PREFIXES = ['/auth/', '/spaces'];
+export const PUBLIC_PATH_PREFIXES = ['/auth/', '/spaces', '/space-images'];

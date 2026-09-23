@@ -115,8 +115,14 @@ async function send<T>(
   path: string,
   { body, query, headers, auth = true }: SendOptions = {},
 ): Promise<T> {
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   const requestHeaders: Record<string, string> = { Accept: 'application/json', ...headers };
-  if (body !== undefined) requestHeaders['Content-Type'] = 'application/json';
+  if (body !== undefined && !isFormData && !requestHeaders['Content-Type']) {
+    requestHeaders['Content-Type'] = 'application/json';
+  }
+  if (isFormData) {
+    delete requestHeaders['Content-Type'];
+  }
   if (auth && accessToken) requestHeaders.Authorization = `Bearer ${accessToken}`;
 
   let response: Response;
@@ -124,7 +130,7 @@ async function send<T>(
     response = await fetch(buildUrl(path, query), {
       method,
       headers: requestHeaders,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
       credentials: 'same-origin',
     });
   } catch (cause) {

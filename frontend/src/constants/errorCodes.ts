@@ -36,6 +36,12 @@ export type ErrorCode =
   | 'INQUIRY_NOT_FOUND'
   | 'INQUIRY_ALREADY_ANSWERED'
   | 'INVALID_TIME_RANGE'
+  | 'IMAGE_FILE_EMPTY'
+  | 'INVALID_IMAGE_FORMAT'
+  | 'IMAGE_SIZE_EXCEEDED'
+  | 'IMAGE_DIMENSIONS_EXCEEDED'
+  | 'IMAGE_NOT_FOUND'
+  | 'IMAGE_STORAGE_ERROR'
   | 'NETWORK_ERROR';
 
 export const ERROR_CODE: Record<ErrorCode, ErrorCode> = {
@@ -68,6 +74,12 @@ export const ERROR_CODE: Record<ErrorCode, ErrorCode> = {
   INQUIRY_NOT_FOUND: 'INQUIRY_NOT_FOUND',
   INQUIRY_ALREADY_ANSWERED: 'INQUIRY_ALREADY_ANSWERED',
   INVALID_TIME_RANGE: 'INVALID_TIME_RANGE',
+  IMAGE_FILE_EMPTY: 'IMAGE_FILE_EMPTY',
+  INVALID_IMAGE_FORMAT: 'INVALID_IMAGE_FORMAT',
+  IMAGE_SIZE_EXCEEDED: 'IMAGE_SIZE_EXCEEDED',
+  IMAGE_DIMENSIONS_EXCEEDED: 'IMAGE_DIMENSIONS_EXCEEDED',
+  IMAGE_NOT_FOUND: 'IMAGE_NOT_FOUND',
+  IMAGE_STORAGE_ERROR: 'IMAGE_STORAGE_ERROR',
   NETWORK_ERROR: 'NETWORK_ERROR',
 };
 
@@ -101,6 +113,12 @@ const MESSAGES: Record<ErrorCode, string> = {
   SELF_GRANT_NOT_ALLOWED: '자기 자신에게는 크레딧을 지급할 수 없습니다.',
   TARGET_IS_ADMIN: '관리자 계정은 정지하거나 복구할 수 없습니다.',
   RESERVATION_NOT_CONFIRMED: '취소되었거나 이미 종료된 예약입니다.',
+  IMAGE_FILE_EMPTY: '업로드할 이미지 파일을 선택해 주세요.',
+  INVALID_IMAGE_FORMAT: 'JPG, PNG 형식의 이미지 파일만 업로드할 수 있습니다.',
+  IMAGE_SIZE_EXCEEDED: '이미지 크기는 최대 5MB까지 업로드할 수 있습니다.',
+  IMAGE_DIMENSIONS_EXCEEDED: '이미지 해상도는 최대 4096px까지 지원됩니다.',
+  IMAGE_NOT_FOUND: '이미지를 찾을 수 없습니다.',
+  IMAGE_STORAGE_ERROR: '이미지 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
   NETWORK_ERROR: '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.',
 };
 
@@ -110,6 +128,7 @@ const STATUS_FALLBACK: Record<number, string> = {
   403: '접근 권한이 없습니다.',
   404: '요청한 정보를 찾을 수 없습니다.',
   409: '현재 상태와 충돌하는 요청입니다.',
+  413: '파일 크기가 허용 한도(5MB)를 초과했습니다.',
   422: '처리할 수 없는 요청입니다.',
   500: '서버에서 오류가 발생했습니다.',
 };
