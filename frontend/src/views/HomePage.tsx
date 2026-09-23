@@ -37,7 +37,6 @@ export default function HomePage() {
           <a className={`${styles.outlineButton} ${styles.heroButton}`} href="#offices">공간 둘러보기 <Arrow down /></a>
         </div>
         <a href="#offices" className={styles.scrollCue} aria-label="아래 공간 목록으로 이동"><Arrow down /></a>
-        <small className={styles.imageNote}>건축 이미지 예시</small>
       </section>
 
       <section id="offices" className={styles.offices} aria-labelledby="offices-title">

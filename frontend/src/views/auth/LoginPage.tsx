@@ -36,7 +36,6 @@ export default function LoginPage() {
           <h2>다시 만나는<br />나의 업무 공간</h2>
           <p>예약부터 이용까지<br />한곳에서 편하게 관리하세요.</p>
         </div>
-        <small className="auth-image-note">건축 이미지 예시</small>
       </div>
 
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
