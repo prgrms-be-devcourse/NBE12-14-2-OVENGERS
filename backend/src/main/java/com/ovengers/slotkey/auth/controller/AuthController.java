@@ -17,7 +17,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import com.ovengers.slotkey.global.common.response.ApiResponse;
 import org.springframework.beans.factory.annotation.Value;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "인증", description = "회원가입, 로그인, 토큰 재발급 및 로그아웃 API")
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
@@ -33,6 +36,14 @@ public class AuthController {
     private String cookieSameSite;
 
     // 공통 ApiResponse 형식이 정해지면 추후 반환 형태 수정
+    @Operation(
+            summary = "회원가입",
+            description = """
+                이메일, 비밀번호, 비밀번호 확인, 닉네임으로 가입합니다.
+                비밀번호와 확인값이 일치해야 하며, 이미 사용 중인 이메일은 가입할 수 없습니다.
+                가입 성공 시 회원 정보를 반환합니다. 로그인은 별도로 진행해야 합니다.
+                """
+    )
     @PostMapping("/signup")
     public ResponseEntity<ApiResponse<SignupResponse>> signup(
             @RequestBody @Valid SignupRequest request
