@@ -84,3 +84,27 @@ test('admin can answer once; answered inquiry displays response without form',()
   assert.match(detail('WAITING',true),/답변 등록/);
   const html=detail('ANSWERED',true);assert.match(html,/답변입니다/);assert.doesNotMatch(html,/<textarea/);
 });
+
+const dashboard = load('utils/adminDashboard.ts');
+const reservation = (reservationId, status, startTime='2026-09-23T09:00:00',spaceId=1) => ({reservationId,status,startTime,endTime:'2026-09-23T10:00:00',spaceId});
+test('dashboard calendar uses Seoul date near UTC midnight',()=>{
+  assert.equal(dashboard.seoulDate(new Date('2026-09-22T16:00:00Z')),'2026-09-23');
+});
+test('dashboard counts selected date and space; cancelled bookings do not inflate active totals',()=>{
+  const rows=[reservation(1,'HELD'),reservation(2,'CONFIRMED'),reservation(3,'IN_USE','2026-09-23T09:00:00',2),reservation(4,'CANCELLED')];
+  const selected=dashboard.selectDashboardReservations(rows,'2026-09-23','1');
+  assert.deepEqual(dashboard.countDashboardStatuses(selected),{HELD:1,CONFIRMED:1,IN_USE:0,COMPLETED:0});
+  assert.equal(dashboard.selectDashboardReservations(rows,'2026-09-24').length,0);
+});
+test('dashboard prioritizes in-use then held then confirmed without mutating input',()=>{
+  const rows=[reservation(1,'CONFIRMED'),reservation(2,'HELD'),reservation(3,'IN_USE')];
+  assert.deepEqual(dashboard.sortDashboardReservations(rows).map(r=>r.reservationId),[3,2,1]);
+  assert.equal(rows[0].reservationId,1);
+});
+test('dashboard reads all pages and rejects partial totals on request failure',async()=>{
+  const api=load('api/adminDashboardApi.ts',{'./client':{},'./adminSpaceApi':{}});
+  const requested=[];
+  assert.deepEqual(await api.collectDashboardPages(async page=>{requested.push(page);return {content:[page],totalPages:3};}),[0,1,2]);
+  assert.deepEqual(requested,[0,1,2]);
+  await assert.rejects(()=>api.collectDashboardPages(async page=>{if(page===1) throw new Error('offline');return {content:[0],totalPages:2};}),/offline/);
+});

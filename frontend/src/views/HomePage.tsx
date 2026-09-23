@@ -9,6 +9,7 @@ import { ROUTES } from '@/constants/routePaths';
 import styles from './HomePage.module.css';
 import StoryScroller from './StoryScroller';
 import HomeReservations from '../components/reservation/HomeReservations';
+import AdminDashboard from '../components/admin/AdminDashboard';
 
 const fetchFeaturedSpaces = () => getSpaces({ page: 0, size: 3, status: 'ACTIVE' });
 
@@ -41,6 +42,7 @@ export default function HomePage() {
       </section>
 
       <HomeReservations />
+      <AdminDashboard compact />
 
       <section id="offices" className={styles.offices} aria-labelledby="offices-title">
         <div className={styles.sectionHeading}>

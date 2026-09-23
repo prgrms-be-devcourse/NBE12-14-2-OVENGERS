@@ -19,6 +19,7 @@ export const ROUTES = {
 
   door: '/door',
 
+  adminDashboard: '/admin/dashboard',
   adminSpaces: '/admin/spaces',
   adminSpaceNew: '/admin/spaces/new',
   adminSpaceEdit: (spaceId: number | string) => `/admin/spaces/${spaceId}/edit`,
@@ -41,6 +42,7 @@ export const USER_NAV: NavItem[] = [
 
 /** 좌측 메뉴 (관리자) */
 export const ADMIN_NAV: NavItem[] = [
+  { href: ROUTES.adminDashboard, label: '대시보드' },
   { href: ROUTES.adminInquiries, label: '문의 관리' },
   { href: ROUTES.adminSpaces, label: '공간 관리' },
   { href: ROUTES.adminReservations, label: '예약 관리' },
