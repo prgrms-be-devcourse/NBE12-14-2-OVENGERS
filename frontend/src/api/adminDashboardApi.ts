@@ -30,8 +30,8 @@ export async function collectDashboardPages<T>(fetchPage: (page: number) => Prom
 
 export async function getAdminDashboard() {
   const [reservations, spaces] = await Promise.all([
-    collectDashboardPages(page => api.get<Page<DashboardReservation>>(API_ROUTES.admin.reservations, { query: { page, size: 100, sort: 'id,desc' } })),
-    collectDashboardPages<Space>(page => getAdminSpaces({ page, size: 100 })),
+    collectDashboardPages(page => api.get<Page<DashboardReservation>>(API_ROUTES.admin.reservations, { query: { page, size: 1000, sort: 'id,desc' } })),
+    collectDashboardPages<Space>(page => getAdminSpaces({ page, size: 1000 })),
   ]);
   return { reservations: [...new Map(reservations.map(row => [row.reservationId, row])).values()], spaces, fetchedAt: Date.now() };
 }
