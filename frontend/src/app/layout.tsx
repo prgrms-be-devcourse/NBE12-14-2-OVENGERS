@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import '../styles/global.css';
 import '../styles/home-shell.css';
 import Providers from './providers';
+import Footer from '../components/layout/Footer';
+import '../styles/site-footer.css';
 
 export const metadata = {
   title: {
@@ -30,6 +32,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="ko">
       <body>
         <Providers>{children}</Providers>
+        <Footer />
       </body>
     </html>
   );
