@@ -17,7 +17,27 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springdoc.core.annotations.ParameterObject;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 
+@ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "AUTHENTICATION_REQUIRED / INVALID_ACCESS_TOKEN: 인증 정보가 없거나 토큰이 유효하지 않음",
+                content = @Content
+        ),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "403",
+                description = "ACCESS_DENIED / FORBIDDEN_ROLE: 관리자 권한이 없음",
+                content = @Content
+        )
+})
+@Tag(name = "관리자 - 회원", description = "회원 조회, 정지·복구 및 크레딧 지급 API")
+@SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/api/v1/admin/members")
 @RequiredArgsConstructor
@@ -26,10 +46,26 @@ public class AdminMemberController {
     private final AdminMemberService adminMemberService;
     private final MemberAuthorizationService memberAuthorizationService;
 
+    @Operation(
+            summary = "회원 목록 조회",
+            description = """
+                관리자 권한으로 회원 목록을 조회합니다.
+                status로 회원 상태를 필터링하고, keyword로 검색할 수 있습니다.
+                page는 0부터 시작하며, 기본 페이지 크기는 20입니다.
+                """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "회원 목록 조회 성공",
+                    useReturnTypeSchema = true
+            )
+    })
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<AdminMemberResponse>>> getMembers(
             @RequestParam(required = false) MemberStatus status,
             @RequestParam(required = false) String keyword,
+            @ParameterObject
             @PageableDefault(size = 20) Pageable pageable,
             @AuthenticationPrincipal AuthPrincipal authPrincipal) {
         memberAuthorizationService.validateCanManageMember(authPrincipal);
@@ -38,6 +74,35 @@ public class AdminMemberController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @Operation(
+            summary = "회원 정지",
+            description = """
+                관리자 권한으로 대상 회원을 정지합니다.
+                요청 본문에 정지 사유를 입력해야 합니다.
+                """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "회원 상태 변경 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "VALIDATION_FAILED: 변경 사유 누락 또는 길이 제한 위반",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "MEMBER_NOT_FOUND: 대상 회원이 존재하지 않음",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "422",
+                    description = "TARGET_IS_ADMIN: 관리자 계정은 정지하거나 복구할 수 없음",
+                    content = @Content
+            )
+    })
     @PatchMapping("/{memberId}/suspend")
     public ResponseEntity<ApiResponse<MemberStatusChangeResponse>> suspend(
             @PathVariable Long memberId,
@@ -49,6 +114,36 @@ public class AdminMemberController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+
+    @Operation(
+            summary = "회원 복구",
+            description = """
+                관리자 권한으로 대상 회원의 상태를 복구합니다.
+                요청 본문에 복구 사유를 입력해야 합니다.
+                """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "회원 상태 변경 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "VALIDATION_FAILED: 변경 사유 누락 또는 길이 제한 위반",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "MEMBER_NOT_FOUND: 대상 회원이 존재하지 않음",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "422",
+                    description = "TARGET_IS_ADMIN: 관리자 계정은 정지하거나 복구할 수 없음",
+                    content = @Content
+            )
+    })
     @PatchMapping("/{memberId}/restore")
     public ResponseEntity<ApiResponse<MemberStatusChangeResponse>> restore(
             @PathVariable Long memberId,
@@ -60,6 +155,36 @@ public class AdminMemberController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @Operation(
+            summary = "회원 크레딧 지급",
+            description = """
+                관리자 권한으로 대상 회원에게 크레딧을 지급합니다.
+                요청 본문에 지급 금액과 사유를 입력해야 합니다.
+                처리 후 대상 회원 정보를 반환합니다.
+                """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "크레딧 지급 성공. 지급 후 회원 정보 반환",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "VALIDATION_FAILED: 지급 금액 또는 사유가 입력 조건에 맞지 않음",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "MEMBER_NOT_FOUND: 대상 회원이 존재하지 않음",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "422",
+                    description = "SELF_GRANT_NOT_ALLOWED: 자기 자신에게 크레딧을 지급할 수 없음",
+                    content = @Content
+            )
+    })
     @PostMapping("/{memberId}/credits")
     public ResponseEntity<ApiResponse<AdminMemberResponse>> grantCredit(
             @PathVariable Long memberId,
