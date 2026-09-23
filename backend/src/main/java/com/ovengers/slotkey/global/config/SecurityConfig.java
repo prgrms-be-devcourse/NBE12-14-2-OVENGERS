@@ -58,7 +58,8 @@ public class SecurityConfig {
                                         // 공간 목록, 상세, 슬롯 가용성 비회원 조회 허용
                                         .requestMatchers(
                                                         HttpMethod.GET,
-                                                        "/api/v1/spaces/**")
+                                                        "/api/v1/spaces/**",
+                                                        "/api/v1/space-images/**")
                                         .permitAll()
 
                         // 관리자 권한 필요
