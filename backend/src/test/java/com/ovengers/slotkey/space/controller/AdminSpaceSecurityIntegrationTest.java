@@ -15,15 +15,25 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.imageio.ImageIO;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -202,6 +212,79 @@ class AdminSpaceSecurityIntegrationTest extends IntegrationTestSupport {
                 .filteredOn(auditLog -> auditLog.getActorMemberId().equals(admin.getId()))
                 .extracting(auditLog -> auditLog.getAction())
                 .containsExactlyInAnyOrder(AuditAction.REGISTER_SPACE, AuditAction.MODIFY_SPACE);
+    }
+
+    @Test
+    @DisplayName("미인증 요청은 관리자 공간 대표 이미지를 업로드할 수 없고 파일/공간/감사로그에 부작용이 없다")
+    void uploadSpaceImage_unauthenticated_returns401WithoutSideEffects() throws Exception {
+        Space space = saveSpace(SpaceStatus.ACTIVE);
+        long auditsBefore = auditLogRepository.count();
+        byte[] bytes = createSampleJpegBytes(100, 100);
+        MockMultipartFile file = new MockMultipartFile("file", "test.jpg", "image/jpeg", bytes);
+
+        mockMvc.perform(multipart(HttpMethod.PUT, ADMIN_SPACES_PATH + "/{spaceId}/image", space.getId())
+                        .file(file))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+
+        Space reloaded = spaceRepository.findById(space.getId()).orElseThrow();
+        assertThat(reloaded.getImagePath()).isNull();
+        assertThat(auditLogRepository.count()).isEqualTo(auditsBefore);
+    }
+
+    @Test
+    @DisplayName("USER 역할은 관리자 공간 대표 이미지를 업로드할 수 없고 파일/공간/감사로그에 부작용이 없다")
+    void uploadSpaceImage_userRole_returns403WithoutSideEffects() throws Exception {
+        Member user = saveMember(MemberRole.USER, MemberStatus.ACTIVE);
+        Space space = saveSpace(SpaceStatus.ACTIVE);
+        long auditsBefore = auditLogRepository.count();
+        byte[] bytes = createSampleJpegBytes(100, 100);
+        MockMultipartFile file = new MockMultipartFile("file", "test.jpg", "image/jpeg", bytes);
+
+        mockMvc.perform(multipart(HttpMethod.PUT, ADMIN_SPACES_PATH + "/{spaceId}/image", space.getId())
+                        .file(file)
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken(user)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+
+        Space reloaded = spaceRepository.findById(space.getId()).orElseThrow();
+        assertThat(reloaded.getImagePath()).isNull();
+        assertThat(auditLogRepository.count()).isEqualTo(auditsBefore);
+    }
+
+    @Test
+    @DisplayName("ADMIN 역할은 관리자 공간 대표 이미지를 업로드할 수 있고 공간 갱신과 MODIFY_SPACE 감사 로그를 기록한다")
+    void uploadSpaceImage_adminRole_returns200AndUpdatesSpaceAndLogsAudit() throws Exception {
+        Member admin = saveMember(MemberRole.ADMIN, MemberStatus.ACTIVE);
+        Space space = saveSpace(SpaceStatus.ACTIVE);
+        byte[] bytes = createSampleJpegBytes(200, 150);
+        MockMultipartFile file = new MockMultipartFile("file", "office.jpg", "image/jpeg", bytes);
+
+        mockMvc.perform(multipart(HttpMethod.PUT, ADMIN_SPACES_PATH + "/{spaceId}/image", space.getId())
+                        .file(file)
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("OK"))
+                .andExpect(jsonPath("$.data.imagePath").value(org.hamcrest.Matchers.startsWith("/api/v1/space-images/")));
+
+        Space reloaded = spaceRepository.findById(space.getId()).orElseThrow();
+        assertThat(reloaded.getImagePath()).startsWith("/api/v1/space-images/");
+
+        assertThat(auditLogRepository.findAll())
+                .filteredOn(auditLog -> auditLog.getActorMemberId().equals(admin.getId()))
+                .extracting(auditLog -> auditLog.getAction())
+                .contains(AuditAction.MODIFY_SPACE);
+    }
+
+    private byte[] createSampleJpegBytes(int width, int height) throws IOException {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2d = image.createGraphics();
+        g2d.setColor(Color.MAGENTA);
+        g2d.fillRect(0, 0, width, height);
+        g2d.dispose();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(image, "jpg", baos);
+        return baos.toByteArray();
     }
 
     private Member saveMember(MemberRole role, MemberStatus status) {
