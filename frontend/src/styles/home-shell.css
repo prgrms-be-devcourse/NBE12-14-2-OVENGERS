@@ -2,8 +2,7 @@
 html:has(.home-shell){scroll-behavior:smooth;scroll-padding-top:96px}
 .home-shell{--home-ending:#142d4e;background:#f1f6fb;color:#20334d;color-scheme:light;font-family:"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
 .home-main{width:100%;margin:0;padding:0}
-.home-shell .header{position:fixed;inset:0 0 auto;height:88px;padding:0 clamp(24px,5vw,90px);border:0;background:transparent;backdrop-filter:none;color:white;transition:background .25s,color .25s,box-shadow .25s;gap:30px}
-.home-shell .header.header-scrolled{background:#f8fbfef5;backdrop-filter:blur(18px);color:#20334d;box-shadow:0 1px 0 #dce6ef}
+.home-shell .header{position:fixed;inset:0 0 auto;height:88px;padding:0 clamp(24px,5vw,90px);border:0;background:transparent;backdrop-filter:none;color:white;transform:translate3d(0,var(--home-header-offset,0px),0);gap:30px}
 .home-shell .brand{font-size:1.45rem;font-weight:500;gap:9px;letter-spacing:-.03em}
 .home-shell .brand em{color:inherit}
 .home-shell .brandmark{border-radius:0;width:34px;height:34px}
@@ -15,8 +14,6 @@ html:has(.home-shell){scroll-behavior:smooth;scroll-padding-top:96px}
 .home-shell .header-actions .badge{background:#ffffff16;border-color:#ffffff55;color:inherit;font-weight:400}
 .home-shell .header-actions .btn,.home-shell .header-actions button{background:transparent;border-color:#ffffff90;color:inherit;font-weight:400;border-radius:999px;font-size:.8rem;padding:7px 15px}
 .home-shell .header-actions .btn:hover,.home-shell .header-actions button:hover{background:#ffffff20}
-.home-shell .header-scrolled .header-actions .btn,.home-shell .header-scrolled .header-actions button,.home-shell .header-scrolled .header-actions .badge{border-color:#bacce0}
-.home-shell .header-scrolled .header-actions .btn:hover,.home-shell .header-scrolled .header-actions button:hover{background:#e6eff9}
 .footer-brand{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-size:1.1rem;font-weight:500;color:inherit}
 .home-shell .footer{background:var(--home-ending);max-width:none;margin:0;padding:24px clamp(24px,5vw,90px) 28px;border-color:#ffffff24;color:#c0d0e2;align-items:center;font-size:.875rem;line-height:1.85}
 .home-shell .footer-brand{color:#f7fbff;font-size:1.25rem}

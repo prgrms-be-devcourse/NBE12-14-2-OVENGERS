@@ -153,6 +153,7 @@ export interface StatusHistory {
 }
 
 export interface ReservationSummary {
+  holdExpiresAt?: string | null;
   reservationId: number;
   spaceId: number;
   spaceName: string;

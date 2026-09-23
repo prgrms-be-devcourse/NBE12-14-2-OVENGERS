@@ -8,6 +8,7 @@ import { useAsync } from '@/hooks/useApi';
 import { ROUTES } from '@/constants/routePaths';
 import styles from './HomePage.module.css';
 import StoryScroller from './StoryScroller';
+import HomeReservations from '../components/reservation/HomeReservations';
 
 const fetchFeaturedSpaces = () => getSpaces({ page: 0, size: 3, status: 'ACTIVE' });
 
@@ -29,7 +30,7 @@ export default function HomePage() {
 
   return (
     <div className={styles.home}>
-      <section className={styles.hero} aria-labelledby="home-title">
+      <section data-home-hero className={styles.hero} aria-labelledby="home-title">
         <Image className={styles.heroPhoto} src="/images/main/pangyo-blue-hour.webp" alt="푸른 저녁 하늘 아래 곡선형 유리 외벽과 따뜻한 조명이 어우러진 건축 이미지" fill priority sizes="100vw" />
         <div className={styles.heroShade} />
         <div className={styles.heroContent}>
@@ -38,6 +39,8 @@ export default function HomePage() {
         </div>
         <a href="#offices" className={styles.scrollCue} aria-label="아래 공간 목록으로 이동"><Arrow down /></a>
       </section>
+
+      <HomeReservations />
 
       <section id="offices" className={styles.offices} aria-labelledby="offices-title">
         <div className={styles.sectionHeading}>

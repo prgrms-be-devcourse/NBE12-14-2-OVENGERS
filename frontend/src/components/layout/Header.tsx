@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { ROUTES, USER_NAV } from '../../constants/routePaths';
 import { useAuth } from '../../hooks/useAuth';
 import { formatCredit } from '../../utils/price';
@@ -15,16 +15,40 @@ export default function Header() {
   const pathname = usePathname();
   const isHome = pathname === '/';
   const hideMyReservations = isAdmin || pathname === '/admin' || pathname.startsWith('/admin/');
-  const [scrolled, setScrolled] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    const update = () => setScrolled(window.scrollY > 48);
+    const header = headerRef.current;
+    const hero = document.querySelector<HTMLElement>('[data-home-hero]');
+    if (!isHome || !header || !hero) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      // Keep navigation over the hero until its lower edge pushes it offscreen.
+      const height = header.offsetHeight;
+      const offset = Math.min(height, Math.max(0, height - hero.getBoundingClientRect().bottom));
+      header.style.setProperty('--home-header-offset', `${-offset}px`);
+      header.inert = offset >= height;
+      if (header.inert) header.querySelector('details')?.removeAttribute('open');
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    const observer = new ResizeObserver(schedule);
+    observer.observe(header);
+    observer.observe(hero);
     update();
-    window.addEventListener('scroll', update, { passive: true });
-    return () => window.removeEventListener('scroll', update);
-  }, []);
+    window.addEventListener('scroll', schedule, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener('scroll', schedule);
+      header.style.removeProperty('--home-header-offset');
+      header.inert = false;
+    };
+  }, [isHome]);
 
   return (
-    <header className={`header${isHome && scrolled ? ' header-scrolled' : ''}`}>
+    <header ref={headerRef} className="header">
       <Link href={ROUTES.home} className="brand">
         <BrandMark className="brandmark" size={40} />
         <span>Slot <em>Key</em></span>
