@@ -490,6 +490,15 @@ dialog .modal-actions{flex-wrap:wrap}
   .terms-dialog-actions{flex-wrap:wrap;gap:16px}.terms-dialog-actions>button{width:100%}
 }
 
+.door-reservation-preview{display:flex;gap:16px;align-items:center;margin:0 0 24px;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.door-reservation-preview img,.door-reservation-preview .photo-placeholder{width:112px;height:88px;flex:none;border-radius:8px;object-fit:cover}
+.door-photo-placeholder{display:grid;place-items:center;background:var(--raised);color:var(--muted);font-size:.8rem}
+.door-reservation-preview>div:last-child{min-width:0;overflow-wrap:anywhere}
+.door-reservation-preview h2{font-size:1rem;margin:0 0 4px}
+.door-reservation-preview p{margin:0;color:var(--muted);font-size:.875rem}
+@media(max-width:420px){.door-reservation-preview{gap:12px}.door-reservation-preview img,.door-reservation-preview .photo-placeholder{width:80px;height:80px}}
+
+
 /* Shared booking progress: consistent breathing room at every step. */
 .payment-steps{display:flex;max-width:1040px;gap:0;margin:16px auto 64px;padding:0;align-items:center}
 .payment-steps li{flex:1;min-width:0;gap:16px;align-items:center;flex-direction:row}
