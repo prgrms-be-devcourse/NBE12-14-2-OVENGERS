@@ -1,5 +1,7 @@
 'use client';
+
 import { useId, useState } from 'react';
+
 import type { FormEvent } from 'react';
 import Input from '../common/Input';
 import Select from '../common/Select';
@@ -18,15 +20,18 @@ export default function SpaceSearchFilter({ onApply }: { onApply: (filters: Spac
     event.preventDefault();
     const validation = validateSpaceSearch(draft);
     setError(validation);
+
     if (validation) setExpanded(true);
     if (!validation) onApply({ ...draft });
   };
   return <form noValidate className={styles.filter} onSubmit={submit} aria-label="공간 검색 조건">
+
     <div className={styles.primary}>
       <Input label="공간 검색" placeholder="공간 이름 또는 위치" value={draft.keyword} onChange={(event) => update({ keyword: event.target.value })} />
       <Select label="지역" value={draft.location} options={['', '판교', '하남', '강남'].map((value) => ({ value, label: value || '전체 지역' }))}
         onChange={(event) => update({ location: event.target.value })} />
     </div>
+
     <button type="button" className={styles.toggle} aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(!expanded)}>
       상세 검색 <span>{expanded ? '접기' : '펼치기'}</span>
       {[draft.minPrice, draft.maxPrice, draft.date, draft.startTime, draft.endTime].some(Boolean) && <small>조건 입력됨</small>}
@@ -51,6 +56,7 @@ export default function SpaceSearchFilter({ onApply }: { onApply: (filters: Spac
     <div className={styles.footer}>
       <p>조건을 선택한 뒤 검색을 눌러 주세요.</p>
       <div className={styles.actions}><Button onClick={() => { setDraft(EMPTY_SPACE_FILTERS); setExpanded(false); setError(null); onApply(EMPTY_SPACE_FILTERS); }}>초기화</Button><Button type="submit" variant="primary">검색</Button></div>
+
     </div>
   </form>;
 }

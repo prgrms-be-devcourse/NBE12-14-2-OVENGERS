@@ -13,3 +13,4 @@
 .footer p{font-size:.82rem;line-height:1.7;margin:0}.actions{display:flex;gap:10px;flex:none}
 @media(max-width:1000px){.secondary{grid-template-columns:1fr;gap:22px}}
 @media(max-width:600px){.filter{padding:20px}.primary{grid-template-columns:1fr;gap:16px}.time{grid-template-columns:1fr 1fr}.time>label:first-child{grid-column:1/-1}.footer{flex-direction:column;align-items:stretch;gap:12px}.actions>button{flex:1}}
+
