@@ -24,6 +24,7 @@ BACKEND_ORIGIN=http://localhost:8080
 | `npm run start` | 빌드 결과 실행 |
 | `npm run lint` | ESLint 검사 (`next/core-web-vitals` + `next/typescript`) |
 | `npx tsc --noEmit` | 타입 검사만 (빌드 없이) |
+| `node --test tests/*.test.cjs` | 내장 runner 기반 단위 테스트(14개) 실행 |
 
 ## 환경변수
 
@@ -33,24 +34,19 @@ BACKEND_ORIGIN=http://localhost:8080
 | `BACKEND_ORIGIN` | 서버(rewrite) | `/api/v1/*` 를 넘길 백엔드 오리진. 미설정 시 `http://localhost:8080` |
 
 브라우저는 언제나 같은 오리진의 `/api/v1` 로 요청하고, 실제 백엔드로 넘기는 일은
-`next.config.mjs` 의 rewrite 가 맡습니다. 그래서 CORS 설정과 혼합 콘텐츠(HTTPS 페이지 → HTTP API)
-문제를 함께 피합니다. (예전 `vercel.json` 의 rewrites 를 옮겨온 것입니다.)
+개발 서버 실행 시 `next.config.ts` 의 rewrite 가 맡습니다. 그래서 로컬 개발 시 CORS 설정과 혼합 콘텐츠(HTTPS 페이지 → HTTP API)
+문제를 함께 피합니다.
 
-실제 값이 담긴 `.env.local` 은 커밋하지 않습니다. Vercel 에서는 프로젝트 환경변수로 주입합니다.
+실제 값이 담긴 `.env.local` 은 커밋하지 않습니다.
 
-## 배포 (Vercel)
+## 배포 (AWS S3 + CloudFront)
 
-`vercel.json` 은 프레임워크를 `nextjs` 로 고정하는 용도만 남았습니다. rewrite 는
-`next.config.mjs` 로 옮겼으므로 여기서 찾지 않습니다.
+프로젝트 배포 아키텍처는 2026-09-22 AWS(EC2 + RDS + S3/CloudFront)로 확정되었습니다(`docs/system-architecture.md` 참고).
+초기 프로토타입에서 검토되었던 Railway/Vercel은 채택하지 않습니다 (`vercel.json`은 초기 Vite/Vercel 전환 시 잔재 설정).
 
-이 파일이 필요한 이유는 Vite 시절 대시보드 설정이 남아 있기 때문입니다.
-Framework Preset 과 Output Directory 는 서로 다른 설정이라 하나만 고쳐서는 안 되고,
-Output Directory 가 `dist` 로 남아 있으면 빌드가 성공해도 Vercel 이 `.next` 대신
-`dist` 를 찾다가 배포가 실패합니다. `vercel.json` 의 설정이 대시보드보다 우선하므로
-둘 다 여기서 못박아 둡니다.
-
-Root Directory 는 `frontend` 로 잡혀 있어야 하며, 이 값은 `vercel.json` 으로 덮을 수
-없으니 대시보드에서 확인합니다.
+- **정적 빌드**: S3 호스팅을 위해 `STATIC_EXPORT=true npm run build`를 실행하면 Next.js가 정적 파일(`out/`)을 생성합니다 (`output: 'export'`).
+- **라우팅 구성**: 정적 export 모드에서는 `next.config.ts`의 Next rewrites를 사용할 수 없으므로, 배포 환경에서는 CloudFront 캐시 동작에서 `/api/*` 경로를 백엔드 EC2 인스턴스로 전달하도록 설정합니다.
+- **배포 실측 상태**: 본 AWS 배포 구성은 아키텍처 설계 결정 사항이며, 실제 운영 클라우드 인프라 배포 및 E2E 실측은 아직 미실시 상태입니다.
 
 ## 구조
 

@@ -12,7 +12,7 @@ unzip -n ~/Downloads/base-data-kit.zip -d .
 
 ## 실행
 
-Docker/MySQL 실행 → 백엔드를 한 번 실행해 Flyway V8까지 적용 → 백엔드 종료(MySQL 유지) → 아래 명령 실행 → 서버 재시작 순서입니다.
+Docker/MySQL 실행 → 백엔드를 한 번 실행해 Flyway V10까지 적용 → 백엔드 종료(MySQL 유지) → 아래 명령 실행 → 서버 재시작 순서입니다.
 
 ```bash
 # 회원/공간 DB 데이터 및 프론트 사진 설치
