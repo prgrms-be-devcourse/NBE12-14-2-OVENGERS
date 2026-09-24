@@ -3,15 +3,16 @@
 > 출처: 기획서 5장, `데이터모델-아키텍처-결정.md` 항목 3(오케스트레이션 방향), 항목 4(경미한 결정).
 > **2026-09-15 갱신**: `docs/core-domain-decisions.md` 반영 — `payment`/외부 Mock PG 개념 삭제, 크레딧 원장(`credit_transaction`)으로 단일화. Scheduler 책임 확장(HOLD 만료, 노쇼, 자동 퇴실). 결제 실패/취소 보상 처리 설명을 §2/§6-2 기준으로 정정.
 > **2026-09-22 갱신**: 배포 아키텍처를 AWS로 확정 — 백엔드는 EC2, DB는 RDS(MySQL), 프론트엔드는 S3 정적 호스팅 + CloudFront. Vercel/Railway는 채택하지 않는다. §자세한 내용은 아래 배포 절 참고.
+> **2026-09-24 갱신**: 신규 문의 도메인(Inquiry)을 아키텍처 흐름 및 Mermaid 다이어그램에 추가하고, AWS 배포 구성은 설계 결정으로서 로컬/CI 실측 검증과 명확히 분리하여 기술했다.
 
 ## 기술 스택 (5-1)
 
 | 영역 | 기술 | 비고 |
 | --- | --- | --- |
-| 백엔드 | Spring Boot 3.x, Spring Security 6.x, Spring Data JPA | 도메인별로 서비스 분리 |
+| 백엔드 | Spring Boot 3.x, Spring Security 6.x, Spring Data JPA | 단일 모놀리스 애플리케이션 내 도메인별 패키지 분리 |
 | DB | MySQL, Testcontainers 통합 테스트 | 유니크 제약·트랜잭션으로 동시성 검증 |
-| 프론트엔드 | Next.js(App Router) + TypeScript | 조회·예약·결제 확인·출입 검증 최소 화면. 배포 시 정적 export(`output: 'export'`)로 빌드 |
-| 인프라/배포 | AWS EC2(백엔드) + RDS(MySQL) + S3/CloudFront(프론트엔드 정적 호스팅) | 2026-09-22 확정. Railway/Vercel은 검토만 하고 채택하지 않음 |
+| 프론트엔드 | Next.js(App Router) + TypeScript | 조회·예약·결제 확인·출입 검증·문의 화면. 배포 시 정적 export(`output: 'export'`) 지원 |
+| 인프라/배포 | AWS EC2(백엔드) + RDS(MySQL) + S3/CloudFront(프론트엔드 정적 호스팅) | 설계 결정 사항. Railway/Vercel은 검토 후 미채택. 실제 AWS 배포 검증은 별도 과제 |
 | CI/CD | GitHub Actions, Swagger UI | 빌드·테스트 자동화, API 문서 |
 
 ## 전체 흐름 (5-2)
@@ -36,6 +37,7 @@ flowchart TD
     AUTHZ --> SPACE["Space"]
     AUTHZ --> RES["Reservation Service (오케스트레이터)"]
     AUTHZ --> ACCESS["Door Access Service"]
+    AUTHZ --> INQUIRY["Inquiry Service (회원 문의 / 관리자 답변)"]
     AUTHZ --> ADMIN["Admin"]
 
     RES --> PRICING["Pricing Service"]
@@ -51,11 +53,13 @@ flowchart TD
     RES --> DB
     CREDIT --> DB
     ACCESS --> DB
+    INQUIRY --> DB
     ADMIN --> DB
 ```
 
-- **오케스트레이션 방향**: 예약 확정(결제) 트랜잭션에서 화살표는 `RES --> CREDIT`이다. Reservation Service가 슬롯 확보(HOLD) → 결제 확인 페이지 → 크레딧 차감 → 예약 확정을 조율하는 오케스트레이터이며, Credit(구 Payment)이 Reservation을 부르는 구조가 아니다. (2026-09-08 결정, 이전 다이어그램의 `PAY --> RES`는 오기. 2026-09-15: 노드명을 `Payment Service + Mock PG` → `Credit Service`로 변경 — 외부 PG 연동이 처음부터 없었고, `payment` 테이블도 삭제되어 크레딧 원장(`credit_transaction`)만 남았으므로 "게이트웨이" 뉘앙스를 걷어냄.)
+- **오케스트레이션 방향**: 예약 확정(결제) 트랜잭션에서 화살표는 `RES --> CREDIT`이다. Reservation Service가 슬롯 확보(HOLD) → 결제 확인 페이지 → 크레딧 차감 → 예약 확정을 조율하는 오케스트레이터이며, Credit(구 Payment)이 Reservation을 부르는 구조가 아니다. (2026-09-08 결정, 이전 다이어그램의 `PAY --> RES`는 오기. 2026-09-15: 노드명을 `Payment Service + Mock PG` → `Credit Service`로 변경 — 외부 PG 연동이 처음부터 없었고, `payment` 테이블도 애초에 생성되지 않아(V4 빈 마이그레이션 유지) 크레딧 원장(`credit_transaction`)만 남았으므로 "게이트웨이" 뉘앙스를 걷어냄.)
 - **AUTHN / AUTHZ 분리**: 로그인·토큰 발급(AUTHN)과 매 요청의 토큰 검증+도메인별 인가(AUTHZ)는 책임이 다르므로 컴포넌트를 분리한다.
+- **Inquiry Service**: 회원 1:1 문의 등록·조회 및 관리자 답변 작성을 처리하며, `inquiries` 테이블(V10)을 단독 관리한다.
 - **Scheduler**: 세 가지 배치를 담당한다 — ① 만료된 `HELD`를 `EXPIRED`로 정리(단, 이는 정합성의 보험일 뿐 유일한 방어선이 아니다. 예약 생성 시점에도 만료 HELD를 즉시 정리하므로 배치가 늦어도 신규 예약은 막히지 않는다) ② 시작+15분까지 미체크인인 `CONFIRMED`를 `NO_SHOW`로 전이(슬롯 반환, 환불 없음) ③ 종료 시각이 지난 `IN_USE`를 자동으로 `COMPLETED` 처리(`checked_out_at` = `end_time`, 배치 실행 시각이 아님). 출입 검증은 어떤 배치 결과도 그대로 믿지 않고 매 요청에서 현재 시각·예약 상태를 다시 확인한다(배치 지연 리스크 대응).
 - 도메인은 하나의 Spring Boot 애플리케이션 안에서 패키지 단위로 분리하며, 별도의 결제 게이트웨이 서버를 두지 않는다(크레딧 차감은 애플리케이션 내부 로직).
 
@@ -75,5 +79,9 @@ flowchart TD
 - **트레이드오프 — 동적 라우트 문제**: 정적 export는 `/spaces/123`처럼 파라미터가 실제 값인 URL을 파일로 미리 만들 수 없다(가능한 모든 ID를 빌드 시점에 알 수 없음). 이를 해결하기 위해:
   - 빌드 시 `/spaces/[spaceId]` 같은 동적 라우트는 플레이스홀더 파일(`/spaces/_.html`)로 만든다.
   - CloudFront Function(viewer-request)이 `/spaces/123` 같은 실제 요청 URL을 `/spaces/_.html`로 리라이트해서 그 플레이스홀더 파일을 돌려준다.
-  - 화면에서는 `useRouteId` 훅이 브라우저 주소(`window.location`)에서 실제 ID(`123`)를 다시 읽어와 API 호출에 사용한다.
+  - 화면에서는 `useRouteId` 훅이 브라우저 주소(`window.location`)에서 실제 ID(`123`)를 다시 읽어와 API 호출에 사용한다 (`frontend/src/hooks/useRouteId.ts`에 구현).
 - **API 호출 경로도 배포 대상에 따라 다르다**: 정적 export는 Next.js의 서버 사이드 `rewrites()`를 쓸 수 없으므로(정적 파일에는 서버가 없다), API 요청은 CloudFront의 `/api/*` 동작(behavior)이 직접 EC2 오리진으로 넘긴다. 반면 로컬 개발이나 Vercel처럼 Next.js 서버가 살아있는 환경에서는 기존처럼 `next.config.ts`의 `rewrites()`가 프록시 역할을 한다. 즉 `frontend/next.config.ts`는 `STATIC_EXPORT` 환경변수로 두 배포 방식을 모두 지원하도록 만들어져 있다.
+- **설계 결정과 실제 배포 검증의 분리**:
+  - 위 AWS 배포 구성(EC2, RDS, S3 + CloudFront, CloudFront Function URL 리라이트)은 프로젝트의 **인프라 설계 결정**이다.
+  - 소스 코드 레벨에서 Next.js 빌드 설정(`frontend/next.config.ts`) 및 클라이언트 훅(`useRouteId.ts`)은 정적 export와 rewrites 분기를 모두 지원하도록 구현되어 있다.
+  - 그러나 실제 AWS 클라우드 환경에 인스턴스를 프로비저닝하고 CloudFront Function 및 도메인 라우팅이 정상 동작하는지 확인한 엔드투엔드 배포 실측 결과는 현재 저장소 테스트 범위에 포함되지 않는다(미검증 상태로 유지).
