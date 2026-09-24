@@ -1,16 +1,26 @@
 # Slot Key — Backend
 
-Spring Boot 3.3 / Java 21 / MySQL 8 / Flyway.
+Spring Boot 3.3.4 / Java 21 / MySQL 8.4 / Flyway.
 
 ## 실행
 
-MySQL 8 이 `localhost:3306` 에 떠 있어야 합니다. 없다면 컨테이너로 띄웁니다.
+로컬 실행을 위해서는 MySQL 8.4가 `localhost:3306`에 기동되어 있어야 합니다. `backend/docker-compose.yml`을 사용하여 컨테이너를 실행합니다.
+
+### 1. 환경변수 설정 및 MySQL 컨테이너 기동
+`backend/docker-compose.yml`은 `DB_PASSWORD`를 필수로 요구합니다. 예제 파일을 복사하여 `.env`를 준비하고 로컬 프로필(`application-local.yml`)의 기본 비밀번호인 `root`와 일치시킵니다.
 
 ```bash
-docker run -d --name slotkey-mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=slotkey mysql:8.4
-```
+# backend/ 디렉터리 기준 (기존 .env 파일이 없을 때만 복사)
+cp -n .env.example .env
 
-그다음 백엔드를 실행합니다. 스키마는 Flyway 가 첫 기동 때 만듭니다.
+# MySQL 8.4 컨테이너 기동
+docker compose up -d
+```
+- `.env.example`에는 로컬 개발용 `DB_PASSWORD=root`와 기본 `JWT_SECRET_KEY`가 이미 정의되어 있어, 파일 복사 후 별도의 중복 추가 없이 바로 기동할 수 있습니다.
+- 컨테이너명: `slotkey-mysql`, 포트: `3306`, DB: `slotkey`, 계정: `root` / `root`
+
+### 2. 백엔드 서버 기동
+`build.gradle`에는 `.env` 자동 로딩 설정이 없으므로, 프로세스 기동 시 필수 환경변수인 `JWT_SECRET_KEY`를 환경변수로 직접 주입하여 실행합니다 (스키마는 Flyway가 첫 기동 때 V1~V10을 자동 생성합니다).
 
 ```bash
 JWT_SECRET_KEY='local-dev-only-secret-key-must-be-32bytes-or-longer' ./gradlew bootRun
@@ -20,17 +30,18 @@ JWT_SECRET_KEY='local-dev-only-secret-key-must-be-32bytes-or-longer' ./gradlew b
 
 | 명령 | 설명 |
 | --- | --- |
-| `./gradlew bootRun` | 개발 서버 (local 프로필) |
+| `JWT_SECRET_KEY=... ./gradlew bootRun` | 개발 서버 (local 프로필) |
 | `./gradlew build` | 빌드 + 테스트 |
-| `./gradlew test` | 테스트만 |
+| `./gradlew test` | 테스트만 (Docker Testcontainers 필요) |
 
 ## 환경변수
 
-| 이름 | 필수 | 설명 |
+| 이름 | 필수 여부 | 설명 |
 | --- | --- | --- |
-| `JWT_SECRET_KEY` | **예** | JWT 서명 키. 기본값이 없어 없으면 기동에 실패합니다. HS256 이라 **32바이트 이상** |
+| `JWT_SECRET_KEY` | **예** (Spring Boot 필수) | JWT 서명 키. 기본값이 없어 미설정 시 기동에 실패합니다. HS256이라 **32바이트 이상** |
+| `DB_PASSWORD` | **예** (Docker Compose 필수) / 불필요 (Spring local) | `backend/docker-compose.yml` 기동 시 MySQL root 비밀번호로 필수(`backend/.env`). Spring Boot 로컬 실행 시에는 `application-local.yml`의 기본값(`root`)이 적용되므로 Spring 프로세스 환경변수로는 불필요 |
+| `DB_URL` / `DB_USERNAME` | 불필요 (로컬) / **예** (배포) | 로컬에서는 `application-local.yml`이 localhost:3306/slotkey (`root`)로 덮어쓰므로 불필요. 배포 프로필에서만 필요 |
 | `CORS_ALLOWED_ORIGINS` | 아니오 | 미설정 시 `http://localhost:3000` |
-| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | 아니오 | local 프로필에서는 `application-local.yml` 이 덮으므로 불필요. 배포에서만 필요 |
 
 로컬 DB 접속 정보(`root` / `root`, 스키마 `slotkey`)는 `application-local.yml` 에 있습니다.
 
