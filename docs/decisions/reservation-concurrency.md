@@ -1,6 +1,6 @@
 # 기술적 의사결정 — 예약 동시성 제어
 
-> **2026-09-21 갱신**: `03d2d5d6`의 결제·연장 동시성 처리와 시간 정책을 반영했다. 이 변경은 선행 PR의 Space 공유·배타 락(`findByIdForShare`, `findByIdForUpdate`)이 적용되어 있다는 전제에서 동작한다.
+> **2026-09-24 최신화**: 결제·연장 동시성 제어와 시간 정책, 그리고 `Space → Reservation` 잠금 순서가 현재 백엔드 소스에 전면 구현되어 있다. Space 공유·배타 락(`findByIdForShare`, `findByIdForUpdate`), 소유권 선검증, 조건부 UPDATE, 슬롯 `UNIQUE(space_id, slot_start)` 제약이 각 트랜잭션 경합을 원자적으로 방어한다.
 
 ## 문서 목적
 
@@ -32,8 +32,8 @@
 
 관리자가 가격이나 운영시간을 바꾸는 동안 결제 또는 연장이 동시에 실행되면, 한 요청 안에서 변경 전·후의 Space 정보가 섞일 수 있다.
 
-- Space 수정은 선행 PR에서 Space **배타 락**을 사용한다.
-- 결제와 연장은 Space **공유 락**을 사용한다.
+- Space 수정은 Space **배타 락**(`findByIdForUpdate`)을 사용한다.
+- 결제와 연장은 Space **공유 락**(`findByIdForShare`)을 사용한다.
 - 공유 락끼리는 함께 실행될 수 있지만, 공유 락과 배타 락은 서로 기다린다.
 
 따라서 먼저 잠금을 얻은 트랜잭션이 끝난 뒤 다음 트랜잭션이 최신 Space 상태를 확인한다.
@@ -197,6 +197,11 @@ Reservation 배타 락이 있더라도 마지막 조건부 UPDATE를 유지한�
 - **다중 트랜잭션 통합 테스트 (`SpaceReservationLockIntegrationTest`)**:
   - Mock 환경에서 검증할 수 없는 실제 MySQL 격리 수준에서의 잠금 대기를 검증한다.
   - Testcontainers MySQL 환경에서 `CountDownLatch`와 별도 트랜잭션(`REQUIRES_NEW`) 스레드를 사용하여, Space 수정(배타 락)과 결제/연장(공유 락) 간의 상호 대기, 그리고 가격 변경 커밋 후 결제 시도의 버전 불일치 감지를 검증한다.
+- **다중 스레드 동시성 통합 테스트군**:
+  - `ReservationPaymentConcurrencyTest`: 동일 예약에 대한 동시 결제 경합에서 크레딧 1회 차감 및 정확히 1건 확정(나머지 409) 검증.
+  - `ReservationConcurrencyTest` / `ReservationAdjacentSlotConcurrencyTest` / `ReservationPartialOverlapConcurrencyTest`: 동일 슬롯 20개 동시 요청(1건 성공, 19건 409, `ReservationConcurrencyTest`), 맞닿은 슬롯(둘 다 성공), 부분 겹침 슬롯(1건 성공) 등 슬롯 UNIQUE 제약과 롤백의 무결성 검증.
+  - `ReservationCancelConcurrencyTest` / `AdminReservationConcurrencyIntegrationTest`: 본인 취소와 관리자 강제 취소 동시 실행 시 환불 1회 및 정확히 1건 통과 검증.
+  - `DoorAccessTokenConcurrencyTest`: 동일 예약에 대한 출입 토큰 동시 발급 시 활성 토큰 1개 수렴 검증.
 
 ## 기존 슬롯 충돌 원칙
 

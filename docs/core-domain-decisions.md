@@ -22,12 +22,12 @@
 
 - **선불**. 후불은 채택하지 않는다. 후불이면 취소·노쇼 환불 정책이 전부 무의미해진다.
 - **Mock 결제 서비스가 크레딧 잔액을 차감**하는 구조. 외부 PG 연동 없음.
-- **실패 조건은 잔액 부족 하나뿐.** 랜덤 실패는 만들지 않는다 — 같은 입력에 다른 결과가 나오면 테스트가 불가능하다. 잔액 부족은 입력만 맞추면 100% 재현된다.
-- `payment` 테이블은 **삭제**하고 `credit_transaction` 원장으로 단일화한다.
+- **실패 조건은 잔액 부족 하나뿐.** 랜덤 실패는 만들지 않는다 — 같은 입력에 다른 결과가 나오면 테스트가 불가능하다. 잔액 부족은 입력만 맞추면 100% 재현된다. 결제 실패(`INSUFFICIENT_BALANCE` 422) 시 트랜잭션이 롤백되어 **기존 HELD 상태와 슬롯 점유는 만료 시각(10분)까지 그대로 유지**된다. 사용자는 관리자 지급 등으로 잔액이 늘어난 뒤 HOLD 만료 전 동일 키로 재결제를 시도할 수 있다(셀프 충전은 미지원).
+- `payment` 테이블은 애초에 생성하지 않고(V4 파일은 빈 마이그레이션으로 유지) `credit_transaction` 원장으로 단일화한다.
 
 ### 1-2. 크레딧 정의
 
-- **단위: 1 크레딧 = 1원, `int`**. 별도 환율을 두지 않는다. `space.price_per_slot`(원)과 같은 단위여야 변환 코드가 필요 없다.
+- **단위: 1 크레딧 = 1원, `int`**. 별도 환율을 두지 않는다. `spaces.price_per_slot`(원)과 같은 단위여야 변환 코드가 필요 없다.
 - 크레딧은 **결제 수단이 아니라 이용 한도**다. 현금 → 크레딧 전환(셀프 충전)은 범위 밖이며, 도입하면 PG 문제가 그대로 돌아온다.
 
 ### 1-3. 지급 경로 (2개)
@@ -39,7 +39,7 @@
 
 - 가입 지급액은 **설정값**(`app.credit.signup-grant`)으로 관리한다. 하드코딩하지 않는 이유: 테스트 프로파일에서 값을 낮춰 잔액 부족 시나리오를 검증하기 위함.
 - 관리자 지급: 사유 1~500자 필수, **자기 자신에게는 지급 불가**(`actor_id != member_id`), **지급만 가능**(회수 없음 — 회수는 정산·분쟁 처리를 열기 때문에 범위 밖).
-- 관리자 지급은 원장과 `audit_log` **양쪽**에 기록한다. 원장은 "얼마가 들어왔나", 감사 로그는 "누가 왜 줬나"로 역할이 다르다.
+- 관리자 지급은 원장(`credit_transaction`)과 `audit_logs` **양쪽**에 기록한다. 원장은 "얼마가 들어왔나", 감사 로그는 "누가 왜 줬나"로 역할이 다르다.
 
 ### 1-4. 원장 (`credit_transaction`)
 
@@ -97,12 +97,13 @@ UPDATE member SET balance = balance + :amount WHERE id = :id
    [결제 확인 페이지]  금액 / 잔액 / 예약 정보 표시
         ↓
 ② POST /reservations/{id}/pay
-   space.version 비교 → 크레딧 차감 → CONFIRMED
+   spaces.version 비교 → 크레딧 차감 → CONFIRMED
 ```
 
 - ②의 조건부 UPDATE: `WHERE id=:id AND status='HELD' AND :now < hold_expires_at`
 - **`Idempotency-Key`는 ②에 붙인다.** 돈이 움직이는 지점이 ②이기 때문.
-- 만료 후 결제 시도 → 409.
+- 결제 실패 시(잔액 부족 `INSUFFICIENT_BALANCE` 422, 버전 불일치 409 등) 트랜잭션이 롤백되어 **기존 HELD 상태와 슬롯 점유는 `hold_expires_at`까지 유지**된다. 실패한 요청은 `idempotency_key`를 소진하지 않으므로 사용자는 관리자 지급 등으로 잔액이 늘어난 뒤 HOLD 만료 전 동일 키로 재결제를 시도할 수 있다.
+- 만료 후 결제 시도 → 409 (`RESERVATION_STATE_CONFLICT`).
 
 ### 2-2. HOLD의 역할을 정확히 할 것
 
@@ -163,10 +164,10 @@ HELD ─(결제 성공)──→ CONFIRMED ─(최초 체크인)→ IN_USE ─(�
 | `HELD` | 슬롯 확보, 미결제 | 점유 | — | **발급 불가** |
 | `EXPIRED` | 10분 내 미결제 | **삭제** | — | — |
 | `CONFIRMED` | Mock 결제 성공(크레딧 차감) | 점유 | — | 발급 가능 |
-| `IN_USE` | 최초 체크인 성공 | 점유 | — | 재입장 허용 |
-| `COMPLETED` | 체크아웃 또는 종료 시각 경과 | 유지 | 없음 | 폐기 |
-| `CANCELLED` | 시작 전 취소 | **삭제** | 100% / 50% | 폐기 |
-| `NO_SHOW` | 시작 + 15분까지 미체크인 | **삭제** | 없음 | 폐기 |
+| `IN_USE` | 최초 체크인 성공 | 점유 | — | 재입장 허용 (재발급 가능) |
+| `COMPLETED` | 체크아웃 또는 종료 시각 경과 | 유지 | 없음 | **폐기 (재발급 불가)** |
+| `CANCELLED` | 시작 전 취소 | **삭제** | 100% / 50% | **폐기 (재발급 불가)** |
+| `NO_SHOW` | 시작 + 15분까지 미체크인 | **삭제** | 없음 | **폐기 (재발급 불가)** |
 
 `NO_SHOW`를 `CANCELLED`와 합치지 않는 이유: 환불 정책이 다르고, 운영상 "취소한 사람"과 "안 온 사람"은 완전히 다르다.
 
@@ -253,15 +254,15 @@ try {
 
 ### 5-1. 가격 스냅샷 (저장한다)
 
-예약 확정 시 **서버가 직접 읽은** `space.price_per_slot`을 `reservation.price_per_slot_snapshot`에 복사한다. 이후 관리자가 공간 가격을 변경해도 기존 예약의 금액은 불변이다.
+예약 확정 시 **서버가 직접 읽은** `spaces.price_per_slot`을 `reservation.price_per_slot_snapshot`에 복사한다. 이후 관리자가 공간 가격을 변경해도 기존 예약의 금액은 불변이다.
 
 `total_amount = price_per_slot_snapshot × 점유 슬롯 수`
 
 ### 5-2. 가격 확인 (저장하지 않는다, 낙관적 검증)
 
-사용자가 결제 확인 페이지에 머무는 동안 관리자가 가격을 바꿀 수 있다. HOLD 생성 시 `space.version`을 응답에 실어 보내고, 결제 요청에 되돌려받아 비교한다. 다르면 거절하고 초기 페이지로 돌아간다.
+사용자가 결제 확인 페이지에 머무는 동안 관리자가 가격을 바꿀 수 있다. HOLD 생성 시 `spaces.version`을 응답에 실어 보내고, 결제 요청에 되돌려받아 비교한다. 다르면 거절하고 초기 페이지로 돌아간다.
 
-- **비교 기준은 가격 값이 아니라 `space.version`이다.** 5000 → 6000 → 5000으로 돌아오면 가격 비교는 통과해버린다(ABA 문제).
+- **비교 기준은 가격 값이 아니라 `spaces.version`이다.** 5000 → 6000 → 5000으로 돌아오면 가격 비교는 통과해버린다(ABA 문제).
 - **클라이언트가 보낸 금액은 "사용자가 동의한 가격"일 뿐 청구액이 아니다.** 서버는 비교만 하고, 차감과 스냅샷은 서버가 직접 읽은 현재 값으로 한다. 이를 지키지 않으면 클라이언트에서 금액을 1원으로 바꿔 보내는 공격이 통한다.
 
 ---
@@ -334,7 +335,7 @@ try {
 3) 슬롯 행 삭제
 4) 활성 토큰 revoke
 5) 크레딧 환급 + 원장 기록 (REFUND 전액, HELD는 생략)
-6) audit_log 기록
+6) audit_logs 기록
 7) COMMIT
 ```
 
@@ -433,7 +434,7 @@ POST /reservations/{id}/check-out
 | 자동 퇴실 | 종료 시각 경과 (배치) | **`end_time`** |
 
 - **슬롯 반환 없음, 환불 없음.** 예약은 시간 점유권 구매다. 조기 반납을 허용하면 부분 환불 계산 → 남은 슬롯 재판매 → 재판매된 슬롯에 원래 사용자가 재입장 시도로 연쇄된다.
-- **체크아웃은 되돌릴 수 없다.** 실수로 눌렀다면 종료 시각 전까지 키를 재발급받으면 된다(활성 키 1개 제약 안에서). UI에 확인 다이얼로그를 둔다.
+- **체크아웃은 되돌릴 수 없다.** 체크아웃 완료(`COMPLETED`) 후에는 활성 토큰이 폐기되며 상태 전이 규칙에 따라 새 토큰 재발급이 불가(`RESERVATION_STATE_CONFLICT` 409)하므로, 되돌릴 수 없으며 UI에 확인 다이얼로그를 둔다.
 - **체크아웃을 안 한 것은 잘못이 아니다.** 방을 끝까지 썼다는 뜻이며 가장 흔한 경우다. 페널티 없음.
 
 ### 8-5. 키 공유
@@ -446,28 +447,29 @@ POST /reservations/{id}/check-out
 
 ## 9. 예약 가능 여부 판단 규칙
 
-각 검사를 독립 규칙 객체로 분리한다. 규칙 단위로 테스트가 쪼개지고, 추가 시 클래스 하나만 늘어난다.
+> **설계 개념과 실제 구현 구분**: 아래의 `ReservationRule` 인터페이스 및 개별 규칙 객체 목록은 프로젝트 초기 리팩토링 논의 시의 **설계 개념 모델(예시)**이다. 실제 백엔드 코드(`ReservationHoldService`, `ReservationTimePolicy`)는 별도의 규칙 엔진 인터페이스 대신 정책 클래스와 비즈니스 로직으로 직접 구현되어 있다.
 
 ```java
+// [초기 설계 개념 예시]
 interface ReservationRule {
     RuleResult check(ReservationContext ctx);
 }
 ```
 
-| 규칙 | 검사 내용 |
-| --- | --- |
-| `MemberActiveRule` | 관리자에게 차단(정지)된 사용자인가 |
-| `WithinOperatingHoursRule` | 공간 운영시간 내인가 |
-| `SlotAlignmentRule` | 30분 배수인가 |
-| `NotPastRule` | 과거 시간인가 |
-| `NoSelfOverlapRule` | **같은 사용자**가 그 시간에 다른 예약을 갖고 있는가 |
-| `MaxDurationRule` | 1회 최대 예약 시간을 넘는가 |
-| `MaxActiveReservationRule` | 사용자 동시 보유 예약 한도를 넘는가 |
-| `SufficientBalanceRule` | 크레딧 잔액이 충분한가 (사전 안내용) |
+| 규칙 (개념명) | 검사 내용 | 실제 구현 현황 |
+| --- | --- | --- |
+| `MemberActiveRule` | 관리자에게 차단(정지)된 사용자인가 | **보호 API에서 ACTIVE 재검사 미구현** (인증 필터 `CustomAuthenticationFilter`는 JWT 서명·만료만 검증하며 회원 DB를 재조회하지 않음. 정지 계정 차단은 login/refresh 경계에서만 동작하며, 기발급 유효 Access Token 보유 시 일반 보호 API 통과) |
+| `WithinOperatingHoursRule` | 공간 운영시간 내인가 | `ReservationTimePolicy.validate` 내 운영시간 검증 구현 |
+| `SlotAlignmentRule` | 30분 배수인가 | `ReservationTimePolicy.validate` 내 30분 단위 검증 구현 |
+| `NotPastRule` | 과거 시간인가 | `ReservationTimePolicy.validate` 내 `now` 기준 과거 검증 구현 |
+| `NoSelfOverlapRule` | **같은 사용자**가 그 시간에 다른 예약을 갖고 있는가 | **미구현** (DB 제약은 동일 공간 슬롯 `UNIQUE(space_id, slot_start)`만 보장하며, 동일 회원의 서로 다른 공간 동시간대 중복 예약 검사는 없음) |
+| `MaxDurationRule` | 1회 최대 예약 시간을 넘는가 | **미구현** (운영 종료 시각을 넘지 않는 검사만 있으며, 1회 최대 이용 시간 제한 설정 및 검사는 없음) |
+| `MaxActiveReservationRule` | 사용자 동시 보유 예약 한도를 넘는가 | 현재 구현에서는 제외됨 |
+| `SufficientBalanceRule` | 크레딧 잔액이 충분한가 (사전 안내용) | **HOLD 생성 시점에는 잔액 검사 없음**. 2단계 결제(`ReservationPaymentConfirmService`) 시점에 크레딧 차감 조건부 UPDATE로 최종 판정 |
 
-**슬롯 가용성은 이 목록에 포함하지 않는다** (4-2 참조).
+**슬롯 가용성은 사전 검사 대상이 아니다** (4-2 참조). 슬롯 중복 여부는 `reservation_slot`의 `UNIQUE(space_id, slot_start)`가 유일한 진실이다.
 
-`SufficientBalanceRule`도 사전 검사일 뿐이며, 최종 판정은 조건부 UPDATE의 영향 행 수다. 규칙으로도 두는 이유는 잔액 부족을 미리 알려주는 편이 UX상 낫기 때문(슬롯은 조회 API가 그 역할을 한다).
+`SufficientBalanceRule`도 초기 구상에서는 사전 검사로 논의되었으나, 실제 구현에서는 HOLD 생성 시 크레딧 잔액을 요구하지 않으며 결제 확정 시점에 조건부 UPDATE로 일원화되었다.
 
 ---
 
@@ -499,17 +501,20 @@ interface ReservationRule {
 
 | 구분 | 대상 |
 | --- | --- |
-| **삭제** | `payment` 테이블 전체 |
+| **미생성** | `payment` 테이블 (애초에 생성하지 않고 V4 파일은 빈 마이그레이션으로 유지) |
 | **추가** | `member.balance` (int, NOT NULL, DEFAULT 0) |
-| **추가** | `credit_transaction` 테이블 (1-4 스펙) |
+| **추가** | `credit_transaction` 테이블 (1-4 스펙, V6) |
 | **추가** | `reservation.hold_expires_at` (datetime, NULL 허용) |
 | **추가** | `reservation.checked_in_at`, `checked_out_at` |
-| **추가** | `space.version` (int, 낙관적 비교용) |
+| **추가** | `spaces.version` (int, 낙관적 비교용, V8 테이블명 변경) |
+| **추가** | `idempotency_key` 테이블 (V7) |
+| **추가** | `inquiries` 테이블 (V10) |
 | **변경** | `reservation.status` enum → 7개 |
 | **변경** | `reservation.completed_at` 제거 → `checked_out_at`으로 통합 (체크아웃 시각 = 완료 시각) |
-| **확인** | `space.opening_time` / `closing_time` = `TIME`(LocalTime). 운영시간은 "시점"이 아니라 "매일 반복되는 규칙"이므로 날짜를 붙이지 않는다 |
+| **확인** | `spaces.opening_time` / `closing_time` = `TIME`(LocalTime). 운영시간은 "시점"이 아니라 "매일 반복되는 규칙"이므로 날짜를 붙이지 않는다 |
 | **확인** | `reservation_slot`은 **살아있는 점유일 때만 존재** (취소/노쇼/만료 시 하드 삭제), `UNIQUE(space_id, slot_start)` |
 | **유지** | `door_access_token.active_reservation_id` UNIQUE (예약당 활성 토큰 1개) |
+| **유지** | `audit_logs` 테이블 및 인덱스 (V1, V9) |
 
 ### CHECK 제약
 
@@ -526,9 +531,9 @@ CHECK (status NOT IN ('IN_USE','COMPLETED') OR checked_in_at IS NOT NULL)
 
 ## 12. 테스트 목록
 
-> 문서에 적은 규칙은 전부 테스트로 존재해야 한다. 규칙 하나 = 테스트 하나.
+> **검증 상태 및 소스 근거 구분**: 아래 목록의 규칙들은 실제 백엔드 테스트 소스(`backend/src/test/java`)의 단위·통합 테스트 클래스로 분할 작성되어 있다. 과거 로컬 258개 테스트 통과 스냅샷(`docs/test-results.md`, 2026-09-21 기준)에 포함된 테스트는 당시 합격이 실측되었으나, 이후 추가된 13개 클래스는 당시 실행 대상이 아니었다. 또한 공간 이미지 전용 테스트(34개 XML)는 예약·출입 도메인의 직접 실행 근거가 아니므로, 각 항목은 소스 존재 여부와 시점별 실행 실측 여부를 구분하여 파악해야 한다.
 
-### 동시성
+### 동시성 (실제 소스: `ReservationConcurrencyTest`, `ReservationPaymentConcurrencyTest`, `ReservationCancelConcurrencyTest`, `ReservationAdjacentSlotConcurrencyTest`, `ReservationPartialOverlapConcurrencyTest`, `SpaceReservationLockIntegrationTest`, `DoorAccessTokenConcurrencyTest`, `AdminReservationConcurrencyIntegrationTest` 등)
 
 - 같은 슬롯에 20개 동시 요청 → 정확히 1건 성공, 19건 409, 실패 요청의 예약·슬롯 데이터 잔존 없음
 - 만료된 HELD가 있는 슬롯에 신규 예약 → 성공 (배치 미실행 상태에서도)
@@ -546,11 +551,11 @@ CHECK (status NOT IN ('IN_USE','COMPLETED') OR checked_in_at IS NOT NULL)
 
 ### 크레딧
 
-- 잔액 부족 시 예약 확정 실패 + 슬롯 롤백
+- 잔액 부족 시 예약 확정 실패, HELD·슬롯 유지, 차감 없음
 - 동시 결제 2건이 잔액을 초과 차감하지 않음
 - `SUM(credit_transaction.amount) == member.balance`
 - 50% 환불 시 `REFUND` + `PENALTY` 두 건 기록
-- - 결제 실패(잔액 부족) 후 충전하고 같은 `Idempotency-Key`로 재시도 → 성공 (실패한 요청은 키를 소진하지 않음)
+- 결제 실패(잔액 부족) 후 관리자 지급 등으로 잔액이 늘어난 뒤 HOLD 만료 전 같은 `Idempotency-Key`로 재시도 → 성공 (실패한 요청은 키를 소진하지 않음)
 - 연장 성공 → 원 예약 단가 × 추가 슬롯 수만큼만 차감, `RESERVATION_CHARGE` 1건 / 연장 실패(슬롯 충돌·잔액 부족) → 차감·추가 슬롯 없음(롤백)
 - 연장한 예약을 시작 1시간 전까지 취소 → 연장분 포함 전액 환불
 - 강제 취소: `CONFIRMED`·`IN_USE`는 `total_amount` 전액 `REFUND`(위약금 없음, 시작 임박 포함), `HELD`는 환불 없음
