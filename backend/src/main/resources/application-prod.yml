@@ -1,3 +1,4 @@
+# application-prod.yml
 app:
   auth:
     cookie:
@@ -5,3 +6,9 @@ app:
       same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
   space-image:
     storage-root: ${SPACE_IMAGE_STORAGE_ROOT:/var/slotkey/space-images}
+
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 30
+      connection-timeout: 30000
