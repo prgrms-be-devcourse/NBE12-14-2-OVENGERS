@@ -48,7 +48,7 @@ jobs:
       - name: Health check
         run: |
           for i in {1..10}; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080)
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo 000)
             if [ "$code" != "000" ]; then
               echo "server responded with $code"
               exit 0
