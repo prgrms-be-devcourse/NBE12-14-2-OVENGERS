@@ -5,8 +5,10 @@ import com.ovengers.slotkey.auth.dto.request.SignupRequest;
 import com.ovengers.slotkey.auth.dto.response.LoginResponse;
 import com.ovengers.slotkey.auth.dto.response.SignupResponse;
 import com.ovengers.slotkey.auth.service.AuthService;
+import com.ovengers.slotkey.member.dto.request.MemberWithdrawalRequest;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.service.MemberService;
+import com.ovengers.slotkey.member.service.MemberWithdrawalService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,6 +24,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import com.ovengers.slotkey.global.security.AuthPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 
 @Tag(name = "인증", description = "회원가입, 로그인, 토큰 재발급 및 로그아웃 API")
 @RestController
@@ -31,6 +36,7 @@ public class AuthController {
 
     private final MemberService memberService;
     private final AuthService authService;
+    private final MemberWithdrawalService memberWithdrawalService;
 
     @Value("${app.auth.cookie.secure}")
     private boolean cookieSecure;
@@ -248,6 +254,41 @@ public class AuthController {
                 .build();
 
         // 3. 쿠키 삭제 헤더와 본문 없는 성공 응답
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, deleteCookie.toString())
+                .build();
+    }
+
+    @Operation(
+            summary = "회원탈퇴",
+            description = """
+                로그인한 정상 상태의 일반 회원이 현재 비밀번호를 확인하고 탈퇴합니다.
+                정지 회원과 관리자 계정은 탈퇴할 수 없습니다.
+                진행 중인 예약이 있으면 탈퇴할 수 없습니다.
+                잔여 크레딧은 소멸하고 리프레시 토큰과 출입 키는 폐기됩니다.
+                기존 액세스 토큰은 만료까지 유효합니다.
+                """
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/withdraw")
+    public ResponseEntity<Void> withdraw(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @Valid @RequestBody MemberWithdrawalRequest request
+    ) {
+        memberWithdrawalService.withdraw(
+                principal.memberId(),
+                request.currentPassword()
+        );
+
+        ResponseCookie deleteCookie = ResponseCookie
+                .from("refreshToken", "")
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite(cookieSameSite)
+                .path("/api/v1/auth")
+                .maxAge(0)
+                .build();
+
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, deleteCookie.toString())
                 .build();

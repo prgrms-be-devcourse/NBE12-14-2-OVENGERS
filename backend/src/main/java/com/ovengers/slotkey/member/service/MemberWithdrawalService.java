@@ -34,7 +34,6 @@ public class MemberWithdrawalService {
 
     @Transactional
     public void withdraw(Long memberId, String currentPassword) {
-        // 탈퇴 및 관리자 회원 변경 작업을 같은 회원 잠금으로 조율한다.
         Member member = memberRepository.findByIdForUpdate(memberId)
                 .orElseThrow(() ->
                         new BusinessException(ErrorCode.AUTHENTICATION_REQUIRED)
@@ -51,9 +50,7 @@ public class MemberWithdrawalService {
             throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
         }
 
-        // 정상 회원과 정지 회원 모두 탈퇴를 허용한다.
-        if (member.getStatus() != MemberStatus.ACTIVE
-                && member.getStatus() != MemberStatus.SUSPENDED) {
+        if (member.getStatus() != MemberStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.ACCOUNT_INACTIVE);
         }
 
@@ -84,7 +81,6 @@ public class MemberWithdrawalService {
 
         LocalDateTime now = LocalDateTime.now(clock);
 
-        // 잔액 변경과 소멸 원장 기록도 현재 트랜잭션에 참여한다.
         creditExpirationService.expireForWithdrawal(member, now);
 
         member.withdraw(now);
