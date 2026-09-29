@@ -9,6 +9,7 @@ import Button from '@/components/common/Button';
 import { formatCredit } from '@/utils/price';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ErrorMessage from '@/components/common/ErrorMessage';
+import WithdrawalDialog from '@/components/member/WithdrawalDialog';
 
 export default function MyPage() {
   
@@ -19,6 +20,7 @@ export default function MyPage() {
     const [nickname, setNickname] = useState('');
     const [validationError, setValidationError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
+    const [withdrawalOpen, setWithdrawalOpen] = useState(false);
     
     const {
       execute,
@@ -191,6 +193,17 @@ export default function MyPage() {
     {notice}
   </p>
 )}
+          {member.role === 'USER' && (
+            <div className="section" style={{ marginTop: 24, paddingBottom: 0 }}>
+              <h3>회원탈퇴</h3>
+              <p>탈퇴 시 계정을 복구할 수 없고 잔여 크레딧이 소멸합니다. 정지 회원은 운영자에게 문의해주세요.</p>
+              <Button variant="danger" size="small" disabled={saving || editing}
+                onClick={() => setWithdrawalOpen(true)}>회원탈퇴</Button>
+            </div>
+          )}
+          {withdrawalOpen && member.role === 'USER' && (
+            <WithdrawalDialog balance={member.balance} onClose={() => setWithdrawalOpen(false)} />
+          )}
         </section>
       )}
     </div>

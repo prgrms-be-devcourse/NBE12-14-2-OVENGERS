@@ -9,6 +9,23 @@ const versions = new Map<string, number>();
 export const reservationKeyStorageId = (memberId: number, reservationId: number | string) =>
   `${prefix}${memberId}:${reservationId}`;
 
+/** 탈퇴 회원의 키만 제거하고 진행 중인 발급 응답의 재저장도 막는다. */
+export function forgetMemberReservationKeys(memberId: number): void {
+  const memberPrefix = `${prefix}${memberId}:`;
+  const ids = new Set([...memory.keys(), ...pending.keys(), ...versions.keys()]);
+  for (const id of ids) {
+    if (!id.startsWith(memberPrefix)) continue;
+    versions.set(id, (versions.get(id) ?? 0) + 1);
+    memory.delete(id);
+  }
+  try {
+    for (let index = window.localStorage.length - 1; index >= 0; index--) {
+      const key = window.localStorage.key(index);
+      if (key?.startsWith(memberPrefix)) window.localStorage.removeItem(key);
+    }
+  } catch { /* 저장소 접근이 차단돼도 메모리와 로그인 상태는 정리한다. */ }
+}
+
 export function reservationEndTime(value: string): number {
   return new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}+09:00`).getTime();
 }

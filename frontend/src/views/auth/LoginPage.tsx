@@ -41,6 +41,9 @@ export default function LoginPage() {
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
         <p className="page-kicker">WELCOME BACK</p>
         <h1>로그인</h1>
+        {searchParams.get('withdrawn') === '1' && (
+          <p role="status">회원탈퇴가 완료되었습니다. 이용해 주셔서 감사합니다.</p>
+        )}
         <p>Slot Key 계정으로 로그인해 주세요.</p>
 
         <Input

@@ -29,3 +29,8 @@ export async function logout(): Promise<void> {
     clearTokens();
   }
 }
+
+/** 인증된 회원의 탈퇴. 실패 시 현재 세션을 유지한다. */
+export function withdraw(currentPassword: string): Promise<void> {
+  return api.post<void>(API_ROUTES.auth.withdraw, { currentPassword });
+}

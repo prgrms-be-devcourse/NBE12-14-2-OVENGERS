@@ -9,6 +9,7 @@ export interface AuthContextValue {
   login: (credentials: LoginRequest) => Promise<Member>;
   signup: (form: SignupRequest) => Promise<Member>;
   logout: () => Promise<void>;
+  withdraw: (currentPassword: string) => Promise<void>;
   refreshMember: () => Promise<void>;
 }
 

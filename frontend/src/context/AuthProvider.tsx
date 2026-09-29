@@ -12,6 +12,7 @@ import { clearTokens, hasSession, setUnauthorizedHandler } from '../api/client';
 import * as authApi from '../api/authApi';
 import { getMe } from '../api/memberApi';
 import { MEMBER_ROLE } from '../constants/enums';
+import { forgetMemberReservationKeys } from '../utils/reservationKey';
 import { AuthContext } from './AuthContext';
 import type { AuthContextValue } from './AuthContext';
 
@@ -78,6 +79,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMember(null);
   }, []);
 
+  const withdraw = useCallback(async (currentPassword: string) => {
+    const memberId = member?.memberId;
+    await authApi.withdraw(currentPassword);
+    if (memberId !== undefined) forgetMemberReservationKeys(memberId);
+    clearSession();
+  }, [member?.memberId, clearSession]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       member,
@@ -87,11 +95,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       signup,
       logout,
+      withdraw,
       refreshMember: async () => {
         setMember(await getMe());
       },
     }),
-    [member, initializing, login, signup, logout],
+    [member, initializing, login, signup, logout, withdraw],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
