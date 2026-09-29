@@ -15,12 +15,14 @@ import java.util.HexFormat;
 import java.util.UUID;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 
 @Service
 @RequiredArgsConstructor
 public class RefreshTokenService {
     private final RefreshTokenRepository refreshTokenRepository;
-
+    private final EntityManager entityManager;
     // 리프레시 토큰 발급
     @Transactional
     public String issueRefreshToken(Member member) {
@@ -68,7 +70,7 @@ public class RefreshTokenService {
     }
 
     // 리프레시를 검증하고 해당 회원을 반환
-    @Transactional(readOnly = true)
+    @Transactional
     public Member validateRefreshToken(String rawToken) {
         // 1. 쿠키에 토큰이 있는지 확인
         if (rawToken == null || rawToken.isBlank()) {
@@ -92,6 +94,8 @@ public class RefreshTokenService {
         }
         // 4. 현재 계정 상태 확인
         Member member = refreshToken.getMember();
+
+        entityManager.refresh(member, LockModeType.PESSIMISTIC_WRITE);
 
         if (member.getStatus() == MemberStatus.WITHDRAWN) {
             throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);

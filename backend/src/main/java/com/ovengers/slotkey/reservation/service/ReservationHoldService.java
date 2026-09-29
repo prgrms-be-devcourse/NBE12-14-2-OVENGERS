@@ -15,6 +15,9 @@ import com.ovengers.slotkey.space.repository.SpaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.ovengers.slotkey.member.entity.Member;
+import com.ovengers.slotkey.member.entity.MemberStatus;
+import com.ovengers.slotkey.member.repository.MemberRepository;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -34,7 +37,7 @@ import java.util.List;
 public class ReservationHoldService {
 
     private static final int HOLD_MINUTES = 10;
-
+    private final MemberRepository memberRepository;
     private final SpaceRepository spaceRepository;
     private final ReservationRepository reservationRepository;
     private final ReservationStatusHistoryRepository reservationStatusHistoryRepository;
@@ -69,6 +72,14 @@ public class ReservationHoldService {
         // 슬롯 확보 실패(RESERVATION_SLOT_CONFLICT) 시 예외가 전파되어 위의 예약 INSERT를
         // 포함한 트랜잭션 전체가 롤백된다 — HELD 잔재가 남지 않는다.
         reservationSlotService.secureSlots(reservation.getId(), spaceId, slotStarts);
+        Member member = memberRepository.findByIdForUpdate(memberId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.AUTHENTICATION_REQUIRED)
+                );
+
+        if (member.getStatus() == MemberStatus.WITHDRAWN) {
+            throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
+        }
 
         reservationStatusHistoryRepository.save(
                 ReservationStatusHistory.of(reservation.getId(), memberId, null, ReservationStatus.HELD, null, now)

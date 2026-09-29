@@ -30,4 +30,11 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
     Optional<Member> findByIdForUpdate(
             @Param("memberId") Long memberId
     );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM Member m WHERE m.email = :email")
+    Optional<Member> findByEmailForUpdate(
+            @Param("email") String email
+    );
+
 }

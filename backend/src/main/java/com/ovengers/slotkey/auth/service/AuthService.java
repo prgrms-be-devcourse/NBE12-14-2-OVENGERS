@@ -25,8 +25,10 @@ public class AuthService {
     @Transactional
     public LoginResult login(String email, String password) {
         // 이메일로 회원 조회
-        Member member = memberRepository.findByEmail(email).orElseThrow(
-                () -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
+        Member member = memberRepository.findByEmailForUpdate(email)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.INVALID_CREDENTIALS)
+                );
 
         // 입력한 비밀번호와 저장된 해시 비교
         if (!passwordEncoder.matches(password, member.getPasswordHash())) {
@@ -53,7 +55,7 @@ public class AuthService {
     }
 
     //리프레시 토큰을 이용해 엑세스 토큰을 갱신하기
-    @Transactional(readOnly = true)
+    @Transactional
     public String refresh(String rawRefreshToken) {
         // 리프레시가 유효한지 확인하고 회원을 받음
         Member member = refreshTokenService
