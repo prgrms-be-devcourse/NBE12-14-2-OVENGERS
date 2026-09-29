@@ -5,6 +5,7 @@ import com.ovengers.slotkey.global.common.response.ApiResponse;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.global.security.CustomAuthenticationFilter;
 import com.ovengers.slotkey.global.security.jwt.JwtProvider;
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,6 +39,8 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
 
                 .authorizeHttpRequests(auth -> auth
+                        // 오류 응답을 만드는 내부 ERROR 디스패치가 인증 실패로 바뀌지 않도록 허용한다.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/favicon.ico").permitAll()
                         // Swagger UI 및 API 문서 접근 허용
                         .requestMatchers(
