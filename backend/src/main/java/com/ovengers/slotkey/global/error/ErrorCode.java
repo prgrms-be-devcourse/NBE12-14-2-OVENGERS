@@ -19,6 +19,8 @@ public enum ErrorCode {
     SELF_GRANT_NOT_ALLOWED(HttpStatus.UNPROCESSABLE_ENTITY, "SELF_GRANT_NOT_ALLOWED", "자기 자신에게는 크레딧을 지급할 수 없습니다."),
     ACCOUNT_WITHDRAWN(HttpStatus.UNAUTHORIZED, "ACCOUNT_WITHDRAWN", "탈퇴한 계정입니다."),
     MEMBER_WITHDRAWN(HttpStatus.CONFLICT, "MEMBER_WITHDRAWN", "탈퇴한 회원의 상태를 변경하거나 크레딧을 지급할 수 없습니다."),
+    CURRENT_PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST, "CURRENT_PASSWORD_MISMATCH", "현재 비밀번호가 일치하지 않습니다."),
+
     //── Refresh_token ─────────────────────────────────────────
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."),
     ACCOUNT_INACTIVE(HttpStatus.FORBIDDEN, "ACCOUNT_INACTIVE", "이용이 제한된 계정입니다."),

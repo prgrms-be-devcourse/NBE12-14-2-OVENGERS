@@ -44,7 +44,9 @@ export type ErrorCode =
   | 'IMAGE_STORAGE_ERROR'
   | 'NETWORK_ERROR'
   | 'ACCOUNT_WITHDRAWN'
-  | 'MEMBER_WITHDRAWN';
+  | 'MEMBER_WITHDRAWN'
+  | 'CURRENT_PASSWORD_MISMATCH'
+  | 'WITHDRAWAL_ACTIVE_RESERVATION';
   
 
 export const ERROR_CODE: Record<ErrorCode, ErrorCode> = {
@@ -86,6 +88,8 @@ export const ERROR_CODE: Record<ErrorCode, ErrorCode> = {
   NETWORK_ERROR: 'NETWORK_ERROR',
   ACCOUNT_WITHDRAWN: 'ACCOUNT_WITHDRAWN',
 MEMBER_WITHDRAWN: 'MEMBER_WITHDRAWN',
+CURRENT_PASSWORD_MISMATCH: 'CURRENT_PASSWORD_MISMATCH',
+WITHDRAWAL_ACTIVE_RESERVATION: 'WITHDRAWAL_ACTIVE_RESERVATION',
 };
 
 const MESSAGES: Record<ErrorCode, string> = {
@@ -127,6 +131,9 @@ const MESSAGES: Record<ErrorCode, string> = {
   NETWORK_ERROR: '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.',
   ACCOUNT_WITHDRAWN: '탈퇴한 계정입니다.',
 MEMBER_WITHDRAWN: '탈퇴한 회원의 상태를 변경하거나 크레딧을 지급할 수 없습니다.',
+CURRENT_PASSWORD_MISMATCH: '현재 비밀번호가 일치하지 않습니다.',
+WITHDRAWAL_ACTIVE_RESERVATION:
+  '진행 중이거나 예정된 예약이 있습니다. 내 예약에서 확인해주세요.',
 };
 
 const STATUS_FALLBACK: Record<number, string> = {
