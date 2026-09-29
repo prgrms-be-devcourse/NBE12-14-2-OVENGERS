@@ -10,10 +10,14 @@ import com.ovengers.slotkey.reservation.entity.ReservationStatus;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationSlotRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationStatusHistoryRepository;
+import com.ovengers.slotkey.member.entity.Member;
+import com.ovengers.slotkey.member.entity.MemberStatus;
+import com.ovengers.slotkey.member.repository.MemberRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -28,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -42,6 +47,8 @@ class ReservationCancelServiceTest {
 
     @Mock
     private ReservationRepository reservationRepository;
+    @Mock
+    private MemberRepository memberRepository;
     @Mock
     private ReservationSlotRepository reservationSlotRepository;
     @Mock
@@ -61,9 +68,13 @@ class ReservationCancelServiceTest {
         now = LocalDateTime.of(2026, 9, 17, 13, 0);
         clock = Clock.fixed(now.atZone(ZONE).toInstant(), ZONE);
         cancelService = new ReservationCancelService(
-                reservationRepository, reservationSlotRepository, reservationStatusHistoryRepository,
+                reservationRepository, memberRepository, reservationSlotRepository, reservationStatusHistoryRepository,
                 creditService, doorAccessTokenService, clock);
         startTime = LocalDateTime.of(2026, 9, 17, 14, 0); // now(13:00) + 1시간
+    }
+
+    private Member activeMember() {
+        return new Member("user@slotkey.test", "hash", "회원");
     }
 
     private Reservation confirmedReservation(Long memberId) {
@@ -130,6 +141,7 @@ class ReservationCancelServiceTest {
         given(reservationRepository.cancelIfConfirmedAndBeforeStart(
                 RESERVATION_ID, now, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLED))
                 .willReturn(1);
+        given(memberRepository.findByIdForUpdate(MEMBER_ID)).willReturn(Optional.of(activeMember()));
 
         ReservationResponse response = cancelService.cancel(MEMBER_ID, RESERVATION_ID);
 
@@ -145,7 +157,7 @@ class ReservationCancelServiceTest {
         LocalDateTime lateNow = now.plusMinutes(1); // 13:01, 마감(13:00) 1분 경과
         Clock lateClock = Clock.fixed(lateNow.atZone(ZONE).toInstant(), ZONE);
         cancelService = new ReservationCancelService(
-                reservationRepository, reservationSlotRepository, reservationStatusHistoryRepository,
+                reservationRepository, memberRepository, reservationSlotRepository, reservationStatusHistoryRepository,
                 creditService, doorAccessTokenService, lateClock);
         Reservation reservation = confirmedReservation(MEMBER_ID);
         given(reservationRepository.findById(RESERVATION_ID))
@@ -153,6 +165,7 @@ class ReservationCancelServiceTest {
         given(reservationRepository.cancelIfConfirmedAndBeforeStart(
                 RESERVATION_ID, lateNow, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLED))
                 .willReturn(1);
+        given(memberRepository.findByIdForUpdate(MEMBER_ID)).willReturn(Optional.of(activeMember()));
 
         ReservationResponse response = cancelService.cancel(MEMBER_ID, RESERVATION_ID);
 
@@ -163,7 +176,7 @@ class ReservationCancelServiceTest {
     }
 
     @Test
-    @DisplayName("정상 취소 시 슬롯을 반환하고 상태 이력(CONFIRMED→CANCELLED)을 저장한다")
+    @DisplayName("정상 취소 시 잠금 순서(Reservation UPDATE -> Member X -> Slot DELETE -> Refund)를 준수하며 슬롯을 반환하고 상태 이력을 저장한다")
     void cancel_success_deletesSlotsAndSavesHistory() {
         Reservation reservation = confirmedReservation(MEMBER_ID);
         given(reservationRepository.findById(RESERVATION_ID))
@@ -171,14 +184,60 @@ class ReservationCancelServiceTest {
         given(reservationRepository.cancelIfConfirmedAndBeforeStart(
                 RESERVATION_ID, now, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLED))
                 .willReturn(1);
+        given(memberRepository.findByIdForUpdate(MEMBER_ID)).willReturn(Optional.of(activeMember()));
 
         cancelService.cancel(MEMBER_ID, RESERVATION_ID);
 
-        verify(reservationSlotRepository).deleteByReservationId(RESERVATION_ID);
+        InOrder inOrder = inOrder(reservationRepository, memberRepository, reservationSlotRepository, creditService);
+        inOrder.verify(reservationRepository).cancelIfConfirmedAndBeforeStart(
+                RESERVATION_ID, now, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLED);
+        inOrder.verify(memberRepository).findByIdForUpdate(MEMBER_ID);
+        inOrder.verify(reservationSlotRepository).deleteByReservationId(RESERVATION_ID);
+        inOrder.verify(creditService).refund(MEMBER_ID, RESERVATION_ID, TOTAL_AMOUNT);
+
         verify(doorAccessTokenService).revokeByReservation(RESERVATION_ID, now, "CANCELLED");
         verify(reservationStatusHistoryRepository).save(argThat(history ->
                 history.getFromStatus() == ReservationStatus.CONFIRMED
                         && history.getToStatus() == ReservationStatus.CANCELLED
                         && history.getChangedByMemberId().equals(MEMBER_ID)));
+    }
+
+    @Test
+    @DisplayName("회원이 존재하지 않으면 AUTHENTICATION_REQUIRED 예외가 발생하고 슬롯 삭제 및 환불이 실행되지 않는다")
+    void cancel_memberNotFound_throwsAuthenticationRequired() {
+        Reservation reservation = confirmedReservation(MEMBER_ID);
+        given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
+        given(reservationRepository.cancelIfConfirmedAndBeforeStart(
+                RESERVATION_ID, now, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLED))
+                .willReturn(1);
+        given(memberRepository.findByIdForUpdate(MEMBER_ID)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> cancelService.cancel(MEMBER_ID, RESERVATION_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.AUTHENTICATION_REQUIRED);
+
+        verify(reservationSlotRepository, never()).deleteByReservationId(any());
+        verify(creditService, never()).refund(any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("탈퇴한 회원이면 ACCOUNT_WITHDRAWN 예외가 발생하고 슬롯 삭제 및 환불이 실행되지 않는다")
+    void cancel_withdrawnMember_throwsAccountWithdrawn() {
+        Reservation reservation = confirmedReservation(MEMBER_ID);
+        Member withdrawnMember = activeMember();
+        withdrawnMember.withdraw(now);
+
+        given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
+        given(reservationRepository.cancelIfConfirmedAndBeforeStart(
+                RESERVATION_ID, now, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLED))
+                .willReturn(1);
+        given(memberRepository.findByIdForUpdate(MEMBER_ID)).willReturn(Optional.of(withdrawnMember));
+
+        assertThatThrownBy(() -> cancelService.cancel(MEMBER_ID, RESERVATION_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ACCOUNT_WITHDRAWN);
+
+        verify(reservationSlotRepository, never()).deleteByReservationId(any());
+        verify(creditService, never()).refund(any(), any(), anyInt());
     }
 }

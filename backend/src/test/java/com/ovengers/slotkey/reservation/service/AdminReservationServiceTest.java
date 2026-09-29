@@ -206,6 +206,9 @@ class AdminReservationServiceTest {
 
         assertThat(response.status()).isEqualTo(ReservationStatus.CANCELLED);
 
+        // 결제된 예약 취소 시 환불 전 회원 배타 잠금 선점 검증 및 Space 배타 잠금 미선점 검증
+        verify(spaceRepository, never()).findByIdForUpdate(any());
+        verify(memberRepository).findByIdForUpdate(MEMBER_ID);
         verify(reservationSlotRepository).deleteByReservationId(RESERVATION_ID);
         verify(doorAccessTokenService).revokeByReservation(eq(RESERVATION_ID), eq(now), eq("ADMIN_FORCE_CANCEL"));
 
@@ -259,6 +262,8 @@ class AdminReservationServiceTest {
 
         adminReservationService.forceCancel(RESERVATION_ID, REASON, ADMIN_MEMBER_ID);
 
+        verify(spaceRepository, never()).findByIdForUpdate(any());
+        verify(memberRepository).findByIdForUpdate(MEMBER_ID);
         verify(creditService).refund(MEMBER_ID, RESERVATION_ID, 10000);
         verify(statusHistoryRepository).save(argThat(history ->
                 history.getFromStatus() == ReservationStatus.IN_USE
@@ -266,18 +271,22 @@ class AdminReservationServiceTest {
     }
 
     @Test
-    @DisplayName("결제 전(HELD) 예약을 강제 취소하면 슬롯만 반환하고 환불은 하지 않는다")
+    @DisplayName("결제 전(HELD) 예약을 강제 취소하면 Space 배타 잠금을 선점하고 슬롯만 반환하며 환불 및 회원 잠금은 하지 않는다")
     void forceCancel_held_doesNotRefund() {
         Reservation held = reservationWithStatus(ReservationStatus.HELD, 10000);
         Reservation cancelled = reservationWithStatus(ReservationStatus.CANCELLED, 10000);
         given(reservationRepository.findById(RESERVATION_ID))
                 .willReturn(Optional.of(held), Optional.of(cancelled));
+        given(spaceRepository.findByIdForUpdate(SPACE_ID))
+                .willReturn(Optional.of(Space.builder().id(SPACE_ID).name("공간1").build()));
         given(reservationRepository.forceCancelIfStatusIs(
                 RESERVATION_ID, now, ReservationStatus.HELD, ReservationStatus.CANCELLED)).willReturn(1);
         stubMemberAndSpace();
 
         adminReservationService.forceCancel(RESERVATION_ID, REASON, ADMIN_MEMBER_ID);
 
+        verify(spaceRepository).findByIdForUpdate(SPACE_ID);
+        verify(memberRepository, never()).findByIdForUpdate(any());
         verify(reservationSlotRepository).deleteByReservationId(RESERVATION_ID);
         verify(creditService, never()).refund(any(), any(), anyInt());
         verify(creditService, never()).penalize(any(), any(), anyInt());

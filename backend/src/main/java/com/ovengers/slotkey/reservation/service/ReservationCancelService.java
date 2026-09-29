@@ -12,6 +12,9 @@ import com.ovengers.slotkey.reservation.policy.ReservationRefundPolicy;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationSlotRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationStatusHistoryRepository;
+import com.ovengers.slotkey.member.entity.Member;
+import com.ovengers.slotkey.member.entity.MemberStatus;
+import com.ovengers.slotkey.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,12 +30,16 @@ import java.time.LocalDateTime;
  * 취소와 환불은 하나의 트랜잭션에서 함께 커밋된다 — "취소는 됐는데 환불은 실패"하는
  * 중간 상태가 구조적으로 없으므로 별도의 환불 재처리 큐가 필요 없다(ReservationPaymentConfirmService의
  * "차감은 됐는데 확정은 안 된" 중간 상태 없음과 대칭).
+ *
+ * 잠금 순서: Reservation(UPDATE/X) -> Member(X) -> Slot(DELETE) -> Member 환불(UPDATE)
+ * 연장 및 HOLD와 Member-before-Slot 순서를 일치시켜 자원 획득 순환 데드락을 방지한다.
  */
 @Service
 @RequiredArgsConstructor
 public class ReservationCancelService {
 
     private final ReservationRepository reservationRepository;
+    private final MemberRepository memberRepository;
     private final ReservationSlotRepository reservationSlotRepository;
     private final ReservationStatusHistoryRepository reservationStatusHistoryRepository;
     private final CreditService creditService;
@@ -57,6 +64,16 @@ public class ReservationCancelService {
                 reservationId, now, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLED);
         if (updated == 0) {
             throw new BusinessException(ErrorCode.RESERVATION_STATE_CONFLICT, "취소할 수 없는 상태입니다.");
+        }
+
+        // 회원 배타 잠금 확보 및 상태 검증.
+        // 잠금 계층 순서: Reservation(UPDATE/X) -> Member(X) -> Slot(DELETE) -> Member 환불
+        // 연장(Reservation -> Member -> Slot) 및 HOLD(Member -> Slot)와 Member-before-Slot 잠금 순서를
+        // 일치시켜, 동일 회원의 다른 예약 연장/HOLD와의 Slot ↔ Member 교차 대기 데드락(MySQL 1213)을 방지한다.
+        Member member = memberRepository.findByIdForUpdate(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTHENTICATION_REQUIRED));
+        if (member.getStatus() == MemberStatus.WITHDRAWN) {
+            throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
         }
 
         // 점유 슬롯 반환.

@@ -121,6 +121,17 @@ public class AdminReservationService {
         int totalAmount = reservation.getTotalAmount();
         LocalDateTime now = LocalDateTime.now(clock);
 
+        // HELD 상태의 예약은 환불이 없어 명시적 예약자 Member X를 선점하지 않으나,
+        // 이력/감사 로그 INSERT 시 adminMemberId에 대한 FK 공유 잠금(S)이 발생한다.
+        // adminMemberId == memberId인 경우 대체 HOLD(Member X 보유)의 만료 정리(Reservation X 요청)와
+        // Reservation X ↔ Member S 간 순환 데드락이 발생할 수 있다.
+        // 따라서 상위 리소스인 Space의 배타 잠금(X)을 Reservation UPDATE 전에 선점하여,
+        // 동일 공간의 신규 HOLD 및 연장(Space S 잠금)과 상호 배제(직렬화)함으로써 데드락을 원천 차단한다.
+        if (previousStatus == ReservationStatus.HELD) {
+            spaceRepository.findByIdForUpdate(reservation.getSpaceId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.SPACE_NOT_FOUND));
+        }
+
         // 문지기: 조회 시점의 상태가 그대로일 때만 CANCELLED로 전이한다. 0행이면 그 사이 다른 요청이 먼저 상태를 바꾼 것이다.
         int updated = reservationRepository.forceCancelIfStatusIs(
                 reservationId, now, previousStatus, ReservationStatus.CANCELLED);
@@ -138,6 +149,14 @@ public class AdminReservationService {
                 now
         );
         statusHistoryRepository.save(history);
+
+        // 환불이 발생하는 결제된 예약(CONFIRMED, IN_USE)인 경우, 슬롯 삭제 전에 회원 배타 잠금을 선점하여
+        // Slot DELETE ↔ Member UPDATE와 연장/HOLD의 Member X ↔ Slot INSERT 간 교차 대기 데드락을 방지한다.
+        // HELD 상태는 결제/환불이 발생하지 않으므로 회원 잠금을 잡지 않아,
+        // 만료 정리(expireHold)의 Reservation UPDATE와 Member X 간 순환 데드락을 방지한다.
+        if (previousStatus != ReservationStatus.HELD) {
+            memberRepository.findByIdForUpdate(memberId);
+        }
 
         // 슬롯 삭제 (기존 취소와 동일)
         reservationSlotRepository.deleteByReservationId(reservationId);
