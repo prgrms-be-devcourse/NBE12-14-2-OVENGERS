@@ -56,6 +56,22 @@ public interface ReservationSlotRepository extends JpaRepository<ReservationSlot
                     @Param("heldStatus") ReservationStatus heldStatus,
                     @Param("confirmedStatuses") List<ReservationStatus> confirmedStatuses);
 
+    /**
+     * 요청한 슬롯 시작 시각들 중 만료 정리 대상(만료된 HELD 또는 EXPIRED 잔재)인 예약 id 목록(중복 없이).
+     * CONFIRMED, IN_USE 등 유효 점유 상태인 예약은 만료 정리 대상이 아니므로 제외하여,
+     * 불필요한 UPDATE 및 연장(Extend) 등과의 역순 잠금 데드락을 방지한다.
+     */
+    @Query("SELECT DISTINCT rs.reservationId FROM ReservationSlot rs, Reservation r " +
+            "WHERE rs.reservationId = r.id " +
+            "AND rs.spaceId = :spaceId AND rs.slotStart IN :slotStarts " +
+            "AND ((r.status = :heldStatus AND r.holdExpiresAt <= :now) OR r.status = :expiredStatus)")
+    List<Long> findExpiredReservationIdsBySpaceIdAndSlotStartIn(
+            @Param("spaceId") Long spaceId,
+            @Param("slotStarts") List<LocalDateTime> slotStarts,
+            @Param("now") LocalDateTime now,
+            @Param("heldStatus") ReservationStatus heldStatus,
+            @Param("expiredStatus") ReservationStatus expiredStatus);
+
     /** 요청한 슬롯 시작 시각들 중 이미 점유된 슬롯을 가진 예약 id들(중복 없이). */
     @Query("SELECT DISTINCT rs.reservationId FROM ReservationSlot rs " +
             "WHERE rs.spaceId = :spaceId AND rs.slotStart IN :slotStarts")

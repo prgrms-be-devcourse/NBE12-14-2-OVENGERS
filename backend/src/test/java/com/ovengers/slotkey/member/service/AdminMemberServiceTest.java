@@ -183,14 +183,14 @@ class AdminMemberServiceTest {
 
         Member member = mock(Member.class);
 
-        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(member));
         given(member.getId()).willReturn(memberId);
         given(member.getRole()).willReturn(MemberRole.USER);
 
-        // 첫 번째 getStatus() -> 변경 전 상태
-        // 두 번째 getStatus() -> 응답 생성 시 변경 후 상태
+        // WITHDRAWN 검사, beforeStatus 추출, response.status()
         given(member.getStatus())
                 .willReturn(
+                        MemberStatus.ACTIVE,
                         MemberStatus.ACTIVE,
                         MemberStatus.SUSPENDED
                 );
@@ -242,11 +242,12 @@ class AdminMemberServiceTest {
 
         Member member = mock(Member.class);
 
-        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(member));
         given(member.getId()).willReturn(memberId);
         given(member.getRole()).willReturn(MemberRole.USER);
         given(member.getStatus())
                 .willReturn(
+                        MemberStatus.SUSPENDED,
                         MemberStatus.SUSPENDED,
                         MemberStatus.ACTIVE
                 );
@@ -284,7 +285,8 @@ class AdminMemberServiceTest {
 
         Member member = mock(Member.class);
 
-        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(member));
+        given(member.getStatus()).willReturn(MemberStatus.ACTIVE);
         given(member.getRole()).willReturn(MemberRole.ADMIN);
 
         // when
@@ -312,7 +314,8 @@ class AdminMemberServiceTest {
 
         Member member = mock(Member.class);
 
-        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(member));
+        given(member.getStatus()).willReturn(MemberStatus.ACTIVE);
         given(member.getRole()).willReturn(MemberRole.ADMIN);
 
         // when
@@ -338,7 +341,7 @@ class AdminMemberServiceTest {
         // given
         Long memberId = 999L;
 
-        given(memberRepository.findById(memberId))
+        given(memberRepository.findByIdForUpdate(memberId))
                 .willReturn(Optional.empty());
 
         // when
@@ -371,11 +374,11 @@ class AdminMemberServiceTest {
         Member beforeMember = mock(Member.class);
         Member updatedMember = mock(Member.class);
 
+        given(memberRepository.findByIdForUpdate(memberId))
+                .willReturn(Optional.of(beforeMember));
+        given(beforeMember.getStatus()).willReturn(MemberStatus.ACTIVE);
         given(memberRepository.findById(memberId))
-                .willReturn(
-                        Optional.of(beforeMember),
-                        Optional.of(updatedMember)
-                );
+                .willReturn(Optional.of(updatedMember));
 
         given(beforeMember.getBalance()).willReturn(1000000);
         given(updatedMember.getId()).willReturn(memberId);
@@ -487,7 +490,7 @@ class AdminMemberServiceTest {
         // given
         Long memberId = 999L;
 
-        given(memberRepository.findById(memberId)).willReturn(Optional.empty());
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.empty());
 
         // when
         BusinessException exception =

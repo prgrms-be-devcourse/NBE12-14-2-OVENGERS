@@ -2,6 +2,8 @@ package com.ovengers.slotkey.reservation.service;
 
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
+import com.ovengers.slotkey.member.entity.Member;
+import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.reservation.dto.response.ReservationResponse;
 import com.ovengers.slotkey.reservation.entity.Reservation;
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -33,6 +36,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -41,6 +45,8 @@ class ReservationHoldServiceTest {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 
+    @Mock
+    private MemberRepository memberRepository;
     @Mock
     private SpaceRepository spaceRepository;
     @Mock
@@ -63,8 +69,9 @@ class ReservationHoldServiceTest {
         now = LocalDateTime.of(2026, 9, 17, 10, 0);
         clock = Clock.fixed(now.atZone(ZONE).toInstant(), ZONE);
         reservationHoldService = new ReservationHoldService(
-                spaceRepository, reservationRepository, reservationStatusHistoryRepository,
-                pricingService, reservationSlotService, clock);
+                memberRepository, spaceRepository, reservationRepository,
+                reservationStatusHistoryRepository, pricingService,
+                reservationSlotService, clock);
         startTime = LocalDateTime.of(2026, 9, 17, 14, 0);
         endTime = LocalDateTime.of(2026, 9, 17, 16, 0);
     }
@@ -159,6 +166,8 @@ class ReservationHoldServiceTest {
         ArgumentCaptor<Reservation> reservationCaptor = ArgumentCaptor.forClass(Reservation.class);
         given(reservationRepository.save(reservationCaptor.capture()))
                 .willAnswer(invocation -> savedReservationOf(invocation.getArgument(0)));
+        Member member = new Member("hold-test@slotkey.test", "hash", "테스트회원");
+        given(memberRepository.findByIdForUpdate(100L)).willReturn(Optional.of(member));
 
         ReservationResponse response = reservationHoldService.createHold(100L, 1L, startTime, endTime);
 
@@ -172,8 +181,11 @@ class ReservationHoldServiceTest {
         assertThat(response.status()).isEqualTo("HELD");
         assertThat(response.spaceVersion()).isEqualTo(0);
 
-        verify(reservationSlotService).secureSlots(eq(1L), eq(1L), anyList());
-        verify(reservationStatusHistoryRepository).save(argThat(history ->
+        InOrder inOrder = inOrder(memberRepository, reservationRepository, reservationSlotService, reservationStatusHistoryRepository);
+        inOrder.verify(memberRepository).findByIdForUpdate(100L);
+        inOrder.verify(reservationRepository).save(any(Reservation.class));
+        inOrder.verify(reservationSlotService).secureSlots(eq(1L), eq(1L), anyList());
+        inOrder.verify(reservationStatusHistoryRepository).save(argThat(history ->
                 history.getFromStatus() == null
                         && history.getToStatus() == ReservationStatus.HELD
                         && history.getReservationId().equals(1L)));
@@ -182,9 +194,11 @@ class ReservationHoldServiceTest {
     @Test
     @DisplayName("슬롯 확보에 실패하면 RESERVATION_SLOT_CONFLICT 예외가 그대로 전파되고 이력은 남지 않는다")
     void createHold_slotConflict_propagatesException() {
-            given(spaceRepository.findByIdForShare(1L)).willReturn(Optional.of(activeSpace()));
+        given(spaceRepository.findByIdForShare(1L)).willReturn(Optional.of(activeSpace()));
         given(pricingService.calculateSlotCount(startTime, endTime)).willReturn(4);
         given(pricingService.calculateTotalAmount(5000, 4)).willReturn(20000);
+        Member member = new Member("hold-test@slotkey.test", "hash", "테스트회원");
+        given(memberRepository.findByIdForUpdate(100L)).willReturn(Optional.of(member));
         given(reservationRepository.save(any(Reservation.class)))
                 .willAnswer(invocation -> savedReservationOf(invocation.getArgument(0)));
         given(reservationSlotService.buildSlotStarts(startTime, endTime)).willReturn(List.of(startTime));
@@ -195,6 +209,45 @@ class ReservationHoldServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESERVATION_SLOT_CONFLICT);
 
+        verify(reservationStatusHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("회원 조회 결과가 없으면 AUTHENTICATION_REQUIRED 예외가 발생하고 예약·슬롯·이력은 저장되지 않는다")
+    void createHold_memberNotFound_throwsAuthenticationRequired() {
+        Space space = activeSpace();
+        given(spaceRepository.findByIdForShare(1L)).willReturn(Optional.of(space));
+        given(pricingService.calculateSlotCount(startTime, endTime)).willReturn(4);
+        given(pricingService.calculateTotalAmount(5000, 4)).willReturn(20000);
+        given(memberRepository.findByIdForUpdate(100L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> reservationHoldService.createHold(100L, 1L, startTime, endTime))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.AUTHENTICATION_REQUIRED);
+
+        verify(reservationRepository, never()).save(any());
+        verify(reservationSlotService, never()).secureSlots(any(), any(), any());
+        verify(reservationStatusHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("탈퇴한 회원이면 ACCOUNT_WITHDRAWN 예외가 발생하고 예약·슬롯·이력은 저장되지 않는다")
+    void createHold_withdrawnMember_throwsAccountWithdrawn() {
+        Space space = activeSpace();
+        given(spaceRepository.findByIdForShare(1L)).willReturn(Optional.of(space));
+        given(pricingService.calculateSlotCount(startTime, endTime)).willReturn(4);
+        given(pricingService.calculateTotalAmount(5000, 4)).willReturn(20000);
+
+        Member member = new Member("hold-test@slotkey.test", "hash", "테스트회원");
+        member.withdraw(now);
+        given(memberRepository.findByIdForUpdate(100L)).willReturn(Optional.of(member));
+
+        assertThatThrownBy(() -> reservationHoldService.createHold(100L, 1L, startTime, endTime))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ACCOUNT_WITHDRAWN);
+
+        verify(reservationRepository, never()).save(any());
+        verify(reservationSlotService, never()).secureSlots(any(), any(), any());
         verify(reservationStatusHistoryRepository, never()).save(any());
     }
 }

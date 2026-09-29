@@ -3,6 +3,9 @@ package com.ovengers.slotkey.reservation.service;
 import com.ovengers.slotkey.credit.service.CreditService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
+import com.ovengers.slotkey.member.entity.Member;
+import com.ovengers.slotkey.member.entity.MemberStatus;
+import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.reservation.dto.response.ReservationResponse;
 import com.ovengers.slotkey.reservation.entity.Reservation;
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
@@ -22,6 +25,10 @@ import java.util.List;
  * 연장(§7). 기존 슬롯은 건드리지 않고 뒤에 슬롯을 더 붙이는 방식이라, 실패해도
  * 원 예약은 무손상이다. 남의 점유가 HELD인지 CONFIRMED인지 구분하지 않는다 — 슬롯 행이
  * 존재하면 그냥 점유다(core-domain-decisions 7-1). 유일한 예외인 만료된 HELD 정리는 secureSlots가 처리한다.
+ *
+ * 잠금 순서: Space 공유 잠금 -> Reservation 배타 잠금 -> Member 배타 잠금 -> Slot INSERT.
+ * 슬롯 INSERT(secureSlots) 이전에 Member 배타 잠금을 확보함으로써,
+ * 동일 회원에 대해 연장과 HOLD가 동시 경합할 때 Slot과 Member 간 교차 잠금 데드락(MySQL 1213)을 원천 방지한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -29,6 +36,7 @@ public class ReservationExtendService {
 
     private final ReservationRepository reservationRepository;
     private final SpaceRepository spaceRepository;
+    private final MemberRepository memberRepository;
     private final ReservationSlotService reservationSlotService;
     private final PricingService pricingService;
     private final CreditService creditService;
@@ -64,6 +72,15 @@ public class ReservationExtendService {
 
         // 4. 연장 시간 정책 검증 (30분 단위, 동일 날짜, 운영시간 내)
         ReservationTimePolicy.validateExtension(reservation.getEndTime(), newEndTime, space.getClosingTime());
+
+        // 5. Member 배타 잠금(findByIdForUpdate) 획득 및 부재/탈퇴 검증
+        // Space -> Reservation -> Member -> Slot 잠금 순서를 준수하여
+        // 추가 슬롯 INSERT 이전에 Member X 잠금을 선점한다.
+        Member member = memberRepository.findByIdForUpdate(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTHENTICATION_REQUIRED));
+        if (member.getStatus() == MemberStatus.WITHDRAWN) {
+            throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
+        }
 
         // 추가 슬롯 확보. 실패(RESERVATION_SLOT_CONFLICT) 시 전파되어 아래 크레딧 차감/UPDATE는
         // 시도조차 되지 않고, 이미 삽입 시도한 슬롯도 트랜잭션과 함께 롤백된다.

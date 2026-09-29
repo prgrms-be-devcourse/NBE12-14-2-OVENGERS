@@ -3,6 +3,9 @@ package com.ovengers.slotkey.reservation.service;
 import com.ovengers.slotkey.credit.service.CreditService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
+import com.ovengers.slotkey.member.entity.Member;
+import com.ovengers.slotkey.member.entity.MemberStatus;
+import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.reservation.dto.response.ReservationResponse;
 import com.ovengers.slotkey.reservation.entity.Reservation;
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
@@ -14,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -32,6 +36,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -51,6 +56,8 @@ class ReservationExtendServiceTest {
         @Mock
         private SpaceRepository spaceRepository;
         @Mock
+        private MemberRepository memberRepository;
+        @Mock
         private ReservationSlotService reservationSlotService;
         @Mock
         private PricingService pricingService;
@@ -69,7 +76,7 @@ class ReservationExtendServiceTest {
                 now = LocalDateTime.of(2026, 9, 20, 10, 0);
                 clock = Clock.fixed(now.atZone(ZONE).toInstant(), ZONE);
                 extendService = new ReservationExtendService(
-                                reservationRepository, spaceRepository, reservationSlotService, pricingService,
+                                reservationRepository, spaceRepository, memberRepository, reservationSlotService, pricingService,
                                 creditService, clock);
 
                 startTime = LocalDateTime.of(2026, 9, 20, 11, 0);
@@ -173,6 +180,47 @@ class ReservationExtendServiceTest {
                 verifyNoInteractions(creditService);
         }
 
+        private Member activeMember() {
+                return new Member("extend-test@slotkey.test", "hash", "테스트회원");
+        }
+
+        @Test
+        @DisplayName("회원이 존재하지 않으면 AUTHENTICATION_REQUIRED 예외가 발생하고 슬롯을 확보하지 않는다")
+        void extend_memberNotFound_throwsException() {
+                given(reservationRepository.findSpaceIdById(RESERVATION_ID)).willReturn(Optional.of(SPACE_ID));
+                given(spaceRepository.findByIdForShare(SPACE_ID)).willReturn(Optional.of(space()));
+                given(reservationRepository.findByIdForUpdate(RESERVATION_ID))
+                                .willReturn(Optional.of(activeReservation(ReservationStatus.CONFIRMED)));
+                given(memberRepository.findByIdForUpdate(MEMBER_ID)).willReturn(Optional.empty());
+
+                assertThatThrownBy(() -> extendService.extend(MEMBER_ID, RESERVATION_ID, endTime, newEndTime))
+                                .isInstanceOf(BusinessException.class)
+                                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.AUTHENTICATION_REQUIRED);
+
+                verify(reservationSlotService, never()).secureSlots(any(), any(), any());
+                verifyNoInteractions(creditService);
+        }
+
+        @Test
+        @DisplayName("탈퇴한 회원이면 ACCOUNT_WITHDRAWN 예외가 발생하고 슬롯을 확보하지 않는다")
+        void extend_memberWithdrawn_throwsException() {
+                given(reservationRepository.findSpaceIdById(RESERVATION_ID)).willReturn(Optional.of(SPACE_ID));
+                given(spaceRepository.findByIdForShare(SPACE_ID)).willReturn(Optional.of(space()));
+                given(reservationRepository.findByIdForUpdate(RESERVATION_ID))
+                                .willReturn(Optional.of(activeReservation(ReservationStatus.CONFIRMED)));
+
+                Member withdrawn = new Member("extend-test@slotkey.test", "hash", "테스트회원");
+                withdrawn.withdraw(now);
+                given(memberRepository.findByIdForUpdate(MEMBER_ID)).willReturn(Optional.of(withdrawn));
+
+                assertThatThrownBy(() -> extendService.extend(MEMBER_ID, RESERVATION_ID, endTime, newEndTime))
+                                .isInstanceOf(BusinessException.class)
+                                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ACCOUNT_WITHDRAWN);
+
+                verify(reservationSlotService, never()).secureSlots(any(), any(), any());
+                verifyNoInteractions(creditService);
+        }
+
         @Test
         @DisplayName("연장 성공 시 추가 슬롯을 확보하고 크레딧을 차감하며 연장된 예약 정보를 반환한다")
         void extend_success() {
@@ -191,6 +239,7 @@ class ReservationExtendServiceTest {
                 given(reservationRepository.findSpaceIdById(RESERVATION_ID)).willReturn(Optional.of(SPACE_ID));
                 given(spaceRepository.findByIdForShare(SPACE_ID)).willReturn(Optional.of(space()));
                 given(reservationRepository.findByIdForUpdate(RESERVATION_ID)).willReturn(Optional.of(reservation));
+                given(memberRepository.findByIdForUpdate(MEMBER_ID)).willReturn(Optional.of(activeMember()));
                 given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(extendedReservation));
 
                 List<LocalDateTime> additionalSlots = List.of(endTime, endTime.plusMinutes(30));
@@ -203,8 +252,13 @@ class ReservationExtendServiceTest {
                 ReservationResponse response = extendService.extend(MEMBER_ID, RESERVATION_ID, endTime, newEndTime);
 
                 assertThat(response.reservationId()).isEqualTo(RESERVATION_ID);
-                verify(spaceRepository).findByIdForShare(SPACE_ID);
-                verify(reservationSlotService).secureSlots(RESERVATION_ID, SPACE_ID, additionalSlots);
-                verify(creditService).charge(MEMBER_ID, RESERVATION_ID, 5000);
+
+                // Space -> Reservation -> Member -> Slot 잠금 순서 검증
+                InOrder inOrder = inOrder(spaceRepository, reservationRepository, memberRepository, reservationSlotService, creditService);
+                inOrder.verify(spaceRepository).findByIdForShare(SPACE_ID);
+                inOrder.verify(reservationRepository).findByIdForUpdate(RESERVATION_ID);
+                inOrder.verify(memberRepository).findByIdForUpdate(MEMBER_ID);
+                inOrder.verify(reservationSlotService).secureSlots(RESERVATION_ID, SPACE_ID, additionalSlots);
+                inOrder.verify(creditService).charge(MEMBER_ID, RESERVATION_ID, 5000);
         }
 }

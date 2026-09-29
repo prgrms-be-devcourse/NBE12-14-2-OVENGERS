@@ -3,6 +3,7 @@ package com.ovengers.slotkey.reservation.service;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.reservation.entity.ReservationSlot;
+import com.ovengers.slotkey.reservation.entity.ReservationStatus;
 import com.ovengers.slotkey.reservation.repository.ReservationSlotRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -57,12 +58,13 @@ public class ReservationSlotService {
     }
 
     private void cleanupExpiredHolds(Long spaceId, List<LocalDateTime> slotStarts) {
+        LocalDateTime now = LocalDateTime.now(clock);
         List<Long> candidateReservationIds =
-                reservationSlotRepository.findReservationIdsBySpaceIdAndSlotStartIn(spaceId, slotStarts);
+                reservationSlotRepository.findExpiredReservationIdsBySpaceIdAndSlotStartIn(
+                        spaceId, slotStarts, now, ReservationStatus.HELD, ReservationStatus.EXPIRED);
         if (candidateReservationIds.isEmpty()) {
             return;
         }
-        LocalDateTime now = LocalDateTime.now(clock);
         for (Long candidateId : candidateReservationIds) {
             reservationHoldExpirationService.expireHold(candidateId, now);
         }

@@ -24,13 +24,14 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 예약 1단계: HOLD 생성(core-domain-decisions 2-1). 회원/공간 검증 -> 가격계산 -> 슬롯확보 -> HOLD 저장까지
+ * 예약 1단계: HOLD 생성(core-domain-decisions 2-1). 공간 검증 -> 가격계산 -> 회원 잠금 및 탈퇴 검증 -> HOLD 저장 -> 슬롯확보까지
  * 하나의 트랜잭션이며, 결제는 이 단계에 없다(구 ReservationCreateService는 1단계 설계
  * 흔적이라 2단계 확정 이후 역할을 HOLD 생성으로 좁히며 이 이름으로 정리했다).
  *
- * 회원 활성 여부는 이 서비스가 다시 확인하지 않는다 — CustomAuthenticationFilter가 Access Token
- * 유효성을 검증한 인증된 사용자이며, 토큰 재발급(refresh) 시점에 계정 상태를 검증하므로
- * 여기 도달한 시점의 memberId는 유효한 토큰을 보유한 회원이다.
+ * Space 공유 잠금 및 공간/시간/가격 검증 후, 예약 INSERT 이전에 비관적 락(findByIdForUpdate)으로
+ * 회원을 조회하여 회원 존재 여부와 탈퇴 여부(WITHDRAWN)를 직접 검증한다.
+ * 예약 INSERT 시 FK 검사로 회원 행에 공유 잠금(S)이 걸리므로, INSERT 전에 회원 배타 잠금(X)을
+ * 선점하여 동일 회원의 동시 HOLD 요청 간 S->X 잠금 전환 데드락(MySQL 1213)을 방지한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -61,6 +62,15 @@ public class ReservationHoldService {
         int pricePerSlotSnapshot = Math.toIntExact(space.getPricePerSlot());
         int totalAmount = pricingService.calculateTotalAmount(pricePerSlotSnapshot, slotCount);
 
+        Member member = memberRepository.findByIdForUpdate(memberId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.AUTHENTICATION_REQUIRED)
+                );
+
+        if (member.getStatus() == MemberStatus.WITHDRAWN) {
+            throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
+        }
+
         Reservation reservation = Reservation.createHeld(
                 memberId, spaceId, startTime, endTime,
                 pricePerSlotSnapshot, totalAmount,
@@ -72,14 +82,6 @@ public class ReservationHoldService {
         // 슬롯 확보 실패(RESERVATION_SLOT_CONFLICT) 시 예외가 전파되어 위의 예약 INSERT를
         // 포함한 트랜잭션 전체가 롤백된다 — HELD 잔재가 남지 않는다.
         reservationSlotService.secureSlots(reservation.getId(), spaceId, slotStarts);
-        Member member = memberRepository.findByIdForUpdate(memberId)
-                .orElseThrow(() ->
-                        new BusinessException(ErrorCode.AUTHENTICATION_REQUIRED)
-                );
-
-        if (member.getStatus() == MemberStatus.WITHDRAWN) {
-            throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
-        }
 
         reservationStatusHistoryRepository.save(
                 ReservationStatusHistory.of(reservation.getId(), memberId, null, ReservationStatus.HELD, null, now)
