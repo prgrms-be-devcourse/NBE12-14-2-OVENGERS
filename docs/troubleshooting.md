@@ -50,6 +50,21 @@
   - 실패(예: 잔액 부족 422)한 키로 재요청 시에는 캐시가 없어 재시도가 정상 허용됩니다.
   - 상세 내용은 [`docs/decisions/reservation-idempotency.md`](decisions/reservation-idempotency.md)를 참고합니다.
 
+### 2.5. 관리자 회원·문의 목록 조회 시 401 오류 및 강제 로그아웃 (인자 바인딩 및 ERROR 디스패치)
+- **현상**: 관리자 권한으로 정상 로그인하여 유효한 Bearer Access Token을 보유하고 있음에도 `/api/v1/admin/members` 및 `/api/v1/admin/inquiries` 요청 시 401 `AUTHENTICATION_REQUIRED`가 반환되고, 프론트엔드(`client.ts`)의 재시도 실패 후 강제 로그아웃되는 현상 발생.
+- **근본 원인 (Root Cause)**:
+  1. **컨트롤러 파라미터 이름 부재 및 컴파일러 플래그 결여**: `AdminMemberController` 및 `AdminInquiryController`의 `@RequestParam`과 `@PathVariable`에 `name`/`value`가 명시되지 않은 상태에서, IDE(VS Code Eclipse JDT 등)가 `-parameters` 메타데이터 없이 컴파일(`backend/bin/main`)하여 Spring Framework 6.1 인자 해석 시 `IllegalArgumentException` 발생.
+  2. **오류 디스패치의 401 왜곡 (Masking)**: 발생한 예외가 전역 예외 처리기를 지나 서블릿 컨테이너(Tomcat)로 전달되어 `/error`로 ERROR 디스패치(`DispatcherType.ERROR`)될 때, Spring Security의 `SecurityFilterChain`에서 인증 헤더가 전달되지 않은 내부 ERROR 디스패치가 `anyRequest().authenticated()`에 걸려 `AuthenticationEntryPoint`에 의해 401 `AUTHENTICATION_REQUIRED`로 변조됨.
+- **해결책 (Resolution)**:
+  1. **컨트롤러 파라미터 이름 명시**: `AdminMemberController` 5곳(`@RequestParam(name = "status")`, `@RequestParam(name = "keyword")`, `@PathVariable("memberId")` 3곳) 및 `AdminInquiryController` 3곳(`@RequestParam(name = "status")`, `@PathVariable("inquiryId")` 2곳)에 인자 이름을 명시적으로 지정.
+  2. **SecurityConfig ERROR 디스패치 허용**: `SecurityConfig`에 `.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()`을 추가하여 내부 오류 디스패치가 401로 왜곡되지 않고 정상적인 500 등 오류 상태로 반환되도록 정합화.
+  3. **IDE 설정 보완**: `.settings/org.eclipse.jdt.core.prefs`에 `org.eclipse.jdt.core.compiler.codegen.methodParameters=generate` 설정.
+- **검증**:
+  - `AdminControllerParameterBindingTest` (메타데이터 부재 환경에서 8개 파라미터 리플렉션 없이 해석 검증) 통과.
+  - `AdminMemberControllerTest`, `AdminInquiryControllerTest` (MVC 계층 인증/인가/파라미터 전달 22건 검증) 통과.
+  - `ErrorDispatchSecurityIntegrationTest` (임베디드 컨테이너 실제 ERROR 디스패치 500 보존 검증) 통과.
+  - 실제 8080 백엔드 및 3000 프록시를 통한 관리자 회원/문의 목록 200 OK 및 브라우저 UI 정상 렌더링 확인.
+
 ---
 
 ## 3. 관련 실행 및 설정 문서 안내
