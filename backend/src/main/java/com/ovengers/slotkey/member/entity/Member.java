@@ -48,4 +48,8 @@ public class Member extends BaseTimeEntity {
     public void updateStatus(MemberStatus status) {
         this.status = status;
     }
+
+    public void updateNickname(String nickname) {
+        this.nickname = nickname;
+    }
 }

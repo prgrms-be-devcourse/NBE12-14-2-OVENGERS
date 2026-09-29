@@ -3,6 +3,7 @@ package com.ovengers.slotkey.member.service;
 import com.ovengers.slotkey.credit.service.CreditGrantService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
+import com.ovengers.slotkey.member.dto.response.MemberResponse;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
@@ -87,5 +88,17 @@ public class MemberService {
                 .orElseThrow(() ->
                         new BusinessException(ErrorCode.MEMBER_NOT_FOUND)
                 );
+    }
+
+    @Transactional
+    public MemberResponse updateNickname(Long memberId, String nickname) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.AUTHENTICATION_REQUIRED)
+                );
+
+        member.updateNickname(nickname);
+
+        return new MemberResponse(member);
     }
 }

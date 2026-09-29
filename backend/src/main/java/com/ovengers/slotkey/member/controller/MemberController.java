@@ -16,6 +16,11 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import com.ovengers.slotkey.member.dto.request.MemberUpdateRequest;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+
 
 @Tag(name = "회원", description = "회원 정보 조회 API")
 @RestController
@@ -54,5 +59,24 @@ public class MemberController {
         return ResponseEntity.ok(
                 ApiResponse.success(new MemberResponse(member))
         );
+    }
+
+    //닉네임 수정
+    @Operation(
+            summary = "내 닉네임 수정",
+            description = "로그인한 회원의 닉네임을 수정합니다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @PatchMapping("/me")
+    public ResponseEntity<ApiResponse<MemberResponse>> updateMyInfo(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @Valid @RequestBody MemberUpdateRequest request
+    ) {
+        MemberResponse response = memberService.updateNickname(
+                principal.memberId(),
+                request.nickname()
+        );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
