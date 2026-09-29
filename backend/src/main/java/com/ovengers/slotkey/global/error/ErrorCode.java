@@ -48,6 +48,7 @@ public enum ErrorCode {
     INSUFFICIENT_BALANCE(HttpStatus.UNPROCESSABLE_ENTITY, "INSUFFICIENT_BALANCE", "크레딧 잔액이 부족합니다."),
     INVALID_RESERVATION_TIME(HttpStatus.BAD_REQUEST, "INVALID_RESERVATION_TIME", "예약 가능한 시간이 아닙니다."),
     IDEMPOTENCY_KEY_REQUIRED(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key 헤더가 필요합니다."),
+    WITHDRAWAL_ACTIVE_RESERVATION(HttpStatus.CONFLICT, "WITHDRAWAL_ACTIVE_RESERVATION", "진행 중이거나 예정된 예약이 있어 탈퇴할 수 없습니다."),
 
     // ── Door Access ──────────────────────────────────────
     ACCESS_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "ACCESS_TOKEN_NOT_FOUND", "출입 토큰을 찾을 수 없습니다."),

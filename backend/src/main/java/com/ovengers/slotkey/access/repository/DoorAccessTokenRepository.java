@@ -6,7 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Modifying;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 public interface DoorAccessTokenRepository extends JpaRepository<DoorAccessToken, Long> {
@@ -30,4 +32,22 @@ public interface DoorAccessTokenRepository extends JpaRepository<DoorAccessToken
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT t FROM DoorAccessToken t WHERE t.id = :id")
     Optional<DoorAccessToken> findByIdForUpdate(@Param("id") Long id);
+
+    @Modifying(flushAutomatically = true)
+    @Query("""
+        UPDATE DoorAccessToken t
+        SET t.revokedAt = :now,
+            t.revokeReason = :reason
+        WHERE t.revokedAt IS NULL
+          AND t.reservation.id IN (
+              SELECT r.id
+              FROM Reservation r
+              WHERE r.memberId = :memberId
+          )
+        """)
+    int revokeAllByMemberId(
+            @Param("memberId") Long memberId,
+            @Param("now") LocalDateTime now,
+            @Param("reason") String reason
+    );
 }

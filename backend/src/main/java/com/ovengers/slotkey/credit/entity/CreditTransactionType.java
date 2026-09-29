@@ -5,5 +5,6 @@ public enum CreditTransactionType {
     ADMIN_GRANT,
     RESERVATION_CHARGE,
     REFUND,
-    PENALTY
+    PENALTY,
+    WITHDRAWAL_EXPIRATION
 }

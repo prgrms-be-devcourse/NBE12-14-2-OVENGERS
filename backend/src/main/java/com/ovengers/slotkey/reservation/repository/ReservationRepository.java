@@ -180,4 +180,9 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM Reservation r WHERE r.id = :id")
     java.util.Optional<Reservation> findByIdForUpdate(@Param("id") Long id);
+
+    boolean existsByMemberIdAndStatusIn(
+            Long memberId,
+            List<ReservationStatus> statuses
+    );
 }
