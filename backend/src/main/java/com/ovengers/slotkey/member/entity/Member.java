@@ -62,4 +62,9 @@ public class Member extends BaseTimeEntity {
         this.withdrawnAt = withdrawnAt;
     }
 
+    public int expireRemainingCredit() {
+        int expiredAmount = this.balance;
+        this.balance = 0;
+        return expiredAmount;
+    }
 }
