@@ -32,7 +32,7 @@ export interface SelectOption {
 /* ------------------------------------------------------------------ 회원 */
 
 export type MemberRole = 'USER' | 'ADMIN';
-export type MemberStatus = 'ACTIVE' | 'SUSPENDED';
+export type MemberStatus = 'ACTIVE' | 'SUSPENDED' | 'WITHDRAWN';
 
 export interface Member {
   memberId: number;

@@ -66,6 +66,10 @@ public class AdminMemberService {
 
         Member updatedMember = findMember(memberId);
 
+        if (member.getStatus() == MemberStatus.WITHDRAWN) {
+            throw new BusinessException(ErrorCode.MEMBER_WITHDRAWN);
+        }
+
         auditLogService.log(
                 adminMemberId,
                 AuditAction.GRANT_CREDIT,
@@ -85,6 +89,10 @@ public class AdminMemberService {
             Long adminMemberId,
             AuditAction action) {
         Member member = findMember(memberId);
+
+        if (member.getStatus() == MemberStatus.WITHDRAWN) {
+            throw new BusinessException(ErrorCode.MEMBER_WITHDRAWN);
+        }
 
         // 관리자 계정은 정지/복구 대상이 될 수 없음
         if (member.getRole() == MemberRole.ADMIN) {

@@ -93,6 +93,10 @@ public class RefreshTokenService {
         // 4. 현재 계정 상태 확인
         Member member = refreshToken.getMember();
 
+        if (member.getStatus() == MemberStatus.WITHDRAWN) {
+            throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
+        }
+
         if (member.getStatus() != MemberStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.ACCOUNT_INACTIVE);
         }

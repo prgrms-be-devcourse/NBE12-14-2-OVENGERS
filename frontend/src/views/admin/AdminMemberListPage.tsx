@@ -132,7 +132,7 @@ export default function AdminMemberListPage() {
                       {member.lastStatusChangeReason && <small>{member.lastStatusChangeReason}</small>}
                     </td>
                     <td>
-                      {member.role === MEMBER_ROLE.ADMIN ? (
+                    {member.role === MEMBER_ROLE.ADMIN || member.status === MEMBER_STATUS.WITHDRAWN ? (
                         <span className="muted">-</span>
                       ) : (
                         <div className="row wrap">

@@ -17,6 +17,8 @@ public enum ErrorCode {
     FORBIDDEN_ROLE(HttpStatus.FORBIDDEN, "FORBIDDEN_ROLE", "접근 권한이 없습니다."),
     TARGET_IS_ADMIN(HttpStatus.UNPROCESSABLE_ENTITY, "TARGET_IS_ADMIN", "관리자 계정은 정지하거나 복구할 수 없습니다."),
     SELF_GRANT_NOT_ALLOWED(HttpStatus.UNPROCESSABLE_ENTITY, "SELF_GRANT_NOT_ALLOWED", "자기 자신에게는 크레딧을 지급할 수 없습니다."),
+    ACCOUNT_WITHDRAWN(HttpStatus.UNAUTHORIZED, "ACCOUNT_WITHDRAWN", "탈퇴한 계정입니다."),
+    MEMBER_WITHDRAWN(HttpStatus.CONFLICT, "MEMBER_WITHDRAWN", "탈퇴한 회원의 상태를 변경하거나 크레딧을 지급할 수 없습니다."),
     //── Refresh_token ─────────────────────────────────────────
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."),
     ACCOUNT_INACTIVE(HttpStatus.FORBIDDEN, "ACCOUNT_INACTIVE", "이용이 제한된 계정입니다."),

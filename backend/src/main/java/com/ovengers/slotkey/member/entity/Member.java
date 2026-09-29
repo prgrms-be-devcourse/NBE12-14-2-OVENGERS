@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.DynamicUpdate;
+import java.time.LocalDateTime;
 
 @Entity
 @DynamicUpdate
@@ -37,6 +38,9 @@ public class Member extends BaseTimeEntity {
     @Column(nullable = false)
     private int balance = 0;
 
+    @Column(name = "withdrawn_at")
+    private LocalDateTime withdrawnAt;
+
     public Member(String email, String passwordHash, String nickname) {
         this.email = email;
         this.passwordHash = passwordHash;
@@ -52,4 +56,10 @@ public class Member extends BaseTimeEntity {
     public void updateNickname(String nickname) {
         this.nickname = nickname;
     }
+
+    public void withdraw(LocalDateTime withdrawnAt) {
+        this.status = MemberStatus.WITHDRAWN;
+        this.withdrawnAt = withdrawnAt;
+    }
+
 }

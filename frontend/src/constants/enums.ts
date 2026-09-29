@@ -29,11 +29,13 @@ export const MEMBER_ROLE_LABEL: Record<MemberRole, string> = {
 export const MEMBER_STATUS: Record<MemberStatus, MemberStatus> = {
   ACTIVE: 'ACTIVE',
   SUSPENDED: 'SUSPENDED',
+  WITHDRAWN: 'WITHDRAWN',
 };
 
 export const MEMBER_STATUS_META: Record<MemberStatus, Meta> = {
   ACTIVE: { label: '이용 중', tone: 'green' },
   SUSPENDED: { label: '정지', tone: 'red' },
+  WITHDRAWN: { label: '탈퇴', tone: 'gray' },
 };
 
 export const SPACE_STATUS: Record<SpaceStatus, SpaceStatus> = {
@@ -113,6 +115,7 @@ export const RESERVATION_STATUS_OPTIONS: SelectOption[] = [
   { value: RESERVATION_STATUS.CANCELLED, label: '취소' },
   { value: RESERVATION_STATUS.NO_SHOW, label: '노쇼' },
   { value: RESERVATION_STATUS.EXPIRED, label: '만료됨' },
+  { value: MEMBER_STATUS.WITHDRAWN, label: '탈퇴' },
 ];
 
 export const SPACE_STATUS_OPTIONS: SelectOption[] = [

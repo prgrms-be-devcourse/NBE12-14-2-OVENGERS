@@ -42,7 +42,10 @@ export type ErrorCode =
   | 'IMAGE_DIMENSIONS_EXCEEDED'
   | 'IMAGE_NOT_FOUND'
   | 'IMAGE_STORAGE_ERROR'
-  | 'NETWORK_ERROR';
+  | 'NETWORK_ERROR'
+  | 'ACCOUNT_WITHDRAWN'
+  | 'MEMBER_WITHDRAWN';
+  
 
 export const ERROR_CODE: Record<ErrorCode, ErrorCode> = {
   VALIDATION_FAILED: 'VALIDATION_FAILED',
@@ -81,6 +84,8 @@ export const ERROR_CODE: Record<ErrorCode, ErrorCode> = {
   IMAGE_NOT_FOUND: 'IMAGE_NOT_FOUND',
   IMAGE_STORAGE_ERROR: 'IMAGE_STORAGE_ERROR',
   NETWORK_ERROR: 'NETWORK_ERROR',
+  ACCOUNT_WITHDRAWN: 'ACCOUNT_WITHDRAWN',
+MEMBER_WITHDRAWN: 'MEMBER_WITHDRAWN',
 };
 
 const MESSAGES: Record<ErrorCode, string> = {
@@ -120,6 +125,8 @@ const MESSAGES: Record<ErrorCode, string> = {
   IMAGE_NOT_FOUND: '이미지를 찾을 수 없습니다.',
   IMAGE_STORAGE_ERROR: '이미지 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
   NETWORK_ERROR: '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+  ACCOUNT_WITHDRAWN: '탈퇴한 계정입니다.',
+MEMBER_WITHDRAWN: '탈퇴한 회원의 상태를 변경하거나 크레딧을 지급할 수 없습니다.',
 };
 
 const STATUS_FALLBACK: Record<number, string> = {
