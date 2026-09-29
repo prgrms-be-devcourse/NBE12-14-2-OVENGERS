@@ -63,8 +63,8 @@ public class AdminMemberController {
     })
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<AdminMemberResponse>>> getMembers(
-            @RequestParam(required = false) MemberStatus status,
-            @RequestParam(required = false) String keyword,
+            @RequestParam(name = "status", required = false) MemberStatus status,
+            @RequestParam(name = "keyword", required = false) String keyword,
             @ParameterObject
             @PageableDefault(size = 20) Pageable pageable,
             @AuthenticationPrincipal AuthPrincipal authPrincipal) {
@@ -105,7 +105,7 @@ public class AdminMemberController {
     })
     @PatchMapping("/{memberId}/suspend")
     public ResponseEntity<ApiResponse<MemberStatusChangeResponse>> suspend(
-            @PathVariable Long memberId,
+            @PathVariable("memberId") Long memberId,
             @Valid @RequestBody MemberStatusChangeRequest request,
             @AuthenticationPrincipal AuthPrincipal authPrincipal) {
         memberAuthorizationService.validateCanManageMember(authPrincipal);
@@ -146,7 +146,7 @@ public class AdminMemberController {
     })
     @PatchMapping("/{memberId}/restore")
     public ResponseEntity<ApiResponse<MemberStatusChangeResponse>> restore(
-            @PathVariable Long memberId,
+            @PathVariable("memberId") Long memberId,
             @Valid @RequestBody MemberStatusChangeRequest request,
             @AuthenticationPrincipal AuthPrincipal authPrincipal) {
         memberAuthorizationService.validateCanManageMember(authPrincipal);
@@ -187,7 +187,7 @@ public class AdminMemberController {
     })
     @PostMapping("/{memberId}/credits")
     public ResponseEntity<ApiResponse<AdminMemberResponse>> grantCredit(
-            @PathVariable Long memberId,
+            @PathVariable("memberId") Long memberId,
             @Valid @RequestBody MemberCreditGrantRequest request,
             @AuthenticationPrincipal AuthPrincipal authPrincipal) {
         memberAuthorizationService.validateCanManageMember(authPrincipal);

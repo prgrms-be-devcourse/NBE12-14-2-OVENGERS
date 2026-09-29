@@ -36,7 +36,7 @@ public class AdminInquiryController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<InquiryResponse>>> getInquiries(
-            @RequestParam(required = false) InquiryStatus status,
+            @RequestParam(name = "status", required = false) InquiryStatus status,
             @PageableDefault(size = 20) Pageable pageable) {
         Page<InquiryResponse> page = adminInquiryService.getInquiries(status, pageable)
                 .map(InquiryResponse::from);
@@ -44,7 +44,7 @@ public class AdminInquiryController {
     }
 
     @GetMapping("/{inquiryId}")
-    public ResponseEntity<ApiResponse<InquiryResponse>> getInquiry(@PathVariable Long inquiryId) {
+    public ResponseEntity<ApiResponse<InquiryResponse>> getInquiry(@PathVariable("inquiryId") Long inquiryId) {
         Inquiry inquiry = adminInquiryService.getInquiry(inquiryId);
         return ResponseEntity.ok(ApiResponse.success(InquiryResponse.from(inquiry)));
     }
@@ -52,7 +52,7 @@ public class AdminInquiryController {
     @PostMapping("/{inquiryId}/answer")
     public ResponseEntity<ApiResponse<InquiryResponse>> answer(
             @CurrentMember AuthPrincipal principal,
-            @PathVariable Long inquiryId,
+            @PathVariable("inquiryId") Long inquiryId,
             @Valid @RequestBody InquiryAnswerRequest request) {
         Inquiry inquiry = adminInquiryService.answer(inquiryId, principal.memberId(), request);
         return ResponseEntity.ok(ApiResponse.success(InquiryResponse.from(inquiry)));
