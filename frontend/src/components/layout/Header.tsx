@@ -111,6 +111,7 @@ export default function Header() {
             </div>
             {!hideMyReservations && <ActiveLink href={ROUTES.reservations}>내 예약</ActiveLink>}
             {!isAdmin && <ActiveLink href={ROUTES.inquiries}>내 문의</ActiveLink>}
+            <ActiveLink href={ROUTES.myPage}>마이페이지</ActiveLink>
             {isAdmin && <ActiveLink href={ROUTES.adminDashboard}>관리자</ActiveLink>}
             <div className="account-signout"><button onClick={logout}>로그아웃</button></div>
           </> : <>

@@ -3,6 +3,7 @@ export const ROUTES = {
   home: '/',
   login: '/login',
   signup: '/signup',
+  myPage: '/mypage',
 
   spaces: '/spaces',
   spaceDetail: (spaceId: number | string) => `/spaces/${spaceId}`,

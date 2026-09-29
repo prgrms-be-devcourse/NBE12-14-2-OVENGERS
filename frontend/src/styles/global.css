@@ -527,3 +527,30 @@ dialog .modal-actions{flex-wrap:wrap}
 .terms-list{display:grid;gap:12px}
 .terms-version{font-size:.85rem;color:var(--muted)}
 .terms-dialog-content section+section{margin-top:28px}
+
+/* 마이페이지 */
+.user-shell > .container:has(> .mypage) {
+  display: grid;
+  place-items: center;
+  padding-block: 40px;
+}
+
+.mypage {
+  width: 100%;
+  max-width: 560px;
+  min-width: 0;
+}
+
+.mypage .pagehead {
+  display: block;
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.mypage .panel {
+  width: 100%;
+}
+
+.mypage .panel h2 {
+  margin-bottom: 24px;
+}
