@@ -8,7 +8,7 @@ export default function Footer() {
       <div className="site-footer-top">
         <div className="site-footer-intro">
           <Link href="/" className="footer-brand"><BrandMark size={30} /><span>Slot Key</span></Link>
-          <p>몰입할 공간, 필요한 만큼.<br />공간 탐색부터 예약과 출입까지.</p>
+          <p>몰입할 공간, 필요한 만큼.<br />오피스 탐색부터 예약과 출입까지.</p>
         </div>
         <nav aria-label="서비스 안내"><h2>서비스</h2>
           <Link href="/spaces">오피스 찾기</Link><Link href="/door">모의 출입</Link><Link href="/#story">Slot Key 이야기</Link>

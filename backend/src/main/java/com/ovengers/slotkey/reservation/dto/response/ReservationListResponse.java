@@ -31,7 +31,7 @@ public record ReservationListResponse(
         return new ReservationListResponse(
                 reservation.getId(),
                 reservation.getSpaceId(),
-                space == null ? "공간 정보 없음" : space.getName(),
+                space == null ? "오피스 정보 없음" : space.getName(),
                 space == null ? null : space.getLocation(),
                 space == null ? null : space.getImagePath(),
                 reservation.getStartTime().toLocalDate(),

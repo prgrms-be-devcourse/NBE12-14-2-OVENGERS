@@ -45,7 +45,7 @@ export const USER_NAV: NavItem[] = [
 export const ADMIN_NAV: NavItem[] = [
   { href: ROUTES.adminDashboard, label: '대시보드' },
   { href: ROUTES.adminInquiries, label: '문의 관리' },
-  { href: ROUTES.adminSpaces, label: '공간 관리' },
+  { href: ROUTES.adminSpaces, label: '오피스 관리' },
   { href: ROUTES.adminReservations, label: '예약 관리' },
   { href: ROUTES.adminMembers, label: '회원 관리' },
 ];

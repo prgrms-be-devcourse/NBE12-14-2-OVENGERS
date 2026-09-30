@@ -19,7 +19,7 @@ import styles from './AdminDashboard.module.css';
 
 function SpacePhoto({src,name}:{src?:string|null;name:string}) {
   const [failed,setFailed]=useState(false);
-  return src && !failed ? <img src={src} alt={name} loading="lazy" onError={()=>setFailed(true)}/> : <div className={styles.placeholder}>공간 사진 없음</div>;
+  return src && !failed ? <img src={src} alt={name} loading="lazy" onError={()=>setFailed(true)}/> : <div className={styles.placeholder}>오피스 사진 없음</div>;
 }
 export default function AdminDashboard({compact=false}:{compact?:boolean}) {
   const {isAdmin,member,initializing}=useAuth();
@@ -54,16 +54,16 @@ function DashboardContent({compact}:{compact:boolean}) {
   const Heading=compact?'h2':'h1';
   return <section className={`${styles.dashboard} ${compact?styles.compact:''}`} aria-label="관리자 예약 현황">
     <div className={styles.heading}><div><Heading>{compact?'오늘의 운영 현황':'운영 대시보드'}</Heading>
-      <p>전체 관리 공간 · {effectiveDate||'전체 날짜'} · 이용 시간 기준</p></div>
+      <p>전체 관리 오피스 · {effectiveDate||'전체 날짜'} · 이용 시간 기준</p></div>
       {compact?<Link href={ROUTES.adminDashboard} className={styles.link}>대시보드 전체 보기 →</Link>:<Button disabled={loading} onClick={()=>{void run().catch(()=>{});}}>새로고침</Button>}
     </div>
     {!compact && <div className={styles.filters}>
       <Input label="이용 날짜" type="date" value={date} onChange={e=>{setDate(e.target.value);setPage(0);}}/>
-      <Select label="공간" value={spaceId} onChange={e=>{setSpaceId(e.target.value);setPage(0);}} options={[{value:'',label:'전체 관리 공간'},...(data?.spaces??[]).map(space=>({value:String(space.id),label:space.name}))]}/>
+      <Select label="오피스" value={spaceId} onChange={e=>{setSpaceId(e.target.value);setPage(0);}} options={[{value:'',label:'전체 관리 오피스'},...(data?.spaces??[]).map(space=>({value:String(space.id),label:space.name}))]}/>
       <Select label="예약 상태" value={status} onChange={e=>{setStatus(e.target.value as ReservationStatus|'');setPage(0);}} options={[{value:'',label:'전체 상태'},...Object.entries(RESERVATION_STATUS_META).map(([value,meta])=>({value,label:DASHBOARD_LABELS[value as keyof typeof DASHBOARD_LABELS]??meta.label}))]}/>
     </div>}
     <ErrorMessage error={error} onRetry={()=>{void run().catch(()=>{});}}/>
-    {!data && loading && <LoadingSpinner label="공간과 예약 현황을 불러오고 있습니다…"/>}
+    {!data && loading && <LoadingSpinner label="오피스와 예약 현황을 불러오고 있습니다…"/>}
     {data && <>
       <div className={styles.stats}>{DASHBOARD_STATES.map(state=><button key={state} type="button" disabled={compact} aria-pressed={!compact && status===state} onClick={()=>{setStatus(status===state?'':state);setPage(0);}}>
         <span>{DASHBOARD_LABELS[state]}</span><strong>{counts[state].toLocaleString()}<small>건</small></strong>

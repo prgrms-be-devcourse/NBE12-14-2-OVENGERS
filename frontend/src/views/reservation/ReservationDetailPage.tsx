@@ -141,7 +141,7 @@ const endsAt = new Date(`${reservation.endTime}+09:00`);
           {status === RESERVATION_STATUS.EXPIRED && (
             <section className="panel">
               <h3>결제 시간이 끝나 취소되었습니다</h3>
-              <p>결제 대기 시간이 지나 예약이 취소되었습니다. 공간과 시간을 다시 선택해 주세요.</p>
+              <p>결제 대기 시간이 지나 예약이 취소되었습니다. 오피스와 시간을 다시 선택해 주세요.</p>
             </section>
           )}
 
@@ -180,7 +180,7 @@ const endsAt = new Date(`${reservation.endTime}+09:00`);
                 <strong>{formatDateTime(reservation.cancelledAt)}</strong>
               </div>
             )}
-            <p className="note">공간 요금이 바뀌어도 이미 확정된 예약의 금액은 바뀌지 않습니다.</p>
+            <p className="note">오피스 요금이 바뀌어도 이미 확정된 예약의 금액은 바뀌지 않습니다.</p>
           </section>
 
           {status === RESERVATION_STATUS.CANCELLED && <CancelRefundInfo />}

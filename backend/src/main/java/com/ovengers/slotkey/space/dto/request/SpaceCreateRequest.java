@@ -17,24 +17,24 @@ public record SpaceCreateRequest(
 
         @Schema(description = "공간 이름 (1~100자)", example = "판교 미팅룸")
         @NotBlank
-        @Size(min = 1, max = 100, message = "공간 이름은 1~100자여야 합니다.")
+        @Size(min = 1, max = 100, message = "오피스 이름은 1~100자여야 합니다.")
         String name,
 
         @Schema(description = "공간 위치 또는 주소", example = "경기도 성남시 분당구 판교역로 166")
-        @NotBlank(message = "공간 주소를 입력해주세요.")
+        @NotBlank(message = "오피스 주소를 입력해주세요.")
         String location,
 
         @Schema(description = "공간 소개", example = "최대 6명이 이용할 수 있는 회의실입니다.")
         String description,
 
         @Schema(description = "최대 수용 인원 (1명 이상)", example = "6")
-        @NotNull(message = "공간 최소 수용 인원을 입력해주세요.")
-        @Min(value = 1, message = "공간 최소 수용 인원은 1명 이상이어야 합니다.")
+        @NotNull(message = "오피스 최소 수용 인원을 입력해주세요.")
+        @Min(value = 1, message = "오피스 최소 수용 인원은 1명 이상이어야 합니다.")
         Integer capacity,
 
         @Schema(description = "30분당 이용 요금 (100원 이상, 100원 단위)", example = "2500")
         @NotNull(message = "슬롯당 요금을 입력해주세요.")
-        @Min(value = 100, message = "공간의 슬롯 당 고정 이용 요금은 100원 이상이어야 합니다.")
+        @Min(value = 100, message = "오피스의 슬롯 당 고정 이용 요금은 100원 이상이어야 합니다.")
         Long pricePerSlot,
 
         @Schema(
@@ -45,16 +45,16 @@ public record SpaceCreateRequest(
         String imagePath,
 
         @Schema(description = "운영 시작 시각 (HH:mm)", example = "09:00", type = "string")
-        @NotNull(message = "공간의 운영 시작 시각을 정해주세요.")
+        @NotNull(message = "오피스의 운영 시작 시각을 정해주세요.")
         @JsonFormat(pattern = "HH:mm")
         LocalTime openingTime,
 
         @Schema(description = "운영 종료 시각 (HH:mm). 시작 시각보다 늦어야 합니다.", example = "22:00", type = "string")
-        @NotNull(message = "공간의 운영 종료 시각을 정해주세요.")
+        @NotNull(message = "오피스의 운영 종료 시각을 정해주세요.")
         @JsonFormat(pattern = "HH:mm")
         LocalTime closingTime
 ) {
-    @AssertTrue(message = "공간 사진은 별도 사진 업로드 API(PUT /api/v1/admin/spaces/{id}/image)로만 등록할 수 있습니다. imagePath를 비워두세요.")
+    @AssertTrue(message = "오피스 사진은 별도 사진 업로드 API(PUT /api/v1/admin/spaces/{id}/image)로만 등록할 수 있습니다. imagePath를 비워두세요.")
     public boolean isImagePathEmpty() {
         return imagePath == null || imagePath.isBlank();
     }

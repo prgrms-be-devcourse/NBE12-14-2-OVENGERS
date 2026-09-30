@@ -5,7 +5,7 @@ import type { PointerEvent, ReactNode } from 'react';
 import styles from './HomePage.module.css';
 
 const chapters = [
-  { id: 'story-space', number: '01', label: '공간' },
+  { id: 'story-space', number: '01', label: '오피스' },
   { id: 'story-time', number: '02', label: '시간' },
   { id: 'story-connection', number: '03', label: '연결' },
 ];

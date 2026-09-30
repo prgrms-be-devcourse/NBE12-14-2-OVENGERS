@@ -15,7 +15,7 @@ export const metadata = {
   applicationName: 'Slot Key',
   openGraph: {
     title: 'Slot Key',
-    description: '몰입할 공간, 필요한 만큼. 회의실과 공유오피스를 만나는 Slot Key.',
+    description: '몰입할 오피스, 필요한 만큼. 회의실과 공유오피스를 만나는 Slot Key.',
     siteName: 'Slot Key',
     locale: 'ko_KR',
     type: 'website',

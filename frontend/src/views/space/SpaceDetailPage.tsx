@@ -89,7 +89,7 @@ export default function SpaceDetailPage() {
   const disabledReason = !isAuthenticated
     ? '예약하려면 로그인이 필요합니다.'
     : inactive
-      ? '현재 신규 예약을 받지 않는 공간입니다.'
+      ? '현재 신규 예약을 받지 않는 오피스입니다.'
       : !selection.hasSelection
         ? '이용할 시간을 선택해 주세요.'
         : null;

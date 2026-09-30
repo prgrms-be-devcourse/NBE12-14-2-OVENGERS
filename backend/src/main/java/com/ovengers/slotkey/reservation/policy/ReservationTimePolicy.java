@@ -45,7 +45,7 @@ public final class ReservationTimePolicy {
         LocalTime end = endTime.toLocalTime();
         boolean withinHours = !start.isBefore(opening) && !end.isAfter(closing);
         if (!withinHours) {
-            throw new BusinessException(ErrorCode.INVALID_RESERVATION_TIME, "공간 운영시간 내에서만 예약할 수 있습니다.");
+            throw new BusinessException(ErrorCode.INVALID_RESERVATION_TIME, "오피스 운영시간 내에서만 예약할 수 있습니다.");
         }
     }
 
@@ -64,7 +64,7 @@ public final class ReservationTimePolicy {
         }
         LocalTime newEnd = newEndTime.toLocalTime();
         if (newEnd.isAfter(closing) || (newEnd.equals(LocalTime.MIDNIGHT) && !closing.equals(LocalTime.MIDNIGHT))) {
-            throw new BusinessException(ErrorCode.INVALID_RESERVATION_TIME, "공간 운영시간 내에서만 연장할 수 있습니다.");
+            throw new BusinessException(ErrorCode.INVALID_RESERVATION_TIME, "오피스 운영시간 내에서만 연장할 수 있습니다.");
         }
     }
 

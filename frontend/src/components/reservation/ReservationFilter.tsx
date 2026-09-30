@@ -34,8 +34,8 @@ export default function ReservationFilter({
   const update = (patch: ReservationFilterValue) => onChange({ ...value, ...patch });
 
   const spaceOptions = spacesLoading
-    ? [{ value: '', label: '공간 목록을 불러오는 중...' }]
-    : [{ value: '', label: '전체 공간' }, ...spaces.map((s) => ({ value: s.id, label: s.name }))];
+    ? [{ value: '', label: '오피스 목록을 불러오는 중...' }]
+    : [{ value: '', label: '전체 오피스' }, ...spaces.map((s) => ({ value: s.id, label: s.name }))];
 
   return (
     <div className="filters">
@@ -52,7 +52,7 @@ export default function ReservationFilter({
       {showSpace && (
         <div className="space-filter-wrap">
           <Select
-            label="공간"
+            label="오피스"
             options={spaceOptions}
             value={value.spaceId ?? ''}
             onChange={(event) => update({ spaceId: event.target.value })}
@@ -60,7 +60,7 @@ export default function ReservationFilter({
           />
           {Boolean(spacesError) && (
             <div className="space-error-hint" style={{ fontSize: '0.85rem', color: 'var(--red, #e53e3e)', marginTop: '4px' }}>
-              <span>공간 목록을 불러오지 못했습니다.</span>{' '}
+              <span>오피스 목록을 불러오지 못했습니다.</span>{' '}
               {onRetrySpaces && (
                 <button
                   type="button"
@@ -83,7 +83,7 @@ export default function ReservationFilter({
       {!showDate && !showSpace && (
         <Input
           label="검색"
-          placeholder="공간 이름"
+          placeholder="오피스 이름"
           value={value.keyword ?? ''}
           onChange={(event) => update({ keyword: event.target.value })}
         />

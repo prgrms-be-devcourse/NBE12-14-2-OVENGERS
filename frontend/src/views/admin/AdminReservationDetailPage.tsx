@@ -114,7 +114,7 @@ export default function AdminReservationDetailPage() {
               <thead>
                 <tr>
                   <th scope="col">시각</th>
-                  <th scope="col">요청 공간</th>
+                  <th scope="col">요청 오피스</th>
                   <th scope="col">결과</th>
                   <th scope="col">사유</th>
                 </tr>

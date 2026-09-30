@@ -103,7 +103,7 @@ export default function SpaceForm({
 
   const validate = () => {
     const next: Partial<Record<ValidationKey, string>> = {};
-    if (!form.name.trim()) next.name = '공간 이름을 입력해 주세요.';
+    if (!form.name.trim()) next.name = '오피스 이름을 입력해 주세요.';
     if (!form.location.trim()) next.location = '위치를 입력해 주세요.';
     if (Number(form.capacity) <= 0) next.capacity = '수용 인원은 1명 이상이어야 합니다.';
     if (Number(form.pricePerSlot) <= 0 || Number(form.pricePerSlot) % 100 !== 0) {
@@ -136,10 +136,10 @@ export default function SpaceForm({
   return (
     <form className="panel admin-space-form" onSubmit={handleSubmit} noValidate>
       <div className="form-grid">
-        <h2 className="form-section-title">공간 기본 정보</h2>
+        <h2 className="form-section-title">오피스 기본 정보</h2>
         <div className="full">
           <Input
-            label="공간 이름"
+            label="오피스 이름"
             required
             value={form.name}
             error={validation.name}
@@ -193,7 +193,7 @@ export default function SpaceForm({
               <div style={{ marginBottom: 12 }}>
                 <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: 6 }}>현재 대표 사진</p>
                 <div style={{ maxWidth: 280, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--line)' }}>
-                  <SpacePhoto src={form.imagePath} alt="현재 등록된 공간 사진" />
+                  <SpacePhoto src={form.imagePath} alt="현재 등록된 오피스 사진" />
                 </div>
               </div>
             )}
@@ -206,7 +206,7 @@ export default function SpaceForm({
                   <div style={{ maxWidth: 280, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--line)' }}>
                     <img
                       src={previewUrl}
-                      alt="새로 선택된 공간 사진 미리보기"
+                      alt="새로 선택된 오피스 사진 미리보기"
                       style={{ display: 'block', width: '100%', maxHeight: 200, objectFit: 'cover' }}
                     />
                   </div>
@@ -262,7 +262,7 @@ export default function SpaceForm({
 
       <div className="actions" style={{ marginTop: 24 }}>
         <Button type="submit" variant="primary" loading={submitting}>
-          {mode === 'create' ? '공간 등록' : '수정 저장'}
+          {mode === 'create' ? '오피스 등록' : '수정 저장'}
         </Button>
         <Button onClick={onCancel}>취소</Button>
       </div>

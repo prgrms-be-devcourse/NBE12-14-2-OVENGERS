@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class DoorAccessVerifyRequest {
 
-    @NotNull(message = "공간 ID는 필수 입니다.")
+    @NotNull(message = "오피스 ID는 필수 입니다.")
     private Long spaceId;
 
     @NotBlank(message = "출입 토큰은 필수입니다.")
