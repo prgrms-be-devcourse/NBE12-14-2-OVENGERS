@@ -18,6 +18,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalTime;
 import java.util.Optional;
@@ -26,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -97,6 +99,40 @@ class AdminSpaceServiceTest {
 
         verify(spaceRepository).findById(spaceId);
         verifyNoInteractions(auditLogService);
+    }
+
+    @Test
+    @DisplayName("관리자 공간 목록 조회 시 keyword 앞뒤 공백이 trim되어 searchSpacesByNameOrDescription에 전달된다")
+    void getSpaces_validKeyword_trimmedAndPassed() {
+        // given
+        String keyword = "  판교 회의실  ";
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+        org.springframework.data.domain.Page<Space> page = new org.springframework.data.domain.PageImpl<>(java.util.List.of());
+        given(spaceRepository.searchSpacesByNameOrDescription(eq("판교 회의실"), eq(SpaceStatus.ACTIVE), eq(pageable)))
+                .willReturn(page);
+
+        // when
+        adminSpaceService.getSpaces(SpaceStatus.ACTIVE, keyword, pageable);
+
+        // then
+        verify(spaceRepository).searchSpacesByNameOrDescription("판교 회의실", SpaceStatus.ACTIVE, pageable);
+    }
+
+    @Test
+    @DisplayName("관리자 공간 목록 조회 시 keyword가 공백 문자열이면 null로 정규화된다")
+    void getSpaces_whitespaceKeyword_normalizedToNull() {
+        // given
+        String keyword = "   ";
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+        org.springframework.data.domain.Page<Space> page = new org.springframework.data.domain.PageImpl<>(java.util.List.of());
+        given(spaceRepository.searchSpacesByNameOrDescription(isNull(), isNull(), eq(pageable)))
+                .willReturn(page);
+
+        // when
+        adminSpaceService.getSpaces(null, keyword, pageable);
+
+        // then
+        verify(spaceRepository).searchSpacesByNameOrDescription(null, null, pageable);
     }
 
     @Test

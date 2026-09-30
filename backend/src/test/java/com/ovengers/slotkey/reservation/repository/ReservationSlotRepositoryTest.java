@@ -22,9 +22,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ovengers.slotkey.reservation.adapter.ReservationOccupiedSlotAdapter;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -56,6 +63,9 @@ class ReservationSlotRepositoryTest extends IntegrationTestSupport {
 
         @Autowired
         private ReservationSlotService reservationSlotService;
+
+        @Autowired
+        private ReservationOccupiedSlotAdapter reservationOccupiedSlotAdapter;
 
         private Long spaceId;
         private Long memberId;
@@ -569,5 +579,110 @@ class ReservationSlotRepositoryTest extends IntegrationTestSupport {
                                 LocalDateTime.of(2026, 9, 20, 9, 0),
                                 LocalDateTime.of(2026, 9, 20, 9, 30),
                                 LocalDateTime.of(2026, 9, 20, 10, 0));
+        }
+
+        @Test
+        @DisplayName("격리 통합: 점유 포트(유효/만료 HOLD)와 공간 저장소 영업시간 조건 결합 시 유효 HOLD 및 영업시간 밖 공간 제외, 만료 HOLD 공간 포함 검증")
+        void searchSpaces_combinedWithOccupiedSlotProviderAndOperatingHours() {
+                // given: 공간 3개 생성
+                // 1. 유효 HOLD 공간: 09:00~18:00 영업 (검색 시간 10:00~12:00 포함), 활성
+                Space validHoldSpace = spaceRepository.save(Space.builder()
+                                .name("유효홀드공간")
+                                .location("성남시 분당구")
+                                .description("유효한 HOLD가 걸려 있는 공간")
+                                .capacity(4)
+                                .pricePerSlot(5000L)
+                                .openingTime(LocalTime.of(9, 0))
+                                .closingTime(LocalTime.of(18, 0))
+                                .status(SpaceStatus.ACTIVE)
+                                .version(0)
+                                .build());
+
+                // 2. 영업시간 밖 비점유 공간: 14:00~22:00 영업 (검색 시간 10:00~12:00 불포함), 예약 없음
+                Space outsideHoursSpace = spaceRepository.save(Space.builder()
+                                .name("영업시간밖공간")
+                                .location("성남시 분당구")
+                                .description("검색 시간대 영업하지 않는 비점유 공간")
+                                .capacity(6)
+                                .pricePerSlot(6000L)
+                                .openingTime(LocalTime.of(14, 0))
+                                .closingTime(LocalTime.of(22, 0))
+                                .status(SpaceStatus.ACTIVE)
+                                .version(0)
+                                .build());
+
+                // 3. 만료 HOLD 공간: 09:00~18:00 영업 (검색 시간 10:00~12:00 포함), 활성
+                Space expiredHoldSpace = spaceRepository.save(Space.builder()
+                                .name("만료홀드공간")
+                                .location("성남시 분당구")
+                                .description("만료된 HOLD만 있어 점유 해제된 공간")
+                                .capacity(4)
+                                .pricePerSlot(7000L)
+                                .openingTime(LocalTime.of(9, 0))
+                                .closingTime(LocalTime.of(18, 0))
+                                .status(SpaceStatus.ACTIVE)
+                                .version(0)
+                                .build());
+
+                LocalDateTime now = LocalDateTime.of(2026, 10, 1, 9, 30);
+
+                // validHoldSpace: 유효한 HOLD 예약 생성 (holdExpiresAt = 09:40 > now)
+                Reservation validHoldReservation = reservationRepository.save(Reservation.builder()
+                                .memberId(memberId)
+                                .spaceId(validHoldSpace.getId())
+                                .startTime(LocalDateTime.of(2026, 10, 1, 10, 0))
+                                .endTime(LocalDateTime.of(2026, 10, 1, 10, 30))
+                                .status(ReservationStatus.HELD)
+                                .pricePerSlotSnapshot(5000)
+                                .totalAmount(5000)
+                                .holdExpiresAt(now.plusMinutes(10))
+                                .createdAt(now.minusMinutes(10))
+                                .build());
+                reservationSlotRepository.save(ReservationSlot.of(validHoldReservation.getId(), validHoldSpace.getId(),
+                                LocalDateTime.of(2026, 10, 1, 10, 0)));
+
+                // expiredHoldSpace: 만료된 HOLD 예약 생성 (holdExpiresAt = 09:25 < now)
+                Reservation expiredHoldReservation = reservationRepository.save(Reservation.builder()
+                                .memberId(memberId)
+                                .spaceId(expiredHoldSpace.getId())
+                                .startTime(LocalDateTime.of(2026, 10, 1, 10, 0))
+                                .endTime(LocalDateTime.of(2026, 10, 1, 10, 30))
+                                .status(ReservationStatus.HELD)
+                                .pricePerSlotSnapshot(7000)
+                                .totalAmount(7000)
+                                .holdExpiresAt(now.minusMinutes(5))
+                                .createdAt(now.minusMinutes(20))
+                                .build());
+                reservationSlotRepository.save(ReservationSlot.of(expiredHoldReservation.getId(), expiredHoldSpace.getId(),
+                                LocalDateTime.of(2026, 10, 1, 10, 0)));
+
+                // when: 점유 포트 조회 (10:00 ~ 12:00, now=09:30)
+                LocalDateTime startInclusive = LocalDateTime.of(2026, 10, 1, 10, 0);
+                LocalDateTime endExclusive = LocalDateTime.of(2026, 10, 1, 12, 0);
+                Set<Long> occupiedSpaceIds = reservationOccupiedSlotAdapter.getOccupiedSpaceIds(
+                                startInclusive, endExclusive, now);
+
+                // then (1): 점유 포트 결과 단언
+                assertThat(occupiedSpaceIds).contains(validHoldSpace.getId());
+                assertThat(occupiedSpaceIds).doesNotContain(expiredHoldSpace.getId());
+                assertThat(occupiedSpaceIds).doesNotContain(outsideHoursSpace.getId());
+
+                // when (2): SpaceQueryService와 동일하게 점유 제외 ID와 영업시간 조건을 spaceRepository.searchSpaces에 전달
+                List<Long> excludedIds = occupiedSpaceIds.isEmpty() ? List.of(-1L) : new ArrayList<>(occupiedSpaceIds);
+                Page<Space> searchResult = spaceRepository.searchSpaces(
+                                SpaceStatus.ACTIVE,
+                                null, null, null, null,
+                                LocalTime.of(10, 0), LocalTime.of(12, 0),
+                                excludedIds,
+                                PageRequest.of(0, 10, Sort.by("id").ascending()));
+
+                // then (2): 최종 검색 결과 단언
+                // - 영업시간 안 유효 HOLD 공간은 점유 포트에 의해 제외됨
+                // - 영업시간 밖 비점유 공간은 영업시간 조건(WHERE openingTime <= 10:00 AND closingTime >= 12:00)에 의해 제외됨
+                // - 영업시간 안 만료 HOLD 공간은 정상 포함됨
+                List<Long> resultSpaceIds = searchResult.getContent().stream().map(Space::getId).toList();
+                assertThat(resultSpaceIds).doesNotContain(validHoldSpace.getId());
+                assertThat(resultSpaceIds).doesNotContain(outsideHoursSpace.getId());
+                assertThat(resultSpaceIds).contains(expiredHoldSpace.getId());
         }
 }

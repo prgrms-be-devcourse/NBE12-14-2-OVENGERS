@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
 
@@ -34,19 +35,25 @@ public class SpaceQueryService {
 
     /**
      * 오피스 찾기 목록 조회. keyword/location/가격 범위는 단순 WHERE 조건이고,
-     * date+startTime+endTime을 모두 지정하면 그 시간대에 이미 점유된 슬롯이 있는 공간을 제외한다
-     * (reservation_slot 조회 1건 + space 조회 1건, 총 2개 쿼리로 처리 — space 도메인은
-     * OccupiedSlotProvider 포트를 통해서만 예약 도메인과 통신한다).
+     * date+startTime+endTime을 모두 지정하면 영업시간 필터 및 점유 슬롯 제외를 적용한다.
      */
     public Page<Space> getSpacesPage(Pageable pageable, SpaceSearchCondition condition) {
+        String keyword = normalize(condition.keyword());
+        String location = normalize(condition.location());
+
+        validatePrice(condition.minPrice(), condition.maxPrice());
+        validateTimeFilter(condition);
+
         List<Long> excludedSpaceIds = NO_EXCLUSION;
+        LocalTime queryStartTime = null;
+        LocalTime queryEndTime = null;
 
         if (condition.hasTimeFilter()) {
-            LocalDateTime start = LocalDateTime.of(condition.date(), condition.startTime());
-            LocalDateTime end = LocalDateTime.of(condition.date(), condition.endTime());
-            if (!start.isBefore(end)) {
-                throw new BusinessException(ErrorCode.INVALID_TIME_RANGE);
-            }
+            queryStartTime = condition.startTime();
+            queryEndTime = condition.endTime();
+
+            LocalDateTime start = LocalDateTime.of(condition.date(), queryStartTime);
+            LocalDateTime end = LocalDateTime.of(condition.date(), queryEndTime);
 
             Set<Long> occupiedSpaceIds = occupiedSlotProvider.getOccupiedSpaceIds(
                     start, end, LocalDateTime.now(clock));
@@ -57,12 +64,58 @@ public class SpaceQueryService {
 
         return spaceRepository.searchSpaces(
                 SpaceStatus.ACTIVE,
-                condition.keyword(),
-                condition.location(),
+                keyword,
+                location,
                 condition.minPrice(),
                 condition.maxPrice(),
+                queryStartTime,
+                queryEndTime,
                 excludedSpaceIds,
                 pageable);
+    }
+
+    private void validatePrice(Long minPrice, Long maxPrice) {
+        if (minPrice != null && minPrice < 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        if (maxPrice != null && maxPrice < 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+    }
+
+    private void validateTimeFilter(SpaceSearchCondition condition) {
+        boolean hasAnyTimeField = condition.date() != null || condition.startTime() != null || condition.endTime() != null;
+        if (hasAnyTimeField && !condition.hasTimeFilter()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        if (condition.hasTimeFilter()) {
+            LocalTime start = condition.startTime();
+            LocalTime end = condition.endTime();
+
+            if (isNotHalfHourAligned(start) || isNotHalfHourAligned(end)) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+            }
+
+            if (!start.isBefore(end)) {
+                throw new BusinessException(ErrorCode.INVALID_TIME_RANGE);
+            }
+        }
+    }
+
+    private boolean isNotHalfHourAligned(LocalTime time) {
+        return time.getMinute() % 30 != 0 || time.getSecond() != 0 || time.getNano() != 0;
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     public Space getSpaceDetailById(Long spaceId) {

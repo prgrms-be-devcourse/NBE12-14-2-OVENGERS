@@ -43,16 +43,28 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ovengers.slotkey.space.repository.SpaceRepository;
+import com.ovengers.slotkey.space.service.OccupiedSlotProvider;
+import java.time.Clock;
+import static org.mockito.Mockito.verifyNoInteractions;
+
 @ExtendWith(MockitoExtension.class)
 class SpaceControllerTest {
 
         private MockMvc mockMvc;
+        private MockMvc realServiceMockMvc;
 
         @Mock
         private SpaceQueryService spaceQueryService;
 
         @Mock
         private SpaceSlotAvailabilityService slotAvailabilityService;
+
+        @Mock
+        private SpaceRepository mockSpaceRepository;
+
+        @Mock
+        private OccupiedSlotProvider mockOccupiedSlotProvider;
 
         @InjectMocks
         private SpaceController spaceController;
@@ -65,6 +77,17 @@ class SpaceControllerTest {
                 objectMapper.registerModule(new JavaTimeModule());
 
                 mockMvc = MockMvcBuilders.standaloneSetup(spaceController)
+                                .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
+                                .setControllerAdvice(new GlobalExceptionHandler())
+                                .build();
+
+                SpaceQueryService realSpaceQueryService = new SpaceQueryService(
+                                mockSpaceRepository,
+                                mockOccupiedSlotProvider,
+                                Clock.systemDefaultZone()
+                );
+                SpaceController realServiceController = new SpaceController(realSpaceQueryService, slotAvailabilityService);
+                realServiceMockMvc = MockMvcBuilders.standaloneSetup(realServiceController)
                                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                                 .setControllerAdvice(new GlobalExceptionHandler())
                                 .build();
@@ -269,5 +292,130 @@ class SpaceControllerTest {
                                 .andExpect(jsonPath("$.data.slots[1].isAvailable").value(true));
 
                 verify(slotAvailabilityService).getSlotAvailability(spaceId, date);
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/spaces minPrice 음수 요청 시 실제 서비스 검증을 거쳐 400 Bad Request와 VALIDATION_FAILED 에러를 반환한다")
+        void getSpacesPage_negativeMinPrice_returns400ValidationFailed() throws Exception {
+                // when & then
+                realServiceMockMvc.perform(get("/api/v1/spaces")
+                                .param("minPrice", "-1")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+                verifyNoInteractions(mockSpaceRepository, mockOccupiedSlotProvider);
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/spaces minPrice > maxPrice 요청 시 실제 서비스 검증을 거쳐 400 Bad Request와 VALIDATION_FAILED 에러를 반환한다")
+        void getSpacesPage_invertedPriceRange_returns400ValidationFailed() throws Exception {
+                // when & then
+                realServiceMockMvc.perform(get("/api/v1/spaces")
+                                .param("minPrice", "10000")
+                                .param("maxPrice", "5000")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+                verifyNoInteractions(mockSpaceRepository, mockOccupiedSlotProvider);
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/spaces 부분 시간 입력(date만 입력) 요청 시 실제 서비스 검증을 거쳐 400 Bad Request와 VALIDATION_FAILED 에러를 반환한다")
+        void getSpacesPage_partialTimeFilter_returns400ValidationFailed() throws Exception {
+                // when & then
+                realServiceMockMvc.perform(get("/api/v1/spaces")
+                                .param("date", "2026-10-01")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+                verifyNoInteractions(mockSpaceRepository, mockOccupiedSlotProvider);
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/spaces 30분 단위 위반 요청 시 실제 서비스 검증을 거쳐 400 Bad Request와 VALIDATION_FAILED 에러를 반환한다")
+        void getSpacesPage_nonAlignedTime_returns400ValidationFailed() throws Exception {
+                // when & then
+                realServiceMockMvc.perform(get("/api/v1/spaces")
+                                .param("date", "2026-10-01")
+                                .param("startTime", "10:15:00")
+                                .param("endTime", "11:00:00")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+                verifyNoInteractions(mockSpaceRepository, mockOccupiedSlotProvider);
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/spaces 나노초 단위 포함 요청 시 실제 서비스 검증을 거쳐 400 Bad Request와 VALIDATION_FAILED 에러를 반환한다")
+        void getSpacesPage_nanoTime_returns400ValidationFailed() throws Exception {
+                // when & then
+                realServiceMockMvc.perform(get("/api/v1/spaces")
+                                .param("date", "2026-10-01")
+                                .param("startTime", "10:00:00.500")
+                                .param("endTime", "11:00:00")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+                verifyNoInteractions(mockSpaceRepository, mockOccupiedSlotProvider);
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/spaces 시간 역전 요청 시 실제 서비스 검증을 거쳐 400 Bad Request와 INVALID_TIME_RANGE 에러를 반환한다")
+        void getSpacesPage_invertedTimeRange_returns400InvalidTimeRange() throws Exception {
+                // when & then
+                realServiceMockMvc.perform(get("/api/v1/spaces")
+                                .param("date", "2026-10-01")
+                                .param("startTime", "11:00:00")
+                                .param("endTime", "10:00:00")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("INVALID_TIME_RANGE"));
+
+                verifyNoInteractions(mockSpaceRepository, mockOccupiedSlotProvider);
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/spaces 날짜 형식 파싱 오류 시 GlobalExceptionHandler를 통해 400 Bad Request와 VALIDATION_FAILED 에러를 반환한다")
+        void getSpacesPage_invalidDateFormat_returns400ValidationFailed() throws Exception {
+                // when & then
+                realServiceMockMvc.perform(get("/api/v1/spaces")
+                                .param("date", "invalid-date")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value("FAIL"))
+                                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+                verifyNoInteractions(mockSpaceRepository, mockOccupiedSlotProvider);
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/spaces minPrice=0&maxPrice=0 요청 시 실제 서비스를 통과하여 200 OK를 반환한다")
+        void getSpacesPage_zeroPrices_passesServiceValidationAndReturns200() throws Exception {
+                // given
+                Page<Space> emptyPage = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+                given(mockSpaceRepository.searchSpaces(
+                                eq(SpaceStatus.ACTIVE), any(), any(), eq(0L), eq(0L), any(), any(), any(), any()
+                )).willReturn(emptyPage);
+
+                // when & then
+                realServiceMockMvc.perform(get("/api/v1/spaces")
+                                .param("minPrice", "0")
+                                .param("maxPrice", "0")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                                .andExpect(jsonPath("$.data.content").isArray())
+                                .andExpect(jsonPath("$.data.totalElements").value(0));
         }
 }

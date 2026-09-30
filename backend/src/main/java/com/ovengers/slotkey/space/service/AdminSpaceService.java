@@ -32,8 +32,17 @@ public class AdminSpaceService {
 
     @Transactional(readOnly = true)
     public Page<SpaceDetailResponse> getSpaces(SpaceStatus status, String keyword, Pageable pageable) {
-        return spaceRepository.searchSpacesByNameOrDescription(keyword, status, pageable)
+        String normalizedKeyword = normalize(keyword);
+        return spaceRepository.searchSpacesByNameOrDescription(normalizedKeyword, status, pageable)
                 .map(SpaceDetailResponse::from);
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     @Transactional(readOnly = true)

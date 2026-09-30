@@ -39,8 +39,9 @@ public class SpaceController {
             summary = "공간 목록 조회",
             description = """
                 공간 목록을 페이지 단위로 조회합니다.
-                검색어, 지역, 최소·최대 가격으로 필터링할 수 있습니다.
-                날짜와 시작·종료 시간을 모두 지정하면 해당 시간대에 예약 가능한 공간을 조회합니다.
+                검색어(이름·위치·설명), 지역, 최소·최대 가격(0원 이상, 최소 요금 <= 최대 요금)으로 필터링할 수 있습니다.
+                날짜와 시작·종료 시간을 모두 지정하면 영업시간 내에 있으면서 해당 시간대에 예약 점유가 없는 공간을 조회합니다.
+                시작·종료 시간은 30분 단위(초/나노초 0)여야 하며 시작 시각은 종료 시각보다 빨라야 합니다.
                 조회 이후 예약 가능 여부는 달라질 수 있으며, 실제 예약 생성 시 다시 확인합니다.
                 page는 0부터 시작하며, 기본 페이지 크기는 20입니다.
                 """
@@ -50,6 +51,11 @@ public class SpaceController {
                     responseCode = "200",
                     description = "공간 목록 조회 성공",
                     useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "잘못된 검색 조건 (음수 요금, 요금 역전, 부분 시간 입력, 30분 단위 위반, 시간 역전 등)",
+                    useReturnTypeSchema = false
             )
     })
     @GetMapping("/spaces")
@@ -58,7 +64,7 @@ public class SpaceController {
             @PageableDefault(size = 20, direction = Sort.Direction.DESC)
             Pageable pageable,
 
-            @Parameter(description = "공간 검색어", example = "미팅룸")
+            @Parameter(description = "공간 검색어 (이름, 위치, 설명 대상)", example = "미팅룸")
             @RequestParam(name = "keyword", required = false)
             String keyword,
 
@@ -66,11 +72,11 @@ public class SpaceController {
             @RequestParam(name = "location", required = false)
             String location,
 
-            @Parameter(description = "최소 가격")
+            @Parameter(description = "최소 가격 (0 이상)", example = "0")
             @RequestParam(name = "minPrice", required = false)
             Long minPrice,
 
-            @Parameter(description = "최대 가격")
+            @Parameter(description = "최대 가격 (0 이상)", example = "10000")
             @RequestParam(name = "maxPrice", required = false)
             Long maxPrice,
 
@@ -79,12 +85,12 @@ public class SpaceController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
             LocalDate date,
 
-            @Parameter(description = "조회할 시작 시간", example = "09:00:00")
+            @Parameter(description = "조회할 시작 시간 (30분 단위)", example = "09:00:00")
             @RequestParam(name = "startTime", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.TIME)
             LocalTime startTime,
 
-            @Parameter(description = "조회할 종료 시간", example = "10:00:00")
+            @Parameter(description = "조회할 종료 시간 (30분 단위)", example = "10:00:00")
             @RequestParam(name = "endTime", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.TIME)
             LocalTime endTime

@@ -32,6 +32,15 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(ErrorCode.VALIDATION_FAILED, message));
     }
 
+    /** 파라미터 타입 불일치 (예: 날짜/시간 파싱 오류 등) 처리 */
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodArgumentTypeMismatchException(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException e) {
+        return ResponseEntity
+                .status(ErrorCode.VALIDATION_FAILED.getHttpStatus())
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_FAILED, "요청 파라미터의 형식이 올바르지 않습니다."));
+    }
+
     /** 파일/요청 크기 초과 처리 (413) */
     @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceededException(
