@@ -70,6 +70,23 @@ GitHub Actions에서 EC2로 배포하는 방법은 크게 두 가지:
 - 서비스명 예: `actions.runner.prgrms-be-devcourse-NBE12-14-2-OVENGERS.ip-172-31-46-159.service`
 - 등록 확인: 저장소 Settings → Actions → Runners에서 상태 확인 가능
 
+### 3-6. 프론트엔드 배포 자동화 (2026-09-30 추가)
+
+파일 위치: `.github/workflows/frontend-ci.yml`
+
+- 이전에는 `STATIC_EXPORT=true npm run build` → S3 업로드 → CloudFront invalidation을 매번 콘솔/CLI에서 수동으로 했음. 이제 `dev` push 시 자동으로 실행됨.
+- 트리거는 백엔드와 동일하게 `pull_request: [dev, main]`(빌드 검증만) / `push: [dev]`(빌드+배포), 다만 `paths: frontend/**`로 제한해 백엔드만 바뀐 PR·push에서는 실행되지 않음.
+- `build` job (`ubuntu-latest`): `npm ci` → `npm run lint` → `tsc --noEmit` → `node --test tests/*.cjs` → `STATIC_EXPORT=true npm run build`(실제 배포 빌드와 동일한 조건으로 빌드 자체가 되는지 검증).
+- `deploy` job: `build` 성공 + `dev` push일 때만, `ubuntu-latest`에서 실행(백엔드와 달리 self-hosted runner 불필요 — EC2에 접속할 필요 없이 AWS API만 호출하면 되므로).
+  1. `STATIC_EXPORT=true npm run build`로 `frontend/out/` 생성
+  2. `aws-actions/configure-aws-credentials`로 IAM 사용자 `slotkey-deploy`의 키를 사용해 인증
+  3. `aws s3 sync out/ s3://slotkey-web-page --delete`
+  4. `aws cloudfront create-invalidation --distribution-id E3PEHWSJNM0BPV --paths "/*"`
+- **필요한 GitHub Secrets** (저장소 Settings → Secrets and variables → Actions에 등록 필요, 아직 미등록 상태):
+  - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: IAM 사용자 `slotkey-deploy`의 CLI 키
+  - `AWS_REGION`: S3 버킷 리전(예: `ap-northeast-2`)
+  - 시크릿이 없으면 `deploy` job의 `Configure AWS credentials` 단계에서 실패함.
+
 ## 4. 검증 기록 (2026-09-25)
 
 - `dev` push → `build`(3m35s) → `deploy`(1m52s), 총 5m33s 만에 자동 배포 완료 확인
