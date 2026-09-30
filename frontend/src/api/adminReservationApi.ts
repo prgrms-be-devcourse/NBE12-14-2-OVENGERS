@@ -2,10 +2,9 @@ import type {
   AdminReservation,
   Page,
   ReservationStatus,
-  ReservationSummary,
 } from '../types/api';
 import { API_ROUTES } from '../constants/apiRoutes';
-import api from './client';
+import api, { type QueryParams } from './client';
 
 export interface AdminReservationListParams {
   page?: number;
@@ -15,22 +14,71 @@ export interface AdminReservationListParams {
   status?: ReservationStatus | '';
 }
 
-/** 목록 행에는 예약자 정보가 함께 내려옵니다. */
-export type AdminReservationRow = ReservationSummary & {
-  memberNickname: string;
+/**
+ * 관리자 예약 목록 행 DTO. 백엔드 AdminReservationResponse 규격과 1:1 일치합니다.
+ */
+export interface AdminReservationRow {
+  reservationId: number;
+  memberId: number;
   memberEmail: string;
-};
+  spaceId: number;
+  spaceName: string;
+  startTime: string;
+  endTime: string;
+  status: ReservationStatus;
+  totalAmount: number;
+  createdAt: string;
+}
 
-export function getAdminReservations({
+/** 서버 응답이 유효한 PageResponse 규격인지 검증하는 어댑터 함수 */
+export function assertPageResponse<T>(data: unknown): Page<T> {
+  const pageData = data as Partial<Page<T>> | null;
+  if (
+    !pageData ||
+    typeof pageData !== 'object' ||
+    !Array.isArray(pageData.content) ||
+    typeof pageData.page !== 'number' ||
+    !Number.isInteger(pageData.page) ||
+    pageData.page < 0 ||
+    typeof pageData.size !== 'number' ||
+    !Number.isInteger(pageData.size) ||
+    pageData.size <= 0 ||
+    typeof pageData.totalPages !== 'number' ||
+    !Number.isInteger(pageData.totalPages) ||
+    pageData.totalPages < 0 ||
+    typeof pageData.totalElements !== 'number' ||
+    !Number.isInteger(pageData.totalElements) ||
+    pageData.totalElements < 0
+  ) {
+    throw new Error('올바르지 않은 페이지 응답 형식입니다.');
+  }
+  return data as Page<T>;
+}
+
+export async function getAdminReservations({
   page = 0,
   size = 20,
   date,
   spaceId,
   status,
 }: AdminReservationListParams = {}): Promise<Page<AdminReservationRow>> {
-  return api.get<Page<AdminReservationRow>>(API_ROUTES.admin.reservations, {
-    query: { page, size, date, spaceId, status },
-  });
+  const query: QueryParams = { page, size };
+
+  if (date && date.trim() !== '') {
+    query.date = date.trim();
+  }
+  if (spaceId !== undefined && spaceId !== '') {
+    const parsedSpaceId = Number(spaceId);
+    if (!Number.isNaN(parsedSpaceId) && parsedSpaceId > 0) {
+      query.spaceId = parsedSpaceId;
+    }
+  }
+  if (status) {
+    query.status = status;
+  }
+
+  const response = await api.get<Page<AdminReservationRow>>(API_ROUTES.admin.reservations, { query });
+  return assertPageResponse<AdminReservationRow>(response);
 }
 
 /** 예약 상세 + 상태 변경 이력 + 출입 시도 이력(FR-RESV-26). */

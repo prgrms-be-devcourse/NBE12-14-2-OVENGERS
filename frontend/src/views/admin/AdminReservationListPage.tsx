@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import type { ReservationFilterValue } from '../../components/reservation/ReservationFilter';
 import { getAdminReservations } from '../../api/adminReservationApi';
-import { getSpaces } from '../../api/spaceApi';
+import { getAllAdminSpaces } from '../../api/adminSpaceApi';
 import { useAsync } from '../../hooks/useApi';
 import { usePagination } from '../../hooks/usePagination';
 import { ROUTES } from '../../constants/routePaths';
@@ -18,12 +18,30 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import EmptyState from '../../components/common/EmptyState';
 
+export function extractDate(isoString: string): string {
+  if (!isoString) return '';
+  return isoString.includes('T') ? isoString.split('T')[0] : isoString.slice(0, 10);
+}
+
+export function extractTime(isoString: string): string {
+  if (!isoString) return '';
+  if (isoString.includes('T')) {
+    return isoString.split('T')[1].slice(0, 5);
+  }
+  return isoString.slice(11, 16);
+}
+
 export default function AdminReservationListPage() {
   const [filter, setFilter] = useState<ReservationFilterValue>({ date: '', spaceId: '', status: '' });
   const { page, size, setPage } = usePagination({ initialSize: 20 });
 
-  const fetchSpaces = useCallback(() => getSpaces({ size: 100 }), []);
-  const { data: spaceData } = useAsync(fetchSpaces, [fetchSpaces]);
+  const fetchSpaces = useCallback(() => getAllAdminSpaces(), []);
+  const {
+    data: spacesData,
+    loading: spacesLoading,
+    error: spacesError,
+    run: runSpaces,
+  } = useAsync(fetchSpaces, [fetchSpaces]);
 
   const fetchReservations = useCallback(
     () => getAdminReservations({ page, size, ...filter }),
@@ -31,6 +49,7 @@ export default function AdminReservationListPage() {
   );
   const { data, loading, error, run } = useAsync(fetchReservations, [fetchReservations]);
   const reservations = data?.content ?? [];
+  const hasFilter = Boolean(filter.date || filter.spaceId || filter.status);
 
   return (
     <>
@@ -46,7 +65,10 @@ export default function AdminReservationListPage() {
         value={filter}
         showDate
         showSpace
-        spaces={spaceData?.content ?? []}
+        spaces={spacesData ?? []}
+        spacesLoading={spacesLoading}
+        spacesError={spacesError}
+        onRetrySpaces={runSpaces}
         onChange={(next) => {
           setFilter(next);
           setPage(0);
@@ -57,7 +79,10 @@ export default function AdminReservationListPage() {
       <ErrorMessage error={error} onRetry={run} />
 
       {!loading && !error && reservations.length === 0 && (
-        <EmptyState title="조건에 맞는 예약이 없습니다" description="필터를 조정해 보세요." />
+        <EmptyState
+          title={hasFilter ? '조건에 맞는 예약이 없습니다' : '등록된 예약이 없습니다'}
+          description={hasFilter ? '필터를 조정해 보세요.' : '새로운 예약이 생성되면 여기에 표시됩니다.'}
+        />
       )}
 
       {reservations.length > 0 && (
@@ -81,13 +106,12 @@ export default function AdminReservationListPage() {
                   <tr key={reservation.reservationId}>
                     <td>{formatReservationNo(reservation.reservationId)}</td>
                     <td>
-                      {reservation.memberNickname}
-                      <small>{reservation.memberEmail}</small>
+                      <span>{reservation.memberEmail}</span>
                     </td>
                     <td>{reservation.spaceName}</td>
                     <td>
-                      {formatDateLabel(reservation.date)}
-                      <small>{formatTimeRange(reservation.startTime, reservation.endTime)}</small>
+                      {formatDateLabel(extractDate(reservation.startTime))}
+                      <small>{formatTimeRange(extractTime(reservation.startTime), extractTime(reservation.endTime))}</small>
                     </td>
                     <td>{formatWon(reservation.totalAmount)}</td>
                     <td>

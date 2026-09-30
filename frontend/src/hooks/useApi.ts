@@ -40,6 +40,7 @@ export function useAsync<T>(
   const [loading, setLoading] = useState(immediate);
   const [error, setError] = useState<ApiError | null>(null);
   const mounted = useRef(true);
+  const latestRequestIdRef = useRef(0);
 
   useEffect(() => {
     mounted.current = true;
@@ -49,17 +50,24 @@ export function useAsync<T>(
   }, []);
 
   const run = useCallback(async () => {
+    const requestId = ++latestRequestIdRef.current;
     setLoading(true);
     setError(null);
     try {
       const result = await asyncFn();
-      if (mounted.current) setData(result);
+      if (mounted.current && requestId === latestRequestIdRef.current) {
+        setData(result);
+      }
       return result;
     } catch (caught) {
-      if (mounted.current) setError(toApiError(caught));
+      if (mounted.current && requestId === latestRequestIdRef.current) {
+        setError(toApiError(caught));
+      }
       throw caught;
     } finally {
-      if (mounted.current) setLoading(false);
+      if (mounted.current && requestId === latestRequestIdRef.current) {
+        setLoading(false);
+      }
     }
     // asyncFn 은 매 렌더마다 새로 만들어지므로 의존성에서 제외하고 deps 를 사용합니다.
     // eslint-disable-next-line react-hooks/exhaustive-deps

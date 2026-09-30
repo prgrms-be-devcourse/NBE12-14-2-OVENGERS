@@ -115,7 +115,6 @@ export const RESERVATION_STATUS_OPTIONS: SelectOption[] = [
   { value: RESERVATION_STATUS.CANCELLED, label: '취소' },
   { value: RESERVATION_STATUS.NO_SHOW, label: '노쇼' },
   { value: RESERVATION_STATUS.EXPIRED, label: '만료됨' },
-  { value: MEMBER_STATUS.WITHDRAWN, label: '탈퇴' },
 ];
 
 export const SPACE_STATUS_OPTIONS: SelectOption[] = [

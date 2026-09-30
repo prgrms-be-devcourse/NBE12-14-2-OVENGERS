@@ -24,6 +24,28 @@ export function getAdminSpace(spaceId: number | string): Promise<Space> {
   return api.get<Space>(API_ROUTES.admin.space(spaceId));
 }
 
+/**
+ * 전체 관리자 공간 목록을 페이지 순회하여 조회합니다.
+ * 비활성 공간을 포함한 모든 공간의 예약 필터링 선택지에 사용됩니다.
+ */
+export async function getAllAdminSpaces(pageSize = 100): Promise<Space[]> {
+  const first = await getAdminSpaces({ page: 0, size: pageSize });
+  const rows = [...first.content];
+  if (first.totalPages <= 1) {
+    return rows;
+  }
+  const remainingPages = Array.from({ length: first.totalPages - 1 }, (_, i) => i + 1);
+  const CONCURRENCY = 8;
+  for (let i = 0; i < remainingPages.length; i += CONCURRENCY) {
+    const batch = remainingPages.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(batch.map((p) => getAdminSpaces({ page: p, size: pageSize })));
+    for (const res of results) {
+      rows.push(...res.content);
+    }
+  }
+  return rows;
+}
+
 /** 폼이 숫자로 정규화한 뒤 넘깁니다. 이미지는 전용 PUT API를 사용하므로 제외합니다. */
 export type SpacePayload = Omit<SpaceFormValues, 'capacity' | 'pricePerSlot' | 'imagePath'> & {
   capacity: number;

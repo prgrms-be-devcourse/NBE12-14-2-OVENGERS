@@ -16,6 +16,9 @@ export interface ReservationFilterProps {
   showDate?: boolean;
   showSpace?: boolean;
   spaces?: Space[];
+  spacesLoading?: boolean;
+  spacesError?: unknown;
+  onRetrySpaces?: () => void;
 }
 
 export default function ReservationFilter({
@@ -24,8 +27,15 @@ export default function ReservationFilter({
   showDate = false,
   showSpace = false,
   spaces = [],
+  spacesLoading = false,
+  spacesError = null,
+  onRetrySpaces,
 }: ReservationFilterProps) {
   const update = (patch: ReservationFilterValue) => onChange({ ...value, ...patch });
+
+  const spaceOptions = spacesLoading
+    ? [{ value: '', label: '공간 목록을 불러오는 중...' }]
+    : [{ value: '', label: '전체 공간' }, ...spaces.map((s) => ({ value: s.id, label: s.name }))];
 
   return (
     <div className="filters">
@@ -40,12 +50,29 @@ export default function ReservationFilter({
         </label>
       )}
       {showSpace && (
-        <Select
-          label="공간"
-          options={[{ value: '', label: '전체 공간' }, ...spaces.map((s) => ({ value: s.id, label: s.name }))]}
-          value={value.spaceId ?? ''}
-          onChange={(event) => update({ spaceId: event.target.value })}
-        />
+        <div className="space-filter-wrap">
+          <Select
+            label="공간"
+            options={spaceOptions}
+            value={value.spaceId ?? ''}
+            onChange={(event) => update({ spaceId: event.target.value })}
+            disabled={spacesLoading}
+          />
+          {Boolean(spacesError) && (
+            <div className="space-error-hint" style={{ fontSize: '0.85rem', color: 'var(--red, #e53e3e)', marginTop: '4px' }}>
+              <span>공간 목록을 불러오지 못했습니다.</span>{' '}
+              {onRetrySpaces && (
+                <button
+                  type="button"
+                  onClick={onRetrySpaces}
+                  style={{ textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0 }}
+                >
+                  다시 시도
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       )}
       <Select
         label="예약 상태"
