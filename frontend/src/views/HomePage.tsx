@@ -11,7 +11,7 @@ import StoryScroller from './StoryScroller';
 import HomeReservations from '../components/reservation/HomeReservations';
 import AdminDashboard from '../components/admin/AdminDashboard';
 
-const fetchFeaturedSpaces = () => getSpaces({ page: 0, size: 3, status: 'ACTIVE' });
+const fetchFeaturedSpaces = () => getSpaces({ page: 0, size: 3 });
 
 function Arrow({ down = false }: { down?: boolean }) {
   return <span aria-hidden="true">{down ? '↓' : '→'}</span>;

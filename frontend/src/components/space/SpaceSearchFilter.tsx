@@ -27,7 +27,7 @@ export default function SpaceSearchFilter({ onApply }: { onApply: (filters: Spac
   return <form noValidate className={styles.filter} onSubmit={submit} aria-label="오피스 검색 조건">
 
     <div className={styles.primary}>
-      <Input label="오피스 검색" placeholder="오피스 이름 또는 위치" value={draft.keyword} onChange={(event) => update({ keyword: event.target.value })} />
+      <Input label="오피스 검색" placeholder="오피스 이름, 위치 또는 설명" value={draft.keyword} onChange={(event) => update({ keyword: event.target.value })} />
       <Select label="지역" value={draft.location} options={['', '판교', '하남', '강남'].map((value) => ({ value, label: value || '전체 지역' }))}
         onChange={(event) => update({ location: event.target.value })} />
     </div>

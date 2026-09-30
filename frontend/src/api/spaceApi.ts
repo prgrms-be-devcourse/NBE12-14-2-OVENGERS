@@ -1,4 +1,4 @@
-import type { Page, Space, SpaceSlotsResponse, SpaceStatus } from '../types/api';
+import type { Page, Space, SpaceSlotsResponse } from '../types/api';
 import { API_ROUTES } from '../constants/apiRoutes';
 import api from './client';
 
@@ -6,7 +6,6 @@ export interface SpaceListParams {
   page?: number;
   size?: number;
   keyword?: string;
-  status?: SpaceStatus | '';
   date?: string;
   location?: string;
   minPrice?: number;
@@ -20,11 +19,10 @@ export function getSpaces({
   page = 0,
   size = 20,
   keyword,
-  status,
   date, location, minPrice, maxPrice, startTime, endTime,
 }: SpaceListParams = {}): Promise<Page<Space>> {
   return api.get<Page<Space>>(API_ROUTES.spaces.list, {
-    query: { page, size, keyword, status, date, location, minPrice, maxPrice, startTime, endTime },
+    query: { page, size, keyword, date, location, minPrice, maxPrice, startTime, endTime },
     auth: false,
   });
 }
