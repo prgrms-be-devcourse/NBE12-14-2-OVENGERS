@@ -36,7 +36,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
       - name: Build (skip tests, already passed above)
-        run: chmod +x gradlew && ./gradlew build -x test
+        run: chmod +x gradlew && ./gradlew clean build -x test
       - name: Stop existing app
         run: |
           pkill -f 'slotkey-0.0.1-SNAPSHOT.jar' || true
