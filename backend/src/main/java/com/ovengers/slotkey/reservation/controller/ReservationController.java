@@ -1,6 +1,7 @@
 package com.ovengers.slotkey.reservation.controller;
 
 import com.ovengers.slotkey.global.common.response.ApiResponse;
+import com.ovengers.slotkey.global.common.response.PageResponse;
 import com.ovengers.slotkey.global.security.AuthPrincipal;
 import com.ovengers.slotkey.global.security.CurrentMember;
 import com.ovengers.slotkey.reservation.dto.request.ReservationCreateRequest;
@@ -330,7 +331,7 @@ public class ReservationController {
             )
     })
     @GetMapping
-    public ResponseEntity<ApiResponse<Page<ReservationListResponse>>> getMyReservations(
+    public ResponseEntity<ApiResponse<PageResponse<ReservationListResponse>>> getMyReservations(
             @Parameter(hidden = true)
             @CurrentMember AuthPrincipal principal,
             @ParameterObject
@@ -344,7 +345,9 @@ public class ReservationController {
                         pageable
                 );
 
-        return ResponseEntity.ok(ApiResponse.success(response));
+        return ResponseEntity.ok(
+                ApiResponse.success(PageResponse.from(response))
+        );
     }
 
     /** 본인 예약 상세 + 상태 전이 이력. */

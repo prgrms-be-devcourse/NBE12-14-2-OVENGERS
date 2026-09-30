@@ -13,9 +13,7 @@
 - JWT 페이로드는 `id`, `email`, `role`, 만료 시각(`exp`)을 포함한다. 보호 API 요청 시 서명과 만료 시각을 검증하여 인증하며, **매 요청마다 회원 DB를 재조회하지 않는다**. 비즈니스 서비스(`ReservationHoldService`, `DoorAccessVerificationService` 등)에서도 회원 `ACTIVE` 여부를 별도 재조회하지 않으므로, 회원이 정지되어도 기존 Access Token은 만료 전까지 기술적으로 요청이 통과될 수 있다. 토큰 재발급(`POST /auth/refresh`) 시에만 DB 조회를 거쳐 `ACCOUNT_INACTIVE`(403)로 차단된다. (정지 즉시 기존 토큰 및 서비스 차단은 **결정 필요** 항목으로 관리)
 - 인증 불필요 API: 회원가입, 로그인, 토큰 재발급, 로그아웃, 공간 목록/상세 조회, 슬롯 가용성 조회, 공간 이미지 공개 조회(`GET /space-images/{fileName}`).
 - 공통 응답: `{ status, code, message, data }` (`status`: SUCCESS | FAIL, 성공 시 `code`: "OK"). 단, `ApiResponse` 클래스에 `@JsonInclude(JsonInclude.Include.NON_NULL)`가 적용되어 있어 Java 상에서 `data == null`인 경우(실패 응답 또는 `ApiResponse<Void>`) 실제 HTTP JSON 직렬화 시 `"data"` 필드 자체가 생략된다.
-- 페이지네이션 형식 (엔드포인트별 구분):
-  - 공통 래퍼 `PageResponse<T>` (`content`, `page`, `size`, `totalElements`, `totalPages`): 공간 목록(`GET /spaces`), 관리자 공간 목록(`GET /admin/spaces`), 관리자 예약 목록(`GET /admin/reservations`), 관리자 회원 목록(`GET /admin/members`), 관리자 감사 로그(`GET /admin/audit-logs`), 문의 목록(`GET /inquiries`), 관리자 문의 목록(`GET /admin/inquiries`)
-  - Spring Data `Page<T>` 직렬화 (`content`, `pageable`, `totalElements`, `totalPages`, `last`, `size`, `number`, `sort`, `first`, `numberOfElements`, `empty` 등): 내 예약 목록(`GET /reservations`)
+- 페이지네이션 형식: 공통 래퍼 `PageResponse<T>` (`content`, `page`, `size`, `totalElements`, `totalPages`)를 사용한다. 대상: 공간 목록(`GET /spaces`), 관리자 공간 목록(`GET /admin/spaces`), 내 예약 목록(`GET /reservations`), 관리자 예약 목록(`GET /admin/reservations`), 관리자 회원 목록(`GET /admin/members`), 관리자 감사 로그(`GET /admin/audit-logs`), 문의 목록(`GET /inquiries`), 관리자 문의 목록(`GET /admin/inquiries`).
 - 시간: ISO-8601 문자열. 서버 직렬화는 타임존 오프셋 표기가 없는 `LocalDateTime` 형식(`"yyyy-MM-dd'T'HH:mm:ss"`)이며, 서버 내부 기준시계는 KST(`Asia/Seoul`, `Clock`)이다. 클라이언트는 이 문자열을 한국 표준시(KST)로 해석하는 것이 설계 목표이다. *(주의: 현재 프론트 `HoldCountdown.tsx`는 `new Date(holdExpiresAt)`로 브라우저 로컬 시간대로 직접 파싱하고 있어 비-KST 환경에서 오차 가능성이 있으며, 시간 파싱 코드 정정은 별도 프론트 코드 과제로 추적한다)*. 날짜는 `"yyyy-MM-dd"`, 시각은 `"HH:mm:ss"`. 예약 시간은 **30분의 배수**만 허용.
 - `Idempotency-Key`(UUID) 헤더:
   - **실제로 돈이 움직이는 `POST /reservations/{id}/pay`에만 필수** (누락 시 400 `IDEMPOTENCY_KEY_REQUIRED`). `POST /reservations`(HOLD 생성)는 결제가 없으므로 대상 아님.
@@ -221,7 +219,7 @@
 
 ### 5-3. 조회
 
-- `GET /reservations?status=&page=&size=` (인증 필요, 본인 예약만). 응답 `ApiResponse<Page<ReservationListResponse>>`. 반환 `data`는 Spring Data `Page` 직렬화 형태(`content`, `pageable`, `totalElements`, `totalPages`, `last`, `size`, `number`, `sort`, `first`, `numberOfElements`, `empty` 등). `status` 생략 시 전체. 원소는 `ReservationListResponse` (공간명, 사진, 위치 포함).
+- `GET /reservations?status=&page=&size=` (인증 필요, 본인 예약만). 응답 `ApiResponse<PageResponse<ReservationListResponse>>`. 반환 `data`는 `content`, `page`, `size`, `totalElements`, `totalPages`를 포함한다. `status` 생략 시 전체. 원소는 `ReservationListResponse` (공간명, 사진, 위치 포함).
 - `GET /reservations/{reservationId}` (인증 필요, 본인 예약만). 응답 `ApiResponse<ReservationDetailResponse>`. 상태 이력(`statusHistory`)이 포함되며, 공간명 등 상세는 프론트가 공간 API를 통해 병합 표시. 오류: `AUTHENTICATION_REQUIRED`(401), `FORBIDDEN_NOT_OWNER`(403), `RESERVATION_NOT_FOUND`(404)
 
 ### 5-4. 취소 — `POST /reservations/{reservationId}/cancel`
