@@ -120,6 +120,7 @@ HELP.md
 GEMINI.md
 CLAUDE.md
 AGENTS.md
+/output
 
 ### 배포 ###
 *.pem
