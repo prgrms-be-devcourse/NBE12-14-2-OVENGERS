@@ -63,7 +63,7 @@ export default function DoorVerifyForm({
             <p>{timeLabel(selected.startTime)}–{timeLabel(selected.endTime)}</p>
           </div>
         </div>
-      ) : <p className="form-help">예약을 선택하면 공간 사진과 이용 시간이 표시됩니다.</p>}
+      ) : <p className="form-help">예약을 선택하면 오피스 사진과 이용 시간이 표시됩니다.</p>}
       <Input
         label="출입 키"
         required

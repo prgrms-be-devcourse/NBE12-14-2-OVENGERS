@@ -16,7 +16,7 @@ public record SpaceUpdateRequest(
         Long targetSpaceId,
 
         @Schema(description = "공간 이름 (1~100자)", example = "판교 미팅룸")
-        @Size(min = 1, max = 100, message = "공간 이름은 1~100자여야 합니다.")
+        @Size(min = 1, max = 100, message = "오피스 이름은 1~100자여야 합니다.")
         String name,
 
         @Schema(description = "공간 위치 또는 주소", example = "경기도 성남시 분당구 판교역로 166")
@@ -26,11 +26,11 @@ public record SpaceUpdateRequest(
         String description,
 
         @Schema(description = "최대 수용 인원 (1명 이상)", example = "6")
-        @Min(value = 1, message = "공간 최소 수용 인원은 1명 이상이어야 합니다.")
+        @Min(value = 1, message = "오피스 최소 수용 인원은 1명 이상이어야 합니다.")
         Integer capacity,
 
         @Schema(description = "30분당 이용 요금 (100원 이상, 100원 단위)", example = "2500")
-        @Min(value = 100, message = "공간의 슬롯 당 고정 이용 요금은 100원 이상이어야 합니다.")
+        @Min(value = 100, message = "오피스의 슬롯 당 고정 이용 요금은 100원 이상이어야 합니다.")
         Long pricePerSlot,
 
         @Schema(
@@ -51,7 +51,7 @@ public record SpaceUpdateRequest(
         @Schema(description = "변경할 공간 상태", example = "ACTIVE")
         SpaceStatus status
 ) {
-    @AssertTrue(message = "공간 사진은 별도 사진 업로드 API(PUT /api/v1/admin/spaces/{id}/image)로만 수정할 수 있습니다. imagePath를 비워두세요.")
+    @AssertTrue(message = "오피스 사진은 별도 사진 업로드 API(PUT /api/v1/admin/spaces/{id}/image)로만 수정할 수 있습니다. imagePath를 비워두세요.")
     public boolean isImagePathEmpty() {
         return imagePath == null || imagePath.isBlank();
     }

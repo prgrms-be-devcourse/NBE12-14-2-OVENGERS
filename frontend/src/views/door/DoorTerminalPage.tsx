@@ -86,7 +86,7 @@ function MemberDoorTerminal() {
       <div className="terminal-top">
         <p className="page-kicker">ACCESS YOUR SPACE</p>
         <h1 ref={formHeading} tabIndex={-1}>모의 출입</h1>
-        <p>{allowed ? '예약한 공간에서 좋은 시간을 시작하세요.' : '내 예약을 선택하고 출입을 확인하세요.'}</p>
+        <p>{allowed ? '예약한 오피스에서 좋은 시간을 시작하세요.' : '내 예약을 선택하고 출입을 확인하세요.'}</p>
       </div>
 
       {allowed && result ? (
@@ -96,9 +96,9 @@ function MemberDoorTerminal() {
             <svg width="42" height="42" viewBox="0 0 40 40" fill="none"><path d="m9 20 7 7L31 12" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </div>
           <h2 id="access-approved-title" ref={approvedHeading} tabIndex={-1}>출입이 허용되었습니다</h2>
-          <p className={styles.message}>이제 예약한 공간을 이용하실 수 있습니다</p>
+          <p className={styles.message}>이제 예약한 오피스를 이용하실 수 있습니다</p>
           <dl className={styles.details}>
-            {result.spaceName && <div><dt>이용 공간</dt><dd>{result.spaceName}</dd></div>}
+            {result.spaceName && <div><dt>이용 오피스</dt><dd>{result.spaceName}</dd></div>}
             <div><dt>출입 상태</dt><dd>{result.firstCheckIn === true ? '최초 체크인 완료' : result.firstCheckIn === false ? '재입장 승인 완료' : '출입 승인 완료'}</dd></div>
             {result.attemptedAt && <div><dt>승인 시각</dt><dd>{formatDateTime(result.attemptedAt)}</dd></div>}
           </dl>
@@ -135,7 +135,7 @@ function MemberDoorTerminal() {
       {result?.result === ACCESS_RESULT.ALLOW && <AccessCelebration />}
 
       <p className={allowed ? styles.notice : 'note'}>
-        {allowed ? '실제 도어락과 연결되지 않는 모의 환경입니다.' : '실제 도어락과 연결되지 않는 모의 환경입니다. 예약자 본인이 예약한 공간과 시간에 이용할 수 있으며, 출입 시도는 기록됩니다.'}
+        {allowed ? '실제 도어락과 연결되지 않는 모의 환경입니다.' : '실제 도어락과 연결되지 않는 모의 환경입니다. 예약자 본인이 예약한 오피스와 시간에 이용할 수 있으며, 출입 시도는 기록됩니다.'}
       </p>
     </div>
   );

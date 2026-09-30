@@ -57,7 +57,7 @@ export default function AdminReservationListPage() {
         <div>
           <p className="page-kicker">RESERVATION MANAGEMENT</p>
           <h1>예약 관리</h1>
-          <p>날짜와 공간별 예약 현황을 확인하세요. 취소된 예약도 조회할 수 있습니다.</p>
+          <p>날짜와 오피스별 예약 현황을 확인하세요. 취소된 예약도 조회할 수 있습니다.</p>
         </div>
       </div>
 
@@ -94,7 +94,7 @@ export default function AdminReservationListPage() {
                 <tr>
                   <th scope="col">예약 번호</th>
                   <th scope="col">예약자</th>
-                  <th scope="col">공간</th>
+                  <th scope="col">오피스</th>
                   <th scope="col">이용 일시</th>
                   <th scope="col">금액</th>
                   <th scope="col">상태</th>

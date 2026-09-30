@@ -32,7 +32,7 @@ export default function PriceSummary({
   return (
     <div>
       <div className="definition">
-        <span>공간</span>
+        <span>오피스</span>
         <strong>{space?.name ?? '-'}</strong>
       </div>
       <div className="definition">

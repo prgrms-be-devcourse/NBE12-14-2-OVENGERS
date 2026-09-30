@@ -33,11 +33,11 @@ export default function AdminSpaceListPage() {
       <div className="pagehead">
         <div>
           <p className="page-kicker">OFFICE MANAGEMENT</p>
-          <h1>공간 관리</h1>
-          <p>공간의 운영 상태, 요금과 이용 시간을 관리하세요.</p>
+          <h1>오피스 관리</h1>
+          <p>오피스의 운영 상태, 요금과 이용 시간을 관리하세요.</p>
         </div>
         <Link href={ROUTES.adminSpaceNew} className="btn primary">
-          공간 등록
+          오피스 등록
         </Link>
       </div>
 
@@ -54,17 +54,17 @@ export default function AdminSpaceListPage() {
       <ErrorMessage error={error} onRetry={run} />
 
       {!loading && !error && spaces.length === 0 && (
-        <EmptyState title="등록된 공간이 없습니다" description="첫 공간을 등록해 주세요." />
+        <EmptyState title="등록된 오피스가 없습니다" description="첫 오피스를 등록해 주세요." />
       )}
 
       {spaces.length > 0 && (
         <>
           <div className="tablebox" tabIndex={0}>
             <table>
-              <caption className="sr-only">공간 목록</caption>
+              <caption className="sr-only">오피스 목록</caption>
               <thead>
                 <tr>
-                  <th scope="col">공간</th>
+                  <th scope="col">오피스</th>
                   <th scope="col">위치</th>
                   <th scope="col">수용</th>
                   <th scope="col">30분당 요금</th>

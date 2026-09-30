@@ -18,7 +18,7 @@ public record AdminReservationSearchCondition(
         LocalDate date,
 
         @Schema(description = "공간 ID (양수)", example = "1")
-        @Positive(message = "공간 ID는 양수여야 합니다.")
+        @Positive(message = "오피스 ID는 양수여야 합니다.")
         Long spaceId,
 
         @Schema(description = "예약 상태")

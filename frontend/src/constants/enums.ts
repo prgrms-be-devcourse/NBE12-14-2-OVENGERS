@@ -94,7 +94,7 @@ const ACCESS_REASON_LABEL: Record<AccessReasonCode, string> = {
   MEMBER_MISMATCH: '본인의 예약에 발급된 출입 키가 아닙니다.',
   RESERVATION_NOT_ACTIVE: '취소·종료·노쇼 처리된 예약입니다.',
   OUTSIDE_ALLOWED_TIME: '출입할 수 있는 시간이 아닙니다.',
-  SPACE_MISMATCH: '예약한 공간이 아닙니다.',
+  SPACE_MISMATCH: '예약한 오피스가 아닙니다.',
 };
 
 /**

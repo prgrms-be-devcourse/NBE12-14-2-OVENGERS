@@ -29,8 +29,8 @@ export default function SpaceFilter({ value, onChange, showStatus = false }: Spa
         />
       </label>}
       <Input
-        label="공간 검색"
-        placeholder="공간 이름 또는 위치"
+        label="오피스 검색"
+        placeholder="오피스 이름 또는 위치"
         value={value.keyword ?? ''}
         onChange={(event) => update({ keyword: event.target.value })}
       />

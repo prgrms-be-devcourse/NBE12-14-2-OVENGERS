@@ -234,7 +234,7 @@ export default function AdminSpaceFormPage({ mode = 'create' }: { mode?: 'create
       setEditImageError(
         err instanceof ApiError
           ? err
-          : '최신 공간 정보를 불러오지 못했습니다. 사진 업로드를 다시 시도하거나 나중에 다시 시도해주세요.',
+          : '최신 오피스 정보를 불러오지 못했습니다. 사진 업로드를 다시 시도하거나 나중에 다시 시도해주세요.',
       );
     } finally {
       setResumingEdit(false);
@@ -247,19 +247,19 @@ export default function AdminSpaceFormPage({ mode = 'create' }: { mode?: 'create
   return (
     <>
       <nav className="crumb" aria-label="현재 위치">
-        <Link href={ROUTES.adminSpaces}>공간 관리</Link>
+        <Link href={ROUTES.adminSpaces}>오피스 관리</Link>
         <span>›</span>
-        <span>{isEdit ? '공간 수정' : '공간 등록'}</span>
+        <span>{isEdit ? '오피스 수정' : '오피스 등록'}</span>
       </nav>
 
       <div className="pagehead">
         <div>
           <p className="page-kicker">OFFICE DETAILS</p>
-          <h1>{isEdit ? '공간 수정' : '공간 등록'}</h1>
+          <h1>{isEdit ? '오피스 수정' : '오피스 등록'}</h1>
           <p>
             {isEdit
               ? '요금을 바꿔도 이미 확정된 예약의 금액은 유지됩니다.'
-              : '공간 정보와 이용 조건을 입력해 주세요.'}
+              : '오피스 정보와 이용 조건을 입력해 주세요.'}
           </p>
         </div>
       </div>
@@ -277,10 +277,10 @@ export default function AdminSpaceFormPage({ mode = 'create' }: { mode?: 'create
           }}
         >
           <h3 style={{ color: '#991b1b', marginBottom: 8, fontSize: '1.15rem' }}>
-            공간 기본 정보 등록 완료 (대표 사진 업로드 실패)
+            오피스 기본 정보 등록 완료 (대표 사진 업로드 실패)
           </h3>
           <p style={{ color: '#7f1d1d', marginBottom: 12, fontSize: '0.95rem', lineHeight: 1.5 }}>
-            공간 기본 정보(ID: {createdSpaceId})가 정상적으로 등록되었습니다.
+            오피스 기본 정보(ID: {createdSpaceId})가 정상적으로 등록되었습니다.
             대표 사진 업로드 중 오류가 발생했으므로, 아래에서 원래 사진으로 다시 시도하거나 새 사진을 선택하여 업로드만 진행할 수 있습니다.
           </p>
           <ErrorMessage error={createImageError} />
@@ -366,13 +366,13 @@ export default function AdminSpaceFormPage({ mode = 'create' }: { mode?: 'create
               disabled={imageRetrying}
               onClick={() => router.push(`/admin/spaces/${createdSpaceId}/edit`)}
             >
-              공간 수정 화면으로 이동
+              오피스 수정 화면으로 이동
             </Button>
             <Button
               disabled={imageRetrying}
               onClick={() => router.push(ROUTES.adminSpaces)}
             >
-              공간 목록으로 이동
+              오피스 목록으로 이동
             </Button>
           </div>
         </div>
@@ -391,10 +391,10 @@ export default function AdminSpaceFormPage({ mode = 'create' }: { mode?: 'create
           }}
         >
           <h3 style={{ color: '#991b1b', marginBottom: 8, fontSize: '1.15rem' }}>
-            공간 기본 정보 수정 완료 (대표 사진 업로드 실패)
+            오피스 기본 정보 수정 완료 (대표 사진 업로드 실패)
           </h3>
           <p style={{ color: '#7f1d1d', marginBottom: 12, fontSize: '0.95rem', lineHeight: 1.5 }}>
-            공간 기본 정보는 정상적으로 저장되었습니다. 새 대표 사진 업로드 중 오류가 발생하였으며,
+            오피스 기본 정보는 정상적으로 저장되었습니다. 새 대표 사진 업로드 중 오류가 발생하였으며,
             사진 업로드가 성공하기 전까지는 기존 사진이 안전하게 유지됩니다.
             아래에서 새 사진을 선택하여 업로드만 다시 진행하거나, 원래 사진으로 다시 시도할 수 있습니다.
           </p>
@@ -481,7 +481,7 @@ export default function AdminSpaceFormPage({ mode = 'create' }: { mode?: 'create
               disabled={imageRetrying || resumingEdit}
               onClick={() => router.push(ROUTES.adminSpaces)}
             >
-              공간 목록으로 이동
+              오피스 목록으로 이동
             </Button>
             <Button
               loading={resumingEdit}

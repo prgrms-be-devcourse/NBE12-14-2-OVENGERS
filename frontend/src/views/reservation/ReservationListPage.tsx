@@ -35,7 +35,7 @@ export default function ReservationListPage() {
           <p>다가오는 일정과 지난 이용 내역을 한눈에 확인하세요.</p>
         </div>
         <Link href={ROUTES.spaces} className="btn primary">
-          공간 예약하기
+          오피스 예약하기
         </Link>
       </div>
 
@@ -53,10 +53,10 @@ export default function ReservationListPage() {
       {!loading && !error && reservations.length === 0 && (
         <EmptyState
           title="아직 예약이 없습니다"
-          description="원하는 공간과 시간을 골라 첫 예약을 만들어 보세요."
+          description="원하는 오피스와 시간을 골라 첫 예약을 만들어 보세요."
           action={
             <Link href={ROUTES.spaces} className="btn primary">
-              공간 둘러보기
+              오피스 둘러보기
             </Link>
           }
         />
