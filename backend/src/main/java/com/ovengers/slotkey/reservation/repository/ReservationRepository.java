@@ -115,9 +115,33 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("inUse") ReservationStatus inUse
     );
 
-    // ===== 조회 (ReservationQueryService) =====
+    // ===== 조회 (ReservationQueryService 및 AdminReservationService) =====
     Page<Reservation> findAllByMemberId(Long memberId, Pageable pageable);
     Page<Reservation> findAllByMemberIdAndStatus(Long memberId, ReservationStatus status, Pageable pageable);
+
+    @Query(
+            value = """
+                    SELECT r FROM Reservation r
+                    WHERE (:spaceId IS NULL OR r.spaceId = :spaceId)
+                      AND (:status IS NULL OR r.status = :status)
+                      AND (:startTimeInclusive IS NULL OR r.startTime >= :startTimeInclusive)
+                      AND (:startTimeExclusive IS NULL OR r.startTime < :startTimeExclusive)
+                    """,
+            countQuery = """
+                    SELECT COUNT(r) FROM Reservation r
+                    WHERE (:spaceId IS NULL OR r.spaceId = :spaceId)
+                      AND (:status IS NULL OR r.status = :status)
+                      AND (:startTimeInclusive IS NULL OR r.startTime >= :startTimeInclusive)
+                      AND (:startTimeExclusive IS NULL OR r.startTime < :startTimeExclusive)
+                    """
+    )
+    Page<Reservation> searchReservations(
+            @Param("spaceId") Long spaceId,
+            @Param("status") ReservationStatus status,
+            @Param("startTimeInclusive") LocalDateTime startTimeInclusive,
+            @Param("startTimeExclusive") LocalDateTime startTimeExclusive,
+            Pageable pageable
+    );
 
     // ===== 배치 대상 조회 (ReservationCompletionScheduler) =====
     // 후보 id만 뽑고, 실제 전이 여부는 건별 조건부 UPDATE가 최종 판정한다.

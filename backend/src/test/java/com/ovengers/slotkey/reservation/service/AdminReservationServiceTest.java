@@ -13,6 +13,7 @@ import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.repository.MemberRepository;
+import com.ovengers.slotkey.reservation.dto.request.AdminReservationSearchCondition;
 import com.ovengers.slotkey.reservation.dto.response.AdminReservationDetailResponse;
 import com.ovengers.slotkey.reservation.dto.response.AdminReservationResponse;
 import com.ovengers.slotkey.reservation.entity.Reservation;
@@ -23,6 +24,11 @@ import com.ovengers.slotkey.reservation.repository.ReservationSlotRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationStatusHistoryRepository;
 import com.ovengers.slotkey.space.entity.Space;
 import com.ovengers.slotkey.space.repository.SpaceRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,6 +37,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -308,5 +315,110 @@ class AdminReservationServiceTest {
         verify(doorAccessTokenService, never()).revokeByReservation(any(), any(), any());
         verify(statusHistoryRepository, never()).save(any());
         verify(auditLogService, never()).log(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("searchReservations: 조건이 비어있으면 null 파라미터와 기본 id DESC 정렬로 리포지토리를 호출한다")
+    void searchReservations_defaultCondition_appliesDefaultSortAndMapsResponses() {
+        // given
+        Reservation reservation = confirmedReservation();
+        Page<Reservation> page = new PageImpl<>(List.of(reservation), PageRequest.of(0, 20), 1);
+
+        given(reservationRepository.searchReservations(eq(null), eq(null), eq(null), eq(null), any(Pageable.class)))
+                .willReturn(page);
+        stubMemberAndSpace();
+
+        // when
+        Page<AdminReservationResponse> result = adminReservationService.searchReservations(
+                new AdminReservationSearchCondition(null, null, null),
+                PageRequest.of(0, 20)
+        );
+
+        // then
+        assertThat(result.getContent()).hasSize(1);
+        AdminReservationResponse item = result.getContent().get(0);
+        assertThat(item.reservationId()).isEqualTo(RESERVATION_ID);
+        assertThat(item.memberEmail()).isEqualTo("user@slotkey.test");
+        assertThat(item.spaceName()).isEqualTo("공간1");
+
+        org.mockito.ArgumentCaptor<Pageable> pageableCaptor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        verify(reservationRepository).searchReservations(eq(null), eq(null), eq(null), eq(null), pageableCaptor.capture());
+        Pageable capturedPageable = pageableCaptor.getValue();
+        assertThat(capturedPageable.getSort().getOrderFor("id")).isNotNull();
+        assertThat(capturedPageable.getSort().getOrderFor("id").getDirection()).isEqualTo(Sort.Direction.DESC);
+    }
+
+    @Test
+    @DisplayName("searchReservations: date, spaceId, status가 주어지면 [date 00:00, date+1 00:00) 범위와 파라미터를 정확히 전달한다")
+    void searchReservations_withAllFilters_passesCorrectArguments() {
+        // given
+        LocalDate searchDate = LocalDate.of(2026, 9, 30);
+        LocalDateTime expectedInclusive = LocalDateTime.of(2026, 9, 30, 0, 0, 0);
+        LocalDateTime expectedExclusive = LocalDateTime.of(2026, 10, 1, 0, 0, 0);
+
+        Page<Reservation> emptyPage = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+        given(reservationRepository.searchReservations(
+                eq(SPACE_ID),
+                eq(ReservationStatus.CONFIRMED),
+                eq(expectedInclusive),
+                eq(expectedExclusive),
+                any(Pageable.class)
+        )).willReturn(emptyPage);
+
+        // when
+        AdminReservationSearchCondition condition = new AdminReservationSearchCondition(
+                searchDate, SPACE_ID, ReservationStatus.CONFIRMED
+        );
+        Page<AdminReservationResponse> result = adminReservationService.searchReservations(condition, PageRequest.of(0, 10));
+
+        // then
+        assertThat(result.getContent()).isEmpty();
+        verify(reservationRepository).searchReservations(
+                eq(SPACE_ID),
+                eq(ReservationStatus.CONFIRMED),
+                eq(expectedInclusive),
+                eq(expectedExclusive),
+                any(Pageable.class)
+        );
+    }
+
+    @Test
+    @DisplayName("searchReservations: 클라이언트가 지정한 정렬이 있으면 기본 정렬로 덮어쓰지 않고 유지한다")
+    void searchReservations_withClientSort_preservesSort() {
+        // given
+        Page<Reservation> emptyPage = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+        org.mockito.ArgumentCaptor<Pageable> pageableCaptor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        given(reservationRepository.searchReservations(any(), any(), any(), any(), pageableCaptor.capture()))
+                .willReturn(emptyPage);
+
+        Pageable clientPageable = PageRequest.of(1, 10, Sort.by(Sort.Direction.ASC, "startTime"));
+
+        // when
+        adminReservationService.searchReservations(new AdminReservationSearchCondition(null, null, null), clientPageable);
+
+        // then
+        Pageable captured = pageableCaptor.getValue();
+        assertThat(captured.getPageNumber()).isEqualTo(1);
+        assertThat(captured.getPageSize()).isEqualTo(10);
+        assertThat(captured.getSort().getOrderFor("startTime")).isNotNull();
+        assertThat(captured.getSort().getOrderFor("startTime").getDirection()).isEqualTo(Sort.Direction.ASC);
+    }
+
+    @Test
+    @DisplayName("findAllReservations: searchReservations를 빈 조건으로 위임 호출한다")
+    void findAllReservations_delegatesToSearchReservations() {
+        // given
+        Reservation reservation = confirmedReservation();
+        Page<Reservation> page = new PageImpl<>(List.of(reservation), PageRequest.of(0, 20), 1);
+        given(reservationRepository.searchReservations(eq(null), eq(null), eq(null), eq(null), any(Pageable.class)))
+                .willReturn(page);
+        stubMemberAndSpace();
+
+        // when
+        Page<AdminReservationResponse> result = adminReservationService.findAllReservations(PageRequest.of(0, 20));
+
+        // then
+        assertThat(result.getContent()).hasSize(1);
+        verify(reservationRepository).searchReservations(eq(null), eq(null), eq(null), eq(null), any(Pageable.class));
     }
 }

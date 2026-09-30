@@ -20,11 +20,14 @@ import com.ovengers.slotkey.reservation.entity.ReservationStatusHistory;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationSlotRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationStatusHistoryRepository;
+import com.ovengers.slotkey.reservation.dto.request.AdminReservationSearchCondition;
 import com.ovengers.slotkey.space.entity.Space;
 import com.ovengers.slotkey.space.repository.SpaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ovengers.slotkey.credit.service.CreditService;   // AuditLogService import 아래
@@ -54,16 +57,47 @@ public class AdminReservationService {
     private final Clock clock;
 
     /**
+     * 관리자 예약 목록 검색 (조건 필터 및 페이징).
+     */
+    @Transactional(readOnly = true)
+    public Page<AdminReservationResponse> searchReservations(
+            AdminReservationSearchCondition condition,
+            Pageable pageable
+    ) {
+        Pageable effectivePageable = (pageable != null && pageable.getSort().isSorted())
+                ? pageable
+                : PageRequest.of(
+                        pageable != null ? pageable.getPageNumber() : 0,
+                        pageable != null ? pageable.getPageSize() : 20,
+                        Sort.by(Sort.Direction.DESC, "id")
+                );
+
+        AdminReservationSearchCondition cond = condition != null
+                ? condition
+                : new AdminReservationSearchCondition(null, null, null);
+
+        LocalDateTime startTimeInclusive = cond.date() != null ? cond.date().atStartOfDay() : null;
+        LocalDateTime startTimeExclusive = cond.date() != null ? cond.date().plusDays(1).atStartOfDay() : null;
+
+        return reservationRepository.searchReservations(
+                cond.spaceId(),
+                cond.status(),
+                startTimeInclusive,
+                startTimeExclusive,
+                effectivePageable
+        ).map(reservation -> AdminReservationResponse.from(
+                reservation,
+                findMemberEmail(reservation.getMemberId()),
+                findSpaceName(reservation.getSpaceId())
+        ));
+    }
+
+    /**
      * 전체 예약 조회 (페이지네이션).
      */
     @Transactional(readOnly = true)
     public Page<AdminReservationResponse> findAllReservations(Pageable pageable) {
-        return reservationRepository.findAll(pageable)
-                .map(reservation -> AdminReservationResponse.from(
-                        reservation,
-                        findMemberEmail(reservation.getMemberId()),
-                        findSpaceName(reservation.getSpaceId())
-                ));
+        return searchReservations(new AdminReservationSearchCondition(null, null, null), pageable);
     }
 
     /**
