@@ -14,8 +14,8 @@
 - 인증 불필요 API: 회원가입, 로그인, 토큰 재발급, 로그아웃, 공간 목록/상세 조회, 슬롯 가용성 조회, 공간 이미지 공개 조회(`GET /space-images/{fileName}`).
 - 공통 응답: `{ status, code, message, data }` (`status`: SUCCESS | FAIL, 성공 시 `code`: "OK"). 단, `ApiResponse` 클래스에 `@JsonInclude(JsonInclude.Include.NON_NULL)`가 적용되어 있어 Java 상에서 `data == null`인 경우(실패 응답 또는 `ApiResponse<Void>`) 실제 HTTP JSON 직렬화 시 `"data"` 필드 자체가 생략된다.
 - 페이지네이션 형식 (엔드포인트별 구분):
-  - 공통 래퍼 `PageResponse<T>` (`content`, `page`, `size`, `totalElements`, `totalPages`): 공간 목록(`GET /spaces`), 관리자 공간 목록(`GET /admin/spaces`), 관리자 회원 목록(`GET /admin/members`), 관리자 감사 로그(`GET /admin/audit-logs`), 문의 목록(`GET /inquiries`), 관리자 문의 목록(`GET /admin/inquiries`)
-  - Spring Data `Page<T>` 직렬화 (`content`, `pageable`, `totalElements`, `totalPages`, `last`, `size`, `number`, `sort`, `first`, `numberOfElements`, `empty` 등): 내 예약 목록(`GET /reservations`), 관리자 예약 목록(`GET /admin/reservations`)
+  - 공통 래퍼 `PageResponse<T>` (`content`, `page`, `size`, `totalElements`, `totalPages`): 공간 목록(`GET /spaces`), 관리자 공간 목록(`GET /admin/spaces`), 관리자 예약 목록(`GET /admin/reservations`), 관리자 회원 목록(`GET /admin/members`), 관리자 감사 로그(`GET /admin/audit-logs`), 문의 목록(`GET /inquiries`), 관리자 문의 목록(`GET /admin/inquiries`)
+  - Spring Data `Page<T>` 직렬화 (`content`, `pageable`, `totalElements`, `totalPages`, `last`, `size`, `number`, `sort`, `first`, `numberOfElements`, `empty` 등): 내 예약 목록(`GET /reservations`)
 - 시간: ISO-8601 문자열. 서버 직렬화는 타임존 오프셋 표기가 없는 `LocalDateTime` 형식(`"yyyy-MM-dd'T'HH:mm:ss"`)이며, 서버 내부 기준시계는 KST(`Asia/Seoul`, `Clock`)이다. 클라이언트는 이 문자열을 한국 표준시(KST)로 해석하는 것이 설계 목표이다. *(주의: 현재 프론트 `HoldCountdown.tsx`는 `new Date(holdExpiresAt)`로 브라우저 로컬 시간대로 직접 파싱하고 있어 비-KST 환경에서 오차 가능성이 있으며, 시간 파싱 코드 정정은 별도 프론트 코드 과제로 추적한다)*. 날짜는 `"yyyy-MM-dd"`, 시각은 `"HH:mm:ss"`. 예약 시간은 **30분의 배수**만 허용.
 - `Idempotency-Key`(UUID) 헤더:
   - **실제로 돈이 움직이는 `POST /reservations/{id}/pay`에만 필수** (누락 시 400 `IDEMPOTENCY_KEY_REQUIRED`). `POST /reservations`(HOLD 생성)는 결제가 없으므로 대상 아님.
@@ -265,7 +265,7 @@
 
 ## 6. [관리자] 예약 관리
 
-- `GET /admin/reservations?page=&size=` (ADMIN): 취소 예약도 목록 포함. 응답 `ApiResponse<Page<AdminReservationResponse>>` (Spring Data `Page` 직렬화 형태. 원소: `{ reservationId, memberId, memberEmail, spaceId, spaceName, startTime, endTime, status, totalAmount, createdAt }`). ⚠️ **검색 조건 필터는 현재 컨트롤러에 파라미터가 매핑되어 있지 않음**(`@ParameterObject Pageable pageable`만 지원) — 프론트는 필터 UI를 비활성화하거나 전체 목록 페이징으로 연동
+- `GET /admin/reservations?page=&size=&date=&spaceId=&status=` (ADMIN): 취소 예약도 목록 포함. 응답 `ApiResponse<PageResponse<AdminReservationResponse>>` (공통 `PageResponse` 형태. 필드: `page`, `size`, `totalElements`, `totalPages`, `content[]` 원소: `{ reservationId, memberId, memberEmail, spaceId, spaceName, startTime, endTime, status, totalAmount, createdAt }`). `date`(YYYY-MM-DD 형식, 해당 날짜 [00:00:00, 다음날 00:00:00) 범위 검색), `spaceId`(양수), `status` 필터 쿼리 파라미터를 지원하며, 잘못된 형식(유효하지 않은 날짜, 음수 spaceId, 알 수 없는 enum 등)은 400 `VALIDATION_FAILED`로 거절된다. 존재하지 않는 양수 spaceId는 빈 목록(200 OK)을 반환한다.
 - `GET /admin/reservations/{reservationId}` (ADMIN): 관리자 예약 상세 조회. 응답 `ApiResponse<AdminReservationDetailResponse>` (목록 필드 + `pricePerSlotSnapshot`, `holdExpiresAt`, `checkedInAt`, `checkedOutAt`, `cancelledAt`, `statusHistory[]`, `accessLogs[]`). 오류: `AUTHENTICATION_REQUIRED`(401), `ACCESS_DENIED`(403), `RESERVATION_NOT_FOUND`(404)
 - `POST /admin/reservations/{reservationId}/force-cancel` (ADMIN): 바디 `{ "reason": "..." }` 1~500자 필수, 응답 `ApiResponse<AdminReservationResponse>`. 취소 가능 상태는 `HELD`/`CONFIRMED`/`IN_USE`(그 외 종료 상태는 409). 조회 시점 상태 기준 조건부 UPDATE(`WHERE id=:id AND status=:조회 시점 상태`) → 같은 트랜잭션에서 상태 이력(사유 포함) + 슬롯 삭제 + 활성 토큰 revoke + **크레딧 환불(`CONFIRMED`/`IN_USE`는 `total_amount` 전액 `REFUND`, 위약금 없음 / `HELD`는 환불 없음)** + audit_log 기록. 오류: `VALIDATION_FAILED`(400), `AUTHENTICATION_REQUIRED`(401), `ACCESS_DENIED`(403), `RESERVATION_NOT_FOUND`(404), `RESERVATION_STATE_CONFLICT`(409). **관리자도 이 API 외의 경로로 타인 예약을 취소하거나 도어 토큰을 발급받을 수 없다** (핵심 차별점)
 
@@ -355,9 +355,8 @@
 3. **정지 계정의 기존 Access Token 즉시 무효화 및 보호 API 차단**
    - **현재 구현**: `CustomAuthenticationFilter`는 JWT 서명과 만료 시각만 검증하며 회원 DB를 재조회하지 않는다. 비즈니스 서비스(`ReservationHoldService`, `DoorAccessVerificationService` 등)에서도 회원 `status == ACTIVE` 여부를 별도 확인하지 않는다. 따라서 회원이 정지되어도 기존 Access Token 만료 전까지는 예약 생성 및 도어 출입 시도가 기술적으로 통과된다(토큰 재발급 요청 시에만 `ACCOUNT_INACTIVE` 403 차단).
    - **결정 과제**: 정지 즉시 기존 토큰까지 완전 차단하려면 JWT 블랙리스트(Redis 등), 인증 필터 내 매 요청 DB/캐시 회원 상태 조회, 또는 서비스 레이어 진입 시 회원 상태 검증 로직 추가가 필요하며, 이를 별도 코드 과제로 추진할지 결정 필요.
-4. **관리자 예약 목록 검색 조건 필터 지원**
-   - **현재 구현**: 백엔드 `AdminReservationController`의 `GET /admin/reservations`는 페이징(`Pageable`)만 수신하며 `AdminReservationSearchCondition`은 빈 클래스 상태로 파라미터가 매핑되어 있지 않다.
-   - **결정 과제**: 관리자 화면에서 상태/기간/공간 필터링이 필요하다면 Querydsl 동적 쿼리 및 컨트롤러 파라미터 바인딩을 구현하는 별도 과제로 진행할 것인지 결정 필요.
+4. **관리자 예약 목록 검색 조건 필터 지원 (해결 완료)**
+   - **구현 현황**: `AdminReservationSearchCondition`(`date`, `spaceId`, `status`) 파라미터 바인딩 및 `ReservationRepository.searchReservations` 동적 JPQL 필터링 구현 완료. `PageResponse<AdminReservationResponse>` 규격 정합화 완료.
 5. **노쇼 환불률**: 현재 확정값은 0%이며 강사 피드백에 따라 재검토 중(`docs/decisions/core-domain-decisions.md` §13). 변경 시 명세서와 크레딧 환급 로직 동기화 필요.
 6. **HOLD 카운트다운 시간대 해석 차이 (프론트 별도 코드 과제)**
    - **현재 구현**: 백엔드는 오프셋 없는 ISO-8601 문자열(`yyyy-MM-dd'T'HH:mm:ss`)을 KST 기준으로 반환하고 클라이언트의 KST 해석을 기대하나, 프론트엔드 `HoldCountdown.tsx`는 `new Date(holdExpiresAt)`를 사용하여 **브라우저 로컬(현지) 시간대**로 파싱한다. KST가 아닌 브라우저 환경(예: UTC)에서는 만료 시점 계산에 9시간 등의 시간차가 발생할 수 있다.
