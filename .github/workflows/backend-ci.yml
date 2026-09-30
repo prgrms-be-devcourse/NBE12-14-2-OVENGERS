@@ -37,23 +37,26 @@ jobs:
           distribution: 'temurin'
       - name: Build (skip tests, already passed above)
         run: chmod +x gradlew && ./gradlew clean build -x test
-      - name: Stop existing app
+      # 운영 프로세스는 systemd(slotkey.service)가 관리한다. 러너가 직접 java를 띄우면
+      # systemd가 재시작한 옛 jar가 8080을 먼저 잡아 새 코드가 반영되지 않는다.
+      - name: Deploy jar and restart service
         run: |
-          pkill -f 'slotkey-0.0.1-SNAPSHOT.jar' || true
-          sleep 3
-      - name: Start app
-        run: |
-          nohup java -jar build/libs/slotkey-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod > app.log 2>&1 &
-          disown
+          install -D -m 644 build/libs/slotkey-0.0.1-SNAPSHOT.jar /home/ubuntu/slotkey/slotkey.jar
+          date '+%Y-%m-%d %H:%M:%S' > "$RUNNER_TEMP/restart_at"
+          sudo systemctl restart slotkey
       - name: Health check
         run: |
-          for i in {1..10}; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo 000)
-            if [ "$code" != "000" ]; then
-              echo "server responded with $code"
-              exit 0
+          since=$(cat "$RUNNER_TEMP/restart_at")
+          for i in {1..24}; do
+            if ! systemctl is-active --quiet slotkey; then
+              echo "slotkey.service is not active"; sudo journalctl -u slotkey -n 50 --no-pager; exit 1
+            fi
+            # 응답 코드만 보면 옛 프로세스도 통과하므로, 이번 재시작 이후의 기동 완료 로그를 확인한다.
+            if sudo journalctl -u slotkey --since "$since" --no-pager | grep -q "Started .* in .* seconds"; then
+              echo "slotkey started"; exit 0
             fi
             sleep 5
           done
-          echo "server did not respond"
+          echo "server did not start in time"
+          sudo journalctl -u slotkey -n 50 --no-pager
           exit 1

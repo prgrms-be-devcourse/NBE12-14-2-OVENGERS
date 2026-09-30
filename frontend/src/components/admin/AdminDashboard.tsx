@@ -27,8 +27,11 @@ export default function AdminDashboard({compact=false}:{compact?:boolean}) {
   return <DashboardContent key={member?.memberId} compact={compact}/>;
 }
 function DashboardContent({compact}:{compact:boolean}) {
-  const {data,loading,error,run}=useAsync(getAdminDashboard,[]);
   const [date,setDate]=useState(()=>seoulDate());
+  const effectiveDate=compact?seoulDate():date;
+  const {data,loading,error,run}=useAsync(()=>getAdminDashboard(effectiveDate),[effectiveDate]);
+  // 날짜를 바꾼 직후에는 이전 날짜의 결과가 남아 있으므로, 새 날짜 결과가 올 때까지 비운다.
+  const current=data?.date===effectiveDate?data:null;
   const [spaceId,setSpaceId]=useState('');
   const [status,setStatus]=useState<ReservationStatus|''>('');
   const [page,setPage]=useState(0);
@@ -43,8 +46,7 @@ function DashboardContent({compact}:{compact:boolean}) {
     window.addEventListener('focus',refresh);
     return ()=>{window.clearInterval(timer);window.removeEventListener('focus',refresh);};
   },[run]);
-  const effectiveDate=compact?seoulDate():date;
-  const rows=selectDashboardReservations(data?.reservations??[],effectiveDate,spaceId);
+  const rows=selectDashboardReservations(current?.reservations??[],effectiveDate,spaceId);
   const counts=countDashboardStatuses(rows);
   const visible=sortDashboardReservations(rows.filter(row=>compact ? ['HELD','CONFIRMED','IN_USE'].includes(row.status) : !status || row.status===status));
   const size=compact?3:8;
@@ -63,8 +65,8 @@ function DashboardContent({compact}:{compact:boolean}) {
       <Select label="예약 상태" value={status} onChange={e=>{setStatus(e.target.value as ReservationStatus|'');setPage(0);}} options={[{value:'',label:'전체 상태'},...Object.entries(RESERVATION_STATUS_META).map(([value,meta])=>({value,label:DASHBOARD_LABELS[value as keyof typeof DASHBOARD_LABELS]??meta.label}))]}/>
     </div>}
     <ErrorMessage error={error} onRetry={()=>{void run().catch(()=>{});}}/>
-    {!data && loading && <LoadingSpinner label="오피스와 예약 현황을 불러오고 있습니다…"/>}
-    {data && <>
+    {!current && loading && <LoadingSpinner label="오피스와 예약 현황을 불러오고 있습니다…"/>}
+    {current && <>
       <div className={styles.stats}>{DASHBOARD_STATES.map(state=><button key={state} type="button" disabled={compact} aria-pressed={!compact && status===state} onClick={()=>{setStatus(status===state?'':state);setPage(0);}}>
         <span>{DASHBOARD_LABELS[state]}</span><strong>{counts[state].toLocaleString()}<small>건</small></strong>
       </button>)}</div>
@@ -79,7 +81,7 @@ function DashboardContent({compact}:{compact:boolean}) {
         </Link>)}
       </div>}
       {!compact && <Pagination page={actualPage} totalPages={Math.ceil(visible.length/size)} totalElements={visible.length} onChange={setPage}/>}
-      <p className={styles.updated} aria-live="polite">{loading?'현황 갱신 중…':`${new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit'}).format(data.fetchedAt)} 기준 · 1분마다 갱신`}{error?' · 갱신 실패로 이전 조회 결과를 표시합니다.':''}</p>
+      <p className={styles.updated} aria-live="polite">{loading?'현황 갱신 중…':`${new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit'}).format(current.fetchedAt)} 기준 · 1분마다 갱신`}{error?' · 갱신 실패로 이전 조회 결과를 표시합니다.':''}</p>
     </>}
   </section>;
 }

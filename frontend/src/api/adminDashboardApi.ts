@@ -28,10 +28,12 @@ export async function collectDashboardPages<T>(fetchPage: (page: number) => Prom
   return rows;
 }
 
-export async function getAdminDashboard() {
+// date가 있으면 서버의 date 필터(이용 시작일 기준)로 그날 예약만 받는다.
+// 전체 예약을 모두 내려받아 브라우저에서 거르던 방식은 데이터가 쌓인 운영 서버에서 수십 MB를 받아 매우 느렸다.
+export async function getAdminDashboard(date = '') {
   const [reservations, spaces] = await Promise.all([
-    collectDashboardPages(page => api.get<Page<DashboardReservation>>(API_ROUTES.admin.reservations, { query: { page, size: 1000, sort: 'id,desc' } })),
+    collectDashboardPages(page => api.get<Page<DashboardReservation>>(API_ROUTES.admin.reservations, { query: { page, size: 1000, sort: 'id,desc', ...(date ? { date } : {}) } })),
     collectDashboardPages<Space>(page => getAdminSpaces({ page, size: 1000 })),
   ]);
-  return { reservations: [...new Map(reservations.map(row => [row.reservationId, row])).values()], spaces, fetchedAt: Date.now() };
+  return { date, reservations: [...new Map(reservations.map(row => [row.reservationId, row])).values()], spaces, fetchedAt: Date.now() };
 }
