@@ -189,25 +189,25 @@ export default function SpaceForm({
         <div className="full">
           <div className="field">
             <span>대표 사진</span>
-            {form.imagePath && !previewUrl && (
-              <div style={{ marginBottom: 12 }}>
-                <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: 6 }}>현재 대표 사진</p>
-                <div style={{ maxWidth: 280, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--line)' }}>
-                  <SpacePhoto src={form.imagePath} alt="현재 등록된 오피스 사진" />
+            {(form.imagePath || mode === 'edit') && !previewUrl && (
+              <div className="space-form-photo-block">
+                <p className="space-form-photo-label">현재 대표 사진</p>
+                <div className="space-form-photo-frame">
+                  <SpacePhoto src={form.imagePath} alt="현재 등록된 오피스 사진" className="space-form-photo" />
                 </div>
               </div>
             )}
             {previewUrl && (
-              <div style={{ marginBottom: 12 }}>
-                <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: 6 }}>
+              <div className="space-form-photo-block">
+                <p className="space-form-photo-label">
                   새로 선택된 사진 미리보기 ({selectedFile?.name})
                 </p>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                  <div style={{ maxWidth: 280, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--line)' }}>
+                <div className="space-form-preview-row">
+                  <div className="space-form-photo-frame">
                     <img
                       src={previewUrl}
                       alt="새로 선택된 오피스 사진 미리보기"
-                      style={{ display: 'block', width: '100%', maxHeight: 200, objectFit: 'cover' }}
+                      className="space-form-photo"
                     />
                   </div>
                   <Button type="button" onClick={handleClearFile}>
