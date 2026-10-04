@@ -261,6 +261,13 @@ test('DoorTerminalPage consumer regression: executes actual fetchDoorReservation
   // 기준 시각: 2026-10-03 12:00:00 (KST 타임스탬프)
   const baseTime = new Date('2026-10-03T12:00:00+09:00').getTime();
 
+  // 테스트 전용 독립 fixture 시각 해석 헬퍼 (KST 계약 준수 및 실행 환경 TZ 독립화)
+  const parseFixtureTime = (raw) => {
+    if (typeof raw !== 'string') return NaN;
+    const normalized = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(raw) ? raw : `${raw}+09:00`;
+    return new Date(normalized).getTime();
+  };
+
   // CONFIRMED (102개):
   // - 1개 만료: endTime = 11:30:00 (ID 1000)
   // - 1개 경계 시각 일치: endTime = 12:00:00 (ID 10000) -> baseTime과 동일하여 > 조건에 의해 제외되어야 함!
@@ -397,8 +404,8 @@ test('DoorTerminalPage consumer regression: executes actual fetchDoorReservation
 
   // 3. startTime 오름차순 정렬 확인
   for (let i = 1; i < collected.length; i++) {
-    const prevTime = new Date(collected[i - 1].startTime.includes('T') ? collected[i - 1].startTime : `${collected[i - 1].date}T${collected[i - 1].startTime}`).getTime();
-    const currTime = new Date(collected[i].startTime.includes('T') ? collected[i].startTime : `${collected[i].date}T${collected[i].startTime}`).getTime();
+    const prevTime = parseFixtureTime(collected[i - 1].startTime.includes('T') ? collected[i - 1].startTime : `${collected[i - 1].date}T${collected[i - 1].startTime}`);
+    const currTime = parseFixtureTime(collected[i].startTime.includes('T') ? collected[i].startTime : `${collected[i].date}T${collected[i].startTime}`);
     assert.ok(prevTime <= currTime, `startTime 오름차순 정렬 위반: ${collected[i - 1].startTime} > ${collected[i].startTime}`);
   }
 
@@ -441,7 +448,7 @@ test('DoorTerminalPage consumer regression: executes actual fetchDoorReservation
   // 6-1. 만약 > 대신 >= 연산자가 사용되면 경계 항목 2건이 포함되어 202건이 됨을 입증
   const reservationTimeFn = (res, field) => {
     const raw = res[field].includes('T') ? res[field] : `${res.date}T${res[field]}`;
-    return new Date(raw).getTime();
+    return parseFixtureTime(raw);
   };
   const countWithGte = [...confirmedItems, ...inUseItems].filter((r) => reservationTimeFn(r, 'endTime') >= baseTime).length;
   assert.equal(countWithGte, 202, '>= 연산자로 변조 시 경계 항목 2건이 포함되어 202건이어야 함');
