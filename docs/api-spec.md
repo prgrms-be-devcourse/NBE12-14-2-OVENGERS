@@ -219,7 +219,7 @@
 
 ### 5-3. 조회
 
-- `GET /reservations?status=&page=&size=` (인증 필요, 본인 예약만). 응답 `ApiResponse<PageResponse<ReservationListResponse>>`. 반환 `data`는 `content`, `page`, `size`, `totalElements`, `totalPages`를 포함한다. `status` 생략 시 전체. 원소는 `ReservationListResponse` (공간명, 사진, 위치 포함).
+- `GET /reservations?status=&keyword=&page=&size=` (인증 필요, 본인 예약만). 응답 `ApiResponse<PageResponse<ReservationListResponse>>`. 반환 `data`는 `content`, `page`, `size`, `totalElements`, `totalPages`를 포함한다. `keyword`는 공간 이름(`Space.name`) 부분 일치 검색(공백 trim, 빈 문자열은 null 간주)을 지원하며, 비활성(`INACTIVE`) 공간의 기존 예약도 포함한다. 정렬은 `startTime DESC, id DESC`가 기본 적용된다. 잘못된 `status` enum은 400 Bad Request(`VALIDATION_FAILED`)로 거절된다. `status` 생략 시 전체 상태 조회. 원소는 `ReservationListResponse` (공간명, 사진, 위치 포함).
 - `GET /reservations/{reservationId}` (인증 필요, 본인 예약만). 응답 `ApiResponse<ReservationDetailResponse>`. 상태 이력(`statusHistory`)이 포함되며, 공간명 등 상세는 프론트가 공간 API를 통해 병합 표시. 오류: `AUTHENTICATION_REQUIRED`(401), `FORBIDDEN_NOT_OWNER`(403), `RESERVATION_NOT_FOUND`(404)
 
 ### 5-4. 취소 — `POST /reservations/{reservationId}/cancel`
