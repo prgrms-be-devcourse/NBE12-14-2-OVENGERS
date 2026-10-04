@@ -13,7 +13,7 @@ import { formatDateShort } from '../../utils/date';
 import { HOME_RESERVATION_STATUSES, selectHomeReservations } from '../../utils/homeReservations';
 import styles from './HomeReservations.module.css';
 
-async function fetchActiveReservations() {
+export async function fetchActiveReservations() {
   // The server sorts by start time descending. Read every active page before
   // selecting the nearest bookings, so older/upcoming bookings aren't omitted.
   const groups = await Promise.all(HOME_RESERVATION_STATUSES.map(async (status) => {

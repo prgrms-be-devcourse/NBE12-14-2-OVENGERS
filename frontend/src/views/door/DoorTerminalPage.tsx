@@ -34,6 +34,23 @@ export default function DoorTerminalPage() {
 const reservationTime = (reservation: ReservationSummary, field: 'startTime' | 'endTime') =>
   reservationEndTime(reservation[field].includes('T') ? reservation[field] : `${reservation.date}T${reservation[field]}`);
 
+export async function fetchDoorReservations(now?: number): Promise<ReservationSummary[]> {
+  const groups = await Promise.all((['CONFIRMED', 'IN_USE'] as const).map(async (status) => {
+    const rows: ReservationSummary[] = [];
+    let page = 0;
+    while (true) {
+      const response = await getMyReservations({ page, size: 100, status });
+      rows.push(...response.content);
+      page += 1;
+      if (page >= response.totalPages || response.content.length === 0) break;
+    }
+    return rows;
+  }));
+  const effectiveNow = now ?? Date.now();
+  return groups.flat().filter((item) => reservationTime(item, 'endTime') > effectiveNow)
+    .sort((a, b) => reservationTime(a, 'startTime') - reservationTime(b, 'startTime'));
+}
+
 function MemberDoorTerminal() {
   const [form, setForm] = useState<DoorVerifyFormValue>({ accessKey: '', reservationId: '' });
   const [result, setResult] = useState<AccessVerifyResult | null>(null);
@@ -45,21 +62,7 @@ function MemberDoorTerminal() {
     if (allowed) approvedHeading.current?.focus();
   }, [allowed]);
 
-  const fetchReservations = useCallback(async () => {
-    const groups = await Promise.all((['CONFIRMED', 'IN_USE'] as const).map(async (status) => {
-      const rows: ReservationSummary[] = [];
-      let page = 0;
-      while (true) {
-        const response = await getMyReservations({ page, size: 100, status });
-        rows.push(...response.content);
-        page += 1;
-        if (page >= response.totalPages || response.content.length === 0) break;
-      }
-      return rows;
-    }));
-    return groups.flat().filter((item) => reservationTime(item, 'endTime') > Date.now())
-      .sort((a, b) => reservationTime(a, 'startTime') - reservationTime(b, 'startTime'));
-  }, []);
+  const fetchReservations = useCallback(() => fetchDoorReservations(), []);
   const { data: reservations, loading: reservationsLoading, error: reservationsError, run: reloadReservations } = useAsync(fetchReservations, [fetchReservations]);
 
   const { execute, loading, error, setError } = useAction(async () => {

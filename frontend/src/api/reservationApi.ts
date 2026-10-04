@@ -58,15 +58,24 @@ export interface ReservationListParams {
   page?: number;
   size?: number;
   status?: ReservationStatus | '';
+  keyword?: string;
 }
 
 export function getMyReservations({
-                                    page = 0,
-                                    size = 10,
-                                    status,
-                                  }: ReservationListParams = {}): Promise<Page<ReservationSummary>> {
+  page = 0,
+  size = 10,
+  status,
+  keyword,
+}: ReservationListParams = {}): Promise<Page<ReservationSummary>> {
+  const normalizedKeyword = keyword?.trim() || undefined;
+  const normalizedStatus = status || undefined;
   return api.get<Page<ReservationSummary>>(API_ROUTES.reservations.list, {
-    query: { page, size, status },
+    query: {
+      page,
+      size,
+      status: normalizedStatus,
+      keyword: normalizedKeyword,
+    },
   });
 }
 

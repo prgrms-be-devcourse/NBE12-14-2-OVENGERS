@@ -14,17 +14,22 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import EmptyState from '../../components/common/EmptyState';
 
+export function isReservationFilterActive(filter: ReservationFilterValue): boolean {
+  return Boolean(filter.status) || Boolean(filter.keyword && filter.keyword.trim().length > 0);
+}
+
 export default function ReservationListPage() {
-  const [filter, setFilter] = useState<ReservationFilterValue>({ status: '' });
+  const [filter, setFilter] = useState<ReservationFilterValue>({ status: '', keyword: '' });
   const { page, size, setPage } = usePagination({ initialSize: 10 });
 
   const fetchReservations = useCallback(
-    () => getMyReservations({ page, size, status: filter.status }),
-    [page, size, filter.status],
+    () => getMyReservations({ page, size, status: filter.status, keyword: filter.keyword }),
+    [page, size, filter.status, filter.keyword],
   );
   const { data, loading, error, run } = useAsync(fetchReservations, [fetchReservations]);
 
   const reservations = data?.content ?? [];
+  const hasActiveFilter = isReservationFilterActive(filter);
 
   return (
     <>
@@ -51,15 +56,22 @@ export default function ReservationListPage() {
       <ErrorMessage error={error} onRetry={run} />
 
       {!loading && !error && reservations.length === 0 && (
-        <EmptyState
-          title="아직 예약이 없습니다"
-          description="원하는 오피스와 시간을 골라 첫 예약을 만들어 보세요."
-          action={
-            <Link href={ROUTES.spaces} className="btn primary">
-              오피스 둘러보기
-            </Link>
-          }
-        />
+        hasActiveFilter ? (
+          <EmptyState
+            title="조건에 맞는 예약이 없습니다"
+            description="검색어나 예약 상태를 조정해 보세요."
+          />
+        ) : (
+          <EmptyState
+            title="아직 예약이 없습니다"
+            description="원하는 오피스와 시간을 골라 첫 예약을 만들어 보세요."
+            action={
+              <Link href={ROUTES.spaces} className="btn primary">
+                오피스 둘러보기
+              </Link>
+            }
+          />
+        )
       )}
 
       {reservations.map((reservation) => (
