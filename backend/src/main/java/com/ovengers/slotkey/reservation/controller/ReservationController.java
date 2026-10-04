@@ -321,13 +321,18 @@ public class ReservationController {
     /** 본인 예약 목록 (최신 시작 시각 순). */
     @Operation(
             summary = "내 예약 목록 조회",
-            description = "로그인한 회원 본인의 예약 목록을 검색 조건에 따라 페이지 단위로 조회합니다."
+            description = "로그인한 회원 본인의 예약 목록을 검색 조건(상태, 공간 이름 키워드)에 따라 최신 이용 시작 시각(startTime DESC, id DESC) 순으로 페이지 단위로 조회합니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "200",
                     description = "본인 예약 목록 조회 성공",
                     useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "VALIDATION_FAILED: 잘못된 요청 파라미터(상태 enum 값 불일치 등)",
+                    content = @Content
             )
     })
     @GetMapping

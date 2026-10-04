@@ -35,7 +35,8 @@ import java.util.List;
 public class ReservationQueryService {
 
     private static final int MAX_PAGE_SIZE = 100;
-    private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "startTime");
+    private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "startTime")
+            .and(Sort.by(Sort.Direction.DESC, "id"));
     private final SpaceRepository spaceRepository;
     private final ReservationRepository reservationRepository;
     private final ReservationStatusHistoryRepository reservationStatusHistoryRepository;
@@ -52,11 +53,18 @@ public class ReservationQueryService {
                 DEFAULT_SORT
         );
 
-        Page<Reservation> reservations = condition.status() == null
-                ? reservationRepository.findAllByMemberId(memberId, pageRequest)
-                : reservationRepository.findAllByMemberIdAndStatus(
+        ReservationSearchCondition searchCondition = condition != null
+                ? condition
+                : new ReservationSearchCondition(null, null);
+
+        String normalizedKeyword = searchCondition.keyword() != null && !searchCondition.keyword().isBlank()
+                ? searchCondition.keyword().trim()
+                : null;
+
+        Page<Reservation> reservations = reservationRepository.searchMemberReservations(
                 memberId,
-                condition.status(),
+                searchCondition.status(),
+                normalizedKeyword,
                 pageRequest
         );
 

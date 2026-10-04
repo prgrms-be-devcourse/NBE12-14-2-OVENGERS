@@ -4,6 +4,7 @@ import org.springframework.data.domain.Pageable;
 
 import com.ovengers.slotkey.reservation.entity.Reservation;
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
+import com.ovengers.slotkey.space.entity.Space;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -118,6 +119,33 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     // ===== 조회 (ReservationQueryService 및 AdminReservationService) =====
     Page<Reservation> findAllByMemberId(Long memberId, Pageable pageable);
     Page<Reservation> findAllByMemberIdAndStatus(Long memberId, ReservationStatus status, Pageable pageable);
+
+    @Query(
+            value = """
+                    SELECT r FROM Reservation r
+                    WHERE r.memberId = :memberId
+                      AND (:status IS NULL OR r.status = :status)
+                      AND (:keyword IS NULL OR :keyword = '' OR EXISTS (
+                            SELECT 1 FROM Space s
+                            WHERE s.id = r.spaceId AND s.name LIKE %:keyword%
+                      ))
+                    """,
+            countQuery = """
+                    SELECT COUNT(r) FROM Reservation r
+                    WHERE r.memberId = :memberId
+                      AND (:status IS NULL OR r.status = :status)
+                      AND (:keyword IS NULL OR :keyword = '' OR EXISTS (
+                            SELECT 1 FROM Space s
+                            WHERE s.id = r.spaceId AND s.name LIKE %:keyword%
+                      ))
+                    """
+    )
+    Page<Reservation> searchMemberReservations(
+            @Param("memberId") Long memberId,
+            @Param("status") ReservationStatus status,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
 
     @Query(
             value = """
