@@ -5,7 +5,9 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-
+  mail:
+    host: localhost
+    port: 1025
 custom:
   jwt:
     secret-key: slotkey-test-only-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz
@@ -14,3 +16,7 @@ custom:
 app:
   space-image:
     storage-root: build/tmp/space-images
+  verification:
+    # 테스트 전용 공개값. 로컬·운영 비밀키로 사용하지 않는다.
+    hash-secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    mail-from: noreply@slotkey.test

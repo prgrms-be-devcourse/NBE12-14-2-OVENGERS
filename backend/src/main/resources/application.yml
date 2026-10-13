@@ -35,7 +35,8 @@ app:
     cookie:
       secure: true
       same-site: Lax
-
+  verification:
+    hash-secret: ${VERIFICATION_HASH_SECRET}
   credit:
     signup-grant: 50000
 

@@ -3,6 +3,16 @@ spring:
     url: jdbc:mysql://localhost:3306/slotkey?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: root
     password: root
+  mail:
+    host: localhost
+    port: 1025
+    default-encoding: UTF-8
+    properties:
+      "[mail.smtp.auth]": false
+      "[mail.smtp.starttls.enable]": false
+      "[mail.smtp.connectiontimeout]": 3000
+      "[mail.smtp.timeout]": 3000
+      "[mail.smtp.writetimeout]": 3000
 
 app:
   auth:
@@ -11,3 +21,5 @@ app:
       same-site: Lax
   space-image:
     storage-root: ./data/space-images
+  verification:
+    mail-from: noreply@slotkey.test

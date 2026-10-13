@@ -20,7 +20,13 @@ public enum ErrorCode {
     ACCOUNT_WITHDRAWN(HttpStatus.UNAUTHORIZED, "ACCOUNT_WITHDRAWN", "탈퇴한 계정입니다."),
     MEMBER_WITHDRAWN(HttpStatus.CONFLICT, "MEMBER_WITHDRAWN", "탈퇴한 회원의 상태를 변경하거나 크레딧을 지급할 수 없습니다."),
     CURRENT_PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST, "CURRENT_PASSWORD_MISMATCH", "현재 비밀번호가 일치하지 않습니다."),
-
+    // ── 이메일 인증 ────────────────────────────────────
+    VERIFICATION_CODE_MISMATCH(HttpStatus.BAD_REQUEST, "VERIFICATION_CODE_MISMATCH", "인증번호가 일치하지 않습니다."),
+    VERIFICATION_CHALLENGE_INVALID(HttpStatus.BAD_REQUEST, "VERIFICATION_CHALLENGE_INVALID", "인증번호가 만료되었거나 사용할 수 없습니다. 다시 요청해주세요."),
+    VERIFICATION_TEMPORARILY_BLOCKED(HttpStatus.TOO_MANY_REQUESTS, "VERIFICATION_TEMPORARILY_BLOCKED", "인증 시도가 일시적으로 제한되었습니다."),
+    VERIFICATION_ADMIN_LOCKED(HttpStatus.FORBIDDEN, "VERIFICATION_ADMIN_LOCKED", "이메일 인증이 정지되었습니다. 관리자에게 문의해주세요."),
+    VERIFICATION_RESEND_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "VERIFICATION_RESEND_TOO_SOON", "인증번호는 마지막 발송 후 30초가 지나야 다시 요청할 수 있습니다."),
+    VERIFICATION_MAIL_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "VERIFICATION_MAIL_FAILED", "인증 메일을 발송하지 못했습니다. 잠시 후 다시 시도해주세요."),
     //── Refresh_token ─────────────────────────────────────────
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."),
     ACCOUNT_INACTIVE(HttpStatus.FORBIDDEN, "ACCOUNT_INACTIVE", "이용이 제한된 계정입니다."),
