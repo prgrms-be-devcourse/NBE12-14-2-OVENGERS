@@ -38,6 +38,9 @@ public class Member extends BaseTimeEntity {
     @Column(name = "withdrawn_at")
     private LocalDateTime withdrawnAt;
 
+    @Column(name = "email_verified_at")
+    private LocalDateTime emailVerifiedAt;
+
     public Member(String email, String nickname) {
         this.email = email;
         this.nickname = nickname;
@@ -62,5 +65,18 @@ public class Member extends BaseTimeEntity {
         int expiredAmount = this.balance;
         this.balance = 0;
         return expiredAmount;
+    }
+    public boolean isEmailVerified() {
+        return emailVerifiedAt != null;
+    }
+
+    public void verifyEmail(LocalDateTime verifiedAt) {
+        if (verifiedAt == null) {
+            throw new IllegalArgumentException("인증 시각은 필수입니다.");
+        }
+
+        if (this.emailVerifiedAt == null) {
+            this.emailVerifiedAt = verifiedAt;
+        }
     }
 }
