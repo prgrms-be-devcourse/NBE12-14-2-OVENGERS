@@ -21,9 +21,6 @@ public class Member extends BaseTimeEntity {
     @Column(unique = true, nullable = false, length = 254)
     private String email;
 
-    @Column(name = "password_hash", nullable = false, length = 255)
-    private String passwordHash;
-
     @Column(nullable = false, length = 50)
     private String nickname;
 
@@ -41,9 +38,8 @@ public class Member extends BaseTimeEntity {
     @Column(name = "withdrawn_at")
     private LocalDateTime withdrawnAt;
 
-    public Member(String email, String passwordHash, String nickname) {
+    public Member(String email, String nickname) {
         this.email = email;
-        this.passwordHash = passwordHash;
         this.nickname = nickname;
         this.role = MemberRole.USER;
         this.status = MemberStatus.ACTIVE;

@@ -92,7 +92,6 @@ class ReservationSlotRepositoryTest extends IntegrationTestSupport {
 
                 Member member = memberRepository.save(new Member(
                                 "repo-test-" + System.nanoTime() + "@slotkey.test",
-                                "{noop}pass",
                                 "레포테스터"));
                 memberId = member.getId();
         }

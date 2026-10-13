@@ -50,7 +50,6 @@ public class RefreshTokenServiceTest {
         Member member = memberRepository.save(
                 new Member(
                         "refresh-lifetime@example.com",
-                        passwordEncoder.encode("Test1234!"),
                         "테스트회원"
                 )
         );

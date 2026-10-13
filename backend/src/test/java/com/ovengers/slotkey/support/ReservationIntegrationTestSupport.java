@@ -83,7 +83,6 @@ public abstract class ReservationIntegrationTestSupport extends IntegrationTestS
     protected Long createMember(int balance) {
         Member member = memberRepository.save(new Member(
                 "fixture-" + System.nanoTime() + "-" + memberIds.size() + "@slotkey.test",
-                "{noop}password",
                 "fixture"));
         memberIds.add(member.getId());
         setBalance(member.getId(), balance);

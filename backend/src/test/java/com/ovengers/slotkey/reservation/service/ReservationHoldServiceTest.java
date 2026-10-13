@@ -166,7 +166,7 @@ class ReservationHoldServiceTest {
         ArgumentCaptor<Reservation> reservationCaptor = ArgumentCaptor.forClass(Reservation.class);
         given(reservationRepository.save(reservationCaptor.capture()))
                 .willAnswer(invocation -> savedReservationOf(invocation.getArgument(0)));
-        Member member = new Member("hold-test@slotkey.test", "hash", "테스트회원");
+        Member member = new Member("hold-test@slotkey.test", "테스트회원");
         given(memberRepository.findByIdForUpdate(100L)).willReturn(Optional.of(member));
 
         ReservationResponse response = reservationHoldService.createHold(100L, 1L, startTime, endTime);
@@ -197,7 +197,7 @@ class ReservationHoldServiceTest {
         given(spaceRepository.findByIdForShare(1L)).willReturn(Optional.of(activeSpace()));
         given(pricingService.calculateSlotCount(startTime, endTime)).willReturn(4);
         given(pricingService.calculateTotalAmount(5000, 4)).willReturn(20000);
-        Member member = new Member("hold-test@slotkey.test", "hash", "테스트회원");
+        Member member = new Member("hold-test@slotkey.test", "테스트회원");
         given(memberRepository.findByIdForUpdate(100L)).willReturn(Optional.of(member));
         given(reservationRepository.save(any(Reservation.class)))
                 .willAnswer(invocation -> savedReservationOf(invocation.getArgument(0)));
@@ -238,7 +238,7 @@ class ReservationHoldServiceTest {
         given(pricingService.calculateSlotCount(startTime, endTime)).willReturn(4);
         given(pricingService.calculateTotalAmount(5000, 4)).willReturn(20000);
 
-        Member member = new Member("hold-test@slotkey.test", "hash", "테스트회원");
+        Member member = new Member("hold-test@slotkey.test", "테스트회원");
         member.withdraw(now);
         given(memberRepository.findByIdForUpdate(100L)).willReturn(Optional.of(member));
 

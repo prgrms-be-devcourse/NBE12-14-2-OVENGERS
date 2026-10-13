@@ -37,7 +37,6 @@ class CreditBalanceConcurrencyIntegrationTest extends IntegrationTestSupport {
         Member member = memberRepository.saveAndFlush(
                 new Member(
                         "credit-concurrency-" + System.nanoTime() + "@test.com",
-                        "password",
                         "동시성테스트"
                 )
         );

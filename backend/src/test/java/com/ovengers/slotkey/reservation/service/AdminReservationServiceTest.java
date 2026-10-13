@@ -117,7 +117,7 @@ class AdminReservationServiceTest {
     /** 응답 조립에 쓰이는 회원 이메일·공간 이름 조회를 준비한다. */
     private void stubMemberAndSpace() {
         given(memberRepository.findById(MEMBER_ID))
-                .willReturn(Optional.of(new Member("user@slotkey.test", "{noop}password", "회원1")));
+                .willReturn(Optional.of(new Member("user@slotkey.test", "회원1")));
         given(spaceRepository.findById(SPACE_ID)).willReturn(Optional.of(
                 Space.builder().name("공간1").build()));
     }

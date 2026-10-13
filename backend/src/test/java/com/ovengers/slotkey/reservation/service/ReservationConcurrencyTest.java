@@ -85,7 +85,6 @@ class ReservationConcurrencyTest {
         for (int i = 0; i < THREAD_COUNT; i++) {
             Member member = new Member(
                     "concurrency-" + i + "-" + System.nanoTime() + "@slotkey.test",
-                    "{noop}password",
                     "동시성테스트" + i);
             memberIds.add(memberRepository.save(member).getId());
         }

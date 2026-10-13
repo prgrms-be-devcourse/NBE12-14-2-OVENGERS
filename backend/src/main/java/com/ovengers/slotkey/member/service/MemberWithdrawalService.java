@@ -15,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.ovengers.slotkey.auth.entity.LocalCredential;
+import com.ovengers.slotkey.auth.repository.LocalCredentialRepository;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -31,6 +33,7 @@ public class MemberWithdrawalService {
     private final DoorAccessTokenRepository doorAccessTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
+    private final LocalCredentialRepository localCredentialRepository;
 
     @Transactional
     public void withdraw(Long memberId, String currentPassword) {
@@ -54,15 +57,18 @@ public class MemberWithdrawalService {
             throw new BusinessException(ErrorCode.ACCOUNT_INACTIVE);
         }
 
+        LocalCredential credential = localCredentialRepository
+                .findById(memberId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.CURRENT_PASSWORD_MISMATCH)
+                );
+
         if (!passwordEncoder.matches(
                 currentPassword,
-                member.getPasswordHash()
+                credential.getPasswordHash()
         )) {
-            throw new BusinessException(
-                    ErrorCode.CURRENT_PASSWORD_MISMATCH
-            );
+            throw new BusinessException(ErrorCode.CURRENT_PASSWORD_MISMATCH);
         }
-
         boolean hasActiveReservation =
                 reservationRepository.existsByMemberIdAndStatusIn(
                         memberId,

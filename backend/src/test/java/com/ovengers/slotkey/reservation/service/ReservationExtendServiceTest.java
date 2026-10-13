@@ -181,7 +181,7 @@ class ReservationExtendServiceTest {
         }
 
         private Member activeMember() {
-                return new Member("extend-test@slotkey.test", "hash", "테스트회원");
+                return new Member("extend-test@slotkey.test", "테스트회원");
         }
 
         @Test
@@ -209,7 +209,7 @@ class ReservationExtendServiceTest {
                 given(reservationRepository.findByIdForUpdate(RESERVATION_ID))
                                 .willReturn(Optional.of(activeReservation(ReservationStatus.CONFIRMED)));
 
-                Member withdrawn = new Member("extend-test@slotkey.test", "hash", "테스트회원");
+                Member withdrawn = new Member("extend-test@slotkey.test", "테스트회원");
                 withdrawn.withdraw(now);
                 given(memberRepository.findByIdForUpdate(MEMBER_ID)).willReturn(Optional.of(withdrawn));
 

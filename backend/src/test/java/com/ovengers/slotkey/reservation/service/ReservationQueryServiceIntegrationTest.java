@@ -71,10 +71,10 @@ class ReservationQueryServiceIntegrationTest extends IntegrationTestSupport {
         resB.clear();
 
         // 1. 회원 저장
-        memberA = memberRepository.save(new Member("memberA@slotkey.test", "{noop}pass1234", "회원A"));
-        memberB = memberRepository.save(new Member("memberB@slotkey.test", "{noop}pass1234", "회원B"));
-        memberC = memberRepository.save(new Member("memberC@slotkey.test", "{noop}pass1234", "회원C"));
-        admin = memberRepository.save(new Member("admin@slotkey.test", "{noop}admin1234", "관리자"));
+        memberA = memberRepository.save(new Member("memberA@slotkey.test",  "회원A"));
+        memberB = memberRepository.save(new Member("memberB@slotkey.test",  "회원B"));
+        memberC = memberRepository.save(new Member("memberC@slotkey.test",  "회원C"));
+        admin = memberRepository.save(new Member("admin@slotkey.test",  "관리자"));
 
         // 2. 공간 저장 (S1 ~ S4)
         spaceS1 = spaceRepository.save(Space.builder()

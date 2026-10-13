@@ -208,10 +208,10 @@ class AdminReservationConcurrencyIntegrationTest extends IntegrationTestSupport 
 
         executorService = Executors.newFixedThreadPool(4);
 
-        userMember = memberRepository.save(new Member("user@slotkey.test", "hash", "예약사용자"));
+        userMember = memberRepository.save(new Member("user@slotkey.test", "예약사용자"));
         creditGrantService.grantSignupCredit(userMember.getId(), 100000);
 
-        adminMember = new Member("admin@slotkey.test", "hash", "최고관리자");
+        adminMember = new Member("admin@slotkey.test",  "최고관리자");
         ReflectionTestUtils.setField(adminMember, "role", MemberRole.ADMIN);
         adminMember = memberRepository.save(adminMember);
 

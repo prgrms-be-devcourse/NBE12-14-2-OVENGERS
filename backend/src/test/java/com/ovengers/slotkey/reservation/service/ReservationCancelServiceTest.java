@@ -74,7 +74,7 @@ class ReservationCancelServiceTest {
     }
 
     private Member activeMember() {
-        return new Member("user@slotkey.test", "hash", "회원");
+        return new Member("user@slotkey.test", "회원");
     }
 
     private Reservation confirmedReservation(Long memberId) {

@@ -93,7 +93,6 @@ class AdminSpaceImageMultipartLimitIntegrationTest {
     private Member saveMember(MemberRole role, MemberStatus status) {
         Member member = new Member(
                 role.name().toLowerCase() + "-" + status.name().toLowerCase() + "-" + System.nanoTime() + "@test.com",
-                "encoded-password",
                 "limit-test-member");
         ReflectionTestUtils.setField(member, "role", role);
         ReflectionTestUtils.setField(member, "status", status);

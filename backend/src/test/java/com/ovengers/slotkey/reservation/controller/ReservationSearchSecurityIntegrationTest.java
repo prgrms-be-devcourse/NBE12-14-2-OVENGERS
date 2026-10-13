@@ -85,9 +85,9 @@ class ReservationSearchSecurityIntegrationTest extends IntegrationTestSupport {
         resB.clear();
 
         // 1. 회원 등록
-        memberA = memberRepository.save(new Member("userA@slotkey.test", "{noop}pass1234", "회원A"));
-        memberB = memberRepository.save(new Member("userB@slotkey.test", "{noop}pass1234", "회원B"));
-        admin = new Member("admin@slotkey.test", "{noop}admin1234", "관리자");
+        memberA = memberRepository.save(new Member("userA@slotkey.test", "회원A"));
+        memberB = memberRepository.save(new Member("userB@slotkey.test",  "회원B"));
+        admin = new Member("admin@slotkey.test",  "관리자");
         ReflectionTestUtils.setField(admin, "role", MemberRole.ADMIN);
         admin = memberRepository.save(admin);
 

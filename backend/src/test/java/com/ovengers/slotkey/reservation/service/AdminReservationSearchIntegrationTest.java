@@ -58,7 +58,6 @@ class AdminReservationSearchIntegrationTest extends IntegrationTestSupport {
 
         Member member = memberRepository.save(new Member(
                 "tester@slotkey.test",
-                "{noop}pass1234",
                 "예약테스터"
         ));
         memberId = member.getId();

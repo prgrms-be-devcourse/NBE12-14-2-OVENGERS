@@ -17,7 +17,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
-
+import java.time.Clock;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -31,6 +31,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.transaction.annotation.Propagation;
 
+import com.ovengers.slotkey.auth.entity.LocalCredential;
+import com.ovengers.slotkey.auth.repository.LocalCredentialRepository;
 import static org.mockito.Mockito.doReturn;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -46,7 +48,10 @@ public class AuthControllerTest {
     private ObjectMapper objectMapper;
     @Autowired
     private MockMvc mvc;
-
+    @Autowired
+    private LocalCredentialRepository localCredentialRepository;
+    @Autowired
+    private Clock clock;
     @SpyBean // 스파이빈은 실제 레포지토리를 이용하면서 테스트에서 지정한 메스드만 결과를 바꿀수 있게 한다고 합니다.
     private MemberRepository memberRepository;
 
@@ -104,16 +109,17 @@ public class AuthControllerTest {
         assertThat(member.getStatus()).isEqualTo(MemberStatus.ACTIVE);
         assertThat(member.getCreatedAt()).isNotNull();
 
+        LocalCredential credential = localCredentialRepository
+                .findById(member.getId())
+                .orElseThrow();
         // 원문이 그대로 저장되지 않았는지 확인
-        assertThat(member.getPasswordHash()).isNotEqualTo(password);
+        assertThat(credential.getPasswordHash()).isNotEqualTo(password);
 
         // 저장된 해시가 입력한 비밀번호와 일치하는지 확인
-        assertThat(
-                passwordEncoder.matches(
-                        password,
-                        member.getPasswordHash()
-                )
-        ).isTrue();
+        assertThat(passwordEncoder.matches(
+                password,
+                credential.getPasswordHash()
+        )).isTrue();
     }
 
     @Test
@@ -126,7 +132,6 @@ public class AuthControllerTest {
         Member existingMember = memberRepository.save(
                 new Member(
                         email,
-                        passwordEncoder.encode(password),
                         "기존회원"
                 )
         );
@@ -233,7 +238,6 @@ public class AuthControllerTest {
         memberRepository.save(
                 new Member(
                         email,
-                        passwordEncoder.encode("Correct1234!"),
                         "테스트회원"
                 )
         );
@@ -563,11 +567,15 @@ public class AuthControllerTest {
     private MvcResult loginForTest(String email) throws Exception {
         String password = "Test1234!";
 
-        memberRepository.save(
-                new Member(
-                        email,
+        Member member = memberRepository.saveAndFlush(
+                new Member(email, "테스트회원")
+        );
+
+        localCredentialRepository.saveAndFlush(
+                new LocalCredential(
+                        member,
                         passwordEncoder.encode(password),
-                        "테스트회원"
+                        LocalDateTime.now(clock)
                 )
         );
 
@@ -575,11 +583,11 @@ public class AuthControllerTest {
                         post("/api/v1/auth/login")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
-                                        {
-                                            "email": "%s",
-                                            "password": "%s"
-                                        }
-                                        """.formatted(email, password))
+                                    {
+                                        "email": "%s",
+                                        "password": "%s"
+                                    }
+                                    """.formatted(email, password))
                 )
                 .andExpect(status().isOk())
                 .andReturn();
@@ -642,7 +650,6 @@ public class AuthControllerTest {
         Member existingMember = memberRepository.saveAndFlush(
                 new Member(
                         email,
-                        passwordEncoder.encode("Test1234!"),
                         "기존회원"
                 )
         );

@@ -51,7 +51,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-
+import com.ovengers.slotkey.auth.entity.LocalCredential;
+import com.ovengers.slotkey.auth.repository.LocalCredentialRepository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -115,6 +116,9 @@ class MemberWithdrawalHoldConcurrencyIntegrationTest extends IntegrationTestSupp
     @Autowired
     private Clock clock;
 
+    @Autowired
+    private LocalCredentialRepository localCredentialRepository;
+
     private Long memberId;
     private Long spaceId;
     private static final String RAW_PASSWORD = "testPassword123!";
@@ -123,11 +127,27 @@ class MemberWithdrawalHoldConcurrencyIntegrationTest extends IntegrationTestSupp
     void setUp() {
         cleanup();
 
-        Member member = memberRepository.save(new Member(
-                "withdraw-hold-" + System.nanoTime() + "@slotkey.test",
-                passwordEncoder.encode(RAW_PASSWORD),
-                "탈퇴테스트유저"));
-        memberId = member.getId();
+        TransactionTemplate transactionTemplate =
+                new TransactionTemplate(transactionManager);
+
+        memberId = transactionTemplate.execute(status -> {
+            Member member = memberRepository.saveAndFlush(
+                    new Member(
+                            "withdraw-hold-" + System.nanoTime() + "@slotkey.test",
+                            "탈퇴테스트유저"
+                    )
+            );
+
+            localCredentialRepository.saveAndFlush(
+                    new LocalCredential(
+                            member,
+                            passwordEncoder.encode(RAW_PASSWORD),
+                            LocalDateTime.now(clock)
+                    )
+            );
+
+            return member.getId();
+        });
 
         Space space = spaceRepository.save(Space.builder()
                 .name("경합 테스트 회의실")
@@ -157,6 +177,9 @@ class MemberWithdrawalHoldConcurrencyIntegrationTest extends IntegrationTestSupp
         reservationSlotRepository.deleteAllInBatch();
         reservationRepository.deleteAllInBatch();
         spaceRepository.deleteAllInBatch();
+
+        // 회원을 참조하는 인증 정보를 먼저 삭제
+        localCredentialRepository.deleteAllInBatch();
         memberRepository.deleteAllInBatch();
     }
 

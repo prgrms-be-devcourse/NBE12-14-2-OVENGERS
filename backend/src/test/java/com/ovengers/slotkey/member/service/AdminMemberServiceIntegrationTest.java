@@ -72,8 +72,8 @@ class AdminMemberServiceIntegrationTest extends IntegrationTestSupport {
         spaceRepository.deleteAllInBatch();
         memberRepository.deleteAllInBatch();
 
-        userMember = memberRepository.save(new Member("user@slotkey.test", "hash", "일반회원"));
-        adminMember = new Member("admin@slotkey.test", "hash", "관리자");
+        userMember = memberRepository.save(new Member("user@slotkey.test",  "일반회원"));
+        adminMember = new Member("admin@slotkey.test",  "관리자");
         ReflectionTestUtils.setField(adminMember, "role", MemberRole.ADMIN);
         adminMember = memberRepository.save(adminMember);
     }

@@ -290,7 +290,6 @@ class AdminSpaceSecurityIntegrationTest extends IntegrationTestSupport {
     private Member saveMember(MemberRole role, MemberStatus status) {
         Member member = new Member(
                 role.name().toLowerCase() + "-" + status.name().toLowerCase() + "-" + System.nanoTime() + "@test.com",
-                "encoded-password",
                 "security-test-member");
         ReflectionTestUtils.setField(member, "role", role);
         ReflectionTestUtils.setField(member, "status", status);

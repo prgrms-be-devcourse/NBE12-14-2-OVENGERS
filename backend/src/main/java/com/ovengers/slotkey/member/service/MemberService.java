@@ -1,5 +1,7 @@
 package com.ovengers.slotkey.member.service;
 
+import com.ovengers.slotkey.auth.entity.LocalCredential;
+import com.ovengers.slotkey.auth.repository.LocalCredentialRepository;
 import com.ovengers.slotkey.credit.service.CreditGrantService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
@@ -14,6 +16,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+
 @Service
 @RequiredArgsConstructor
 public class MemberService {
@@ -21,6 +26,8 @@ public class MemberService {
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final CreditGrantService creditGrantService;
+    private final LocalCredentialRepository localCredentialRepository;
+    private final Clock clock;
 
     @Value("${app.credit.signup-grant}")
     private int signupGrantAmount;
@@ -58,7 +65,7 @@ public class MemberService {
         // 비밀번호 해시 생성
         String passwordHash = passwordEncoder.encode(password);
 
-        Member member = new Member(email, passwordHash, nickname);
+        Member member = new Member(email, nickname);
 
         Member savedMember;
 
@@ -76,7 +83,13 @@ public class MemberService {
 
             throw e;
         }
+        LocalCredential localCredential = new LocalCredential(
+                savedMember,
+                passwordHash,
+                LocalDateTime.now(clock)
+        );
 
+        localCredentialRepository.save(localCredential);
         // 회원가입 초기 크레딧 지급
         creditGrantService.grantSignupCredit(
                 savedMember.getId(),

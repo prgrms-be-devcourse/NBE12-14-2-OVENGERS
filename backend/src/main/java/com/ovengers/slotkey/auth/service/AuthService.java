@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ovengers.slotkey.auth.dto.internal.LoginResult;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
+import com.ovengers.slotkey.auth.entity.LocalCredential;
+import com.ovengers.slotkey.auth.repository.LocalCredentialRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -19,7 +21,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
     private final RefreshTokenService refreshTokenService;
-
+    private final LocalCredentialRepository localCredentialRepository;
 
     // 리프레시 토큰을 DB에 저장하므로 readOnly 제거
     @Transactional
@@ -30,13 +32,18 @@ public class AuthService {
                         new BusinessException(ErrorCode.INVALID_CREDENTIALS)
                 );
 
-        // 입력한 비밀번호와 저장된 해시 비교
-        if (!passwordEncoder.matches(password, member.getPasswordHash())) {
+        // 회원 ID로 로컬 인증 정보 조회
+        LocalCredential credential = localCredentialRepository
+                .findById(member.getId())
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.INVALID_CREDENTIALS)
+                );
+        // 비밀번호 검증
+        if (!passwordEncoder.matches(password, credential.getPasswordHash())) {
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
 
         // ACTIVE 회원만 로그인 허용
-
         if (member.getStatus() == MemberStatus.WITHDRAWN) {
             throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
         }

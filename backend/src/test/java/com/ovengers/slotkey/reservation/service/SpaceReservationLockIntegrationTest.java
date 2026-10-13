@@ -114,7 +114,6 @@ class SpaceReservationLockIntegrationTest extends IntegrationTestSupport {
 
         Member member = memberRepository.save(new Member(
                 "locktest-" + System.nanoTime() + "@slotkey.test",
-                "{noop}password",
                 "테스트유저"));
         memberId = member.getId();
 
