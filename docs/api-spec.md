@@ -77,6 +77,14 @@
 
 ## 5. 예약 · 크레딧 (Reservation & Credit)
 
+### 5-0. PG 크레딧 충전 주문 생성 — `POST /credits/charge-orders`
+
+- 인증 및 회원 `ACTIVE` 상태가 필요하다. `ACTIVE`가 아니면 `ACCOUNT_INACTIVE`(403)로 거절한다. 요청 회원의 충전 시도 하나를 `charge_order`에 `PENDING`으로 저장하며, 이 단계에서는 PG 승인이나 크레딧 증가가 일어나지 않는다.
+- 요청 바디: `{ "amount": 1000 }`
+- `amount`: 1,000원 이상 100,000원 이하인 100원 단위 정수. 범위 또는 단위가 맞지 않으면 `VALIDATION_FAILED`(400).
+- `orderId`: 서버가 `chg_` + 소문자 UUID v4 형식으로 생성한다. DB의 숫자 PK와 별도이며 UNIQUE 제약을 갖는다.
+- 성공: 201, `data` = `{ "orderId": "chg_550e8400-e29b-41d4-a716-446655440000", "amount": 1000, "status": "PENDING" }`.
+
 > **프론트 예약 흐름 요약**: ① `POST /reservations`로 HOLD 생성(201) → 응답의 `reservationId`, `spaceVersion`, `holdExpiresAt` 보관 → ② 10분 안에 `POST /reservations/{id}/pay`(헤더 `Idempotency-Key`, 바디 `spaceVersion`)로 확정. 한 번의 호출로 결제까지 끝나지 않는다. 응답에 `payment` 객체는 없다.
 
 #### 1) 공통 응답 DTO `ReservationResponse` (HOLD 생성 / 결제 확인 / 연장 / 체크아웃 / 취소 단건 응답)
