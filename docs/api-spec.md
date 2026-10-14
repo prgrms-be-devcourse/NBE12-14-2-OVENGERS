@@ -36,7 +36,7 @@
 | 401 | 인증 실패 | 토큰 없음(`AUTHENTICATION_REQUIRED`), 토큰 만료/위조(`INVALID_ACCESS_TOKEN`, `INVALID_REFRESH_TOKEN`), 로그인 자격증명 불일치(`INVALID_CREDENTIALS`) |
 | 403 | 인가 실패 | 역할 불충분(`ACCESS_DENIED`, `FORBIDDEN_ROLE`), 소유권 불일치(`FORBIDDEN_NOT_OWNER`), 정지 계정 로그인/재발급 거절(`ACCOUNT_INACTIVE`) |
 | 404 | 자원 없음 | 존재하지 않는 spaceId(`SPACE_NOT_FOUND`), reservationId(`RESERVATION_NOT_FOUND`), memberId(`MEMBER_NOT_FOUND`), inquiryId(`INQUIRY_NOT_FOUND`), fileName(`IMAGE_NOT_FOUND`) |
-| 409 | 상태 충돌 | 슬롯 중복(`RESERVATION_SLOT_CONFLICT`), 이미 취소/만료/확정된 예약에 대한 요청(`RESERVATION_STATE_CONFLICT`), `space.version` 불일치(`SPACE_VERSION_MISMATCH`), 공간 운영시간 축소 충돌(`SPACE_OPERATING_HOURS_CONFLICT`), 이메일 중복(`EMAIL_ALREADY_EXISTS`) |
+| 409 | 상태 충돌 | 슬롯 중복(`RESERVATION_SLOT_CONFLICT`), 이미 취소/만료/확정된 예약에 대한 요청(`RESERVATION_STATE_CONFLICT`), `space.version` 불일치(`SPACE_VERSION_MISMATCH`), 공간 운영시간 축소 충돌(`SPACE_OPERATING_HOURS_CONFLICT`), 이메일 중복(`EMAIL_ALREADY_EXISTS`), 다른 충전 주문의 멱등키 재사용(`IDEMPOTENCY_KEY_REUSED`) |
 | 413 | 페이로드 초과 | 공간 대표 사진 파일 크기 5MB 초과(`IMAGE_SIZE_EXCEEDED`) |
 | 422 | 비즈니스 규칙 위반 | 크레딧 잔액 부족(`INSUFFICIENT_BALANCE`), 연장 불가(`RESERVATION_EXTEND_NOT_ALLOWED`), 비활성 공간(`SPACE_INACTIVE`), 관리자 정지/복구 불가(`TARGET_IS_ADMIN`), 자기 자신 크레딧 지급 불가(`SELF_GRANT_NOT_ALLOWED`), 답변 완료 문의 수정 불가(`INQUIRY_ALREADY_ANSWERED`) |
 | 500 | 서버 오류 | 이미지 디스크 저장 실패(`IMAGE_STORAGE_ERROR`) |
@@ -84,6 +84,19 @@
 - `amount`: 1,000원 이상 100,000원 이하인 100원 단위 정수. 범위 또는 단위가 맞지 않으면 `VALIDATION_FAILED`(400).
 - `orderId`: 서버가 `chg_` + 소문자 UUID v4 형식으로 생성한다. DB의 숫자 PK와 별도이며 UNIQUE 제약을 갖는다.
 - 성공: 201, `data` = `{ "orderId": "chg_550e8400-e29b-41d4-a716-446655440000", "amount": 1000, "status": "PENDING" }`.
+
+### 5-0-1. PG 크레딧 충전 승인 — `POST /credits/charge-orders/confirm`
+
+- 인증 및 `Idempotency-Key` 헤더가 필요하다.
+- 요청 바디: `{ "paymentKey": "...", "orderId": "chg_...", "amount": 1000 }`.
+- 처리 구조: DB 1에서 소유권·회원 `ACTIVE`를 먼저 확인하고 금액·상태·멱등키를 검증한 뒤 `PENDING → CONFIRMING` 조건부 전이 → 트랜잭션 밖 PG 승인 → DB 2에서 `CONFIRMING → PAID`, `TOP_UP` 원장 기록, 잔액 증가를 한 트랜잭션으로 처리한다.
+- `Idempotency-Key`는 같은 회원의 충전 주문 하나에만 사용할 수 있다. 다른 주문에 재사용하면 PG 호출 전에 `IDEMPOTENCY_KEY_REUSED`(409)로 거절한다. 키는 시도 1회용이므로 주문이 `FAILED`가 되어도 해제하지 않으며, 새 결제 시도는 새 주문과 새 키를 사용한다.
+- 성공 또는 같은 `paymentKey`의 이미 완료된 주문: 200, `data.status = "PAID"`.
+- PG 결과를 알 수 없거나 이미 `CONFIRMING`인 주문: 202, `data.status = "CONFIRMING"`. PG를 다시 호출하지 않는다.
+- 금액 불일치는 소유권과 회원 `ACTIVE` 검사를 통과한 요청에 한해 `CHARGE_AMOUNT_MISMATCH` 감사 로그를 남긴다. 이후 멱등키 재사용과 겹쳐도 기록하며, 단독이면 `PENDING`을 유지하고 `CHARGE_ORDER_AMOUNT_MISMATCH`(400)를 반환한다. 비소유 요청은 403으로 거절하고 피해자 주문 대상 감사 로그를 만들지 않는다.
+- 승인 요청 시 회원이 `ACTIVE`가 아니면 `PENDING` 유지, PG 미호출, `ACCOUNT_INACTIVE`(403).
+- PG 승인은 확인됐지만 DB 2가 실패하면 원인을 로그로 남기고 `CONFIRMING`을 유지한 채 202를 반환한다. 복구 스케줄러가 후속 정리한다.
+- 오류: `IDEMPOTENCY_KEY_REQUIRED`(400), `CHARGE_ORDER_AMOUNT_MISMATCH`(400), `AUTHENTICATION_REQUIRED`(401), `FORBIDDEN_NOT_OWNER`(403), `ACCOUNT_INACTIVE`(403), `CHARGE_ORDER_NOT_FOUND`(404), `CHARGE_ORDER_STATE_CONFLICT`(409), `IDEMPOTENCY_KEY_REUSED`(409), `PAYMENT_DECLINED`(422), `PG_CONFIRMATION_ERROR`(500).
 
 > **프론트 예약 흐름 요약**: ① `POST /reservations`로 HOLD 생성(201) → 응답의 `reservationId`, `spaceVersion`, `holdExpiresAt` 보관 → ② 10분 안에 `POST /reservations/{id}/pay`(헤더 `Idempotency-Key`, 바디 `spaceVersion`)로 확정. 한 번의 호출로 결제까지 끝나지 않는다. 응답에 `payment` 객체는 없다.
 

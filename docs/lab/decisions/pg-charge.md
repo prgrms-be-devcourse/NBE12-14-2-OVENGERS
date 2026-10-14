@@ -39,12 +39,35 @@
 1. `POST /credits/charge-orders` — 서버가 **허용한 충전 금액**(최소·최대·100원 단위 규칙)을 검증하고, `orderId`와 금액을 만들어 `charge_order`(`PENDING`)에 저장한다.
 2. 프론트가 클라이언트 키로 SDK의 **결제 요청 메서드**를 호출해 결제창을 연다(`orderId`, `successUrl`, `failUrl` 전달). 인증이 끝나면 성공 URL로 리다이렉트되고 쿼리에 `paymentKey`, `orderId`, `amount`(와 `status`)가 붙는다. **프론트는 승인하지 않고 우리 서버의 승인 API만 호출한다.**
 3. `POST /credits/charge-orders/confirm` (`Idempotency-Key` 필수) — 짧은 DB → PG 통신 → 짧은 DB의 3단계다.
-   - **DB 1 (짧은 트랜잭션):** 본인 주문인지, `PENDING`인지, 요청 금액이 저장 금액과 같은지 확인하고, `PENDING → CONFIRMING`을 **조건부 UPDATE**로 바꾼다(동시에 와도 한 요청만 통과). PG에 보낼 **멱등키**를 만들어 요청 전에 저장한다.
+   - **DB 1 (짧은 트랜잭션):** 본인 주문인지와 회원이 `ACTIVE`인지 먼저 확인한다. 두 검사를 통과한 요청의 금액이 저장 금액과 다르면 감사 로그를 남기고, 이 기록은 이후 멱등키 재사용 거절과 겹쳐도 유지한다. 그 뒤 `PENDING` 상태와 클라이언트 `Idempotency-Key` 재사용 여부를 확인한다. 같은 회원의 다른 주문에 이미 사용된 키면 409 `IDEMPOTENCY_KEY_REUSED`로 거절한다. 검증을 통과하면 `PENDING → CONFIRMING`을 **조건부 UPDATE**로 바꾸고(동시에 와도 한 요청만 통과), 클라이언트 멱등키와 PG에 보낼 **멱등키**를 PG 호출 전에 저장한다.
    - **PG 승인 호출 (트랜잭션 밖):** 재시도할 때는 같은 멱등키를 쓴다.
    - **DB 2 (짧은 트랜잭션):** 승인이 확인되면 한 트랜잭션에서 `CONFIRMING → PAID`, `credit_transaction`에 `TOP_UP` 행, 잔액 증가.
    - PG가 명확히 거절하면 `FAILED`. 타임아웃·5xx면 `CONFIRMING`을 유지하고 **새 결제를 만들지 않는다**.
 4. **복구 스케줄러:** 오래 `CONFIRMING`인 주문을 PG에 조회해 승인됐으면 DB 2와 같은 경로로 반영하고, 실패·만료면 `FAILED`로 바꾼다. 여전히 모르면 간격을 두고 다시 확인한다. (`ReservationCompletionScheduler`의 `processEach` 건별 트랜잭션 패턴 재사용)
 5. **웹훅은 보조 수단이다.** 이벤트는 `PAYMENT_STATUS_CHANGED`다. 로컬에서 수신할 수 있음을 확인했다(2026-10-06). 본문의 성공 값을 믿지 않고 PG에 조회한 결과로만 DB 2 경로를 호출한다. 이미 처리된 주문이면 무시한다(중복 수신). **10초 안에 200을 응답해야 하므로**, 수신 즉시 기록하고 200을 주고 처리는 따로 한다. 실패 시 PG가 최대 7회 재전송하며(약 3일 19시간) 같은 알림이 중복·지연될 수 있다. 사용자가 결제창을 닫는 것만으로는 웹훅이 오지 않으므로 웹훅에 의존하지 않고 4번이 기본이다.
+
+### 승인 API 응답 정책 (2026-10-13 확정, 2026-10-14 보완)
+
+| 상황 | 주문 상태 | HTTP 응답 |
+| --- | --- | --- |
+| 요청 금액이 저장 금액과 다름 | 소유권과 회원 `ACTIVE` 검사를 통과한 요청만 기존 `audit_log` 방식으로 위변조 의심 기록을 남김. 이후 멱등키 재사용 거절과 겹쳐도 기록하며, 단독이면 `PENDING` 유지·PG 미호출 | 400 `CHARGE_ORDER_AMOUNT_MISMATCH` 또는 함께 발생한 멱등키 거절 코드 |
+| 승인 요청 시 회원이 `ACTIVE`가 아님 | `PENDING` 유지. DB 1에서 거절하고 PG는 호출하지 않음 | 403 `ACCOUNT_INACTIVE` |
+| 같은 회원이 `Idempotency-Key`를 다른 주문에 재사용 | 대상 주문은 `PENDING` 유지. DB 1에서 거절하고 PG는 호출하지 않음 | 409 `IDEMPOTENCY_KEY_REUSED` |
+| 이미 `PAID`이고 요청 `paymentKey`가 저장 값과 같음 | `PAID` 유지 | 200 `PAID` (성공 페이지 새로고침 허용) |
+| 이미 `CONFIRMING` | `CONFIRMING` 유지. PG 재호출 없음 | 202 `CONFIRMING` |
+| 그 밖의 `PENDING` 아닌 상태 | 상태 유지 | 409 `CHARGE_ORDER_STATE_CONFLICT` |
+| PG 사용자 측 거절(카드 거절·한도 초과 등) | `FAILED` | 422 `PAYMENT_DECLINED` |
+| PG `ALREADY_PROCESSED_PAYMENT` | 실패로 단정하지 않고 PG 결제를 조회. 조회 결과가 승인 상태면 DB 2 경로로 `PAID` 반영 | 조회 결과에 따라 200 `PAID` 또는 202 `CONFIRMING` |
+| PG 인증 키·요청 설정 등 우리 측 문제 | `CONFIRMING` 유지 | 500 |
+| PG 타임아웃·5xx 등 결과 모름 | `CONFIRMING` 유지 | 202 `CONFIRMING` |
+| PG 승인은 확인됐지만 DB 2가 실패 | `CONFIRMING` 유지. `FAILED`로 바꾸지 않고 실패 원인을 로그로 남긴 뒤 복구 스케줄러가 정리 | 202 `CONFIRMING` |
+| 결과 모름 뒤 같은 `Idempotency-Key` 재요청 | 저장된 첫 HTTP 응답을 재생하지 않는다. PG를 다시 호출하지 않고 현재 주문 상태를 조회해 응답 | 현재 상태가 `CONFIRMING`이면 202, 이후 복구되어 `PAID`면 200 |
+| 주문 없음 | 해당 없음 | 404 `CHARGE_ORDER_NOT_FOUND` |
+| 본인 주문 아님 | 상태 유지 | 403 `FORBIDDEN_NOT_OWNER` |
+
+클라이언트 `Idempotency-Key`는 충전 시도 1회용이다. `FAILED` 전이에서도 `client_idempotency_key`를 지우지 않으며, 사용자는 새 충전 주문과 새 멱등키로 다시 시도한다. 실패한 시도의 키까지 계속 점유해야 지연·중복 요청이 다른 결제로 해석되는 일을 막을 수 있다.
+
+PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.tosspayments.com/reference/error-codes)와 [테스트 환경에서 에러 재현하기](https://docs.tosspayments.com/guides/v2/get-started/environment#테스트-환경에서-에러-재현하기)를 구현 시점에 다시 확인한다. 문서에 없는 코드나 분류가 불명확한 응답은 명확한 거절로 간주하지 않고 `CONFIRMING`을 유지한다.
 
 ## 승인 결과 분류 (공식 문서 확인, 2026-10-06)
 
@@ -54,10 +77,11 @@
 | --- | --- |
 | 200, 결제 상태 `DONE` | DB 2 경로로 `PAID` |
 | 400 `ALREADY_PROCESSED_PAYMENT` | 실패가 아니다. 조회해서 `DONE`이면 `PAID`(이전 요청이 이미 성공한 경우) |
-| 400 `ALREADY_PROCESSING_REQUEST`, 400 `PROVIDER_ERROR` | `CONFIRMING` 유지, 같은 멱등키로 재시도하거나 조회 |
-| 500 계열(`FAILED_PAYMENT_INTERNAL_SYSTEM_PROCESSING`, `FAILED_INTERNAL_SYSTEM_PROCESSING`, `FAILED_CARD_COMPANY_RESPONSE`, `UNKNOWN_PAYMENT_ERROR`), 타임아웃, 네트워크 오류 | `CONFIRMING` 유지, 조회로 확정 (메시지가 "결제 실패"여도 500이면 단정하지 않는다) |
-| 명확한 거절: `INVALID_REJECT_CARD`, `REJECT_CARD_PAYMENT`, `REJECT_CARD_COMPANY`, `REJECT_ACCOUNT_PAYMENT`, `INVALID_STOPPED_CARD`, `INVALID_CARD_NUMBER`, `INVALID_CARD_EXPIRATION`, `INVALID_CARD_LOST_OR_STOLEN`, `INVALID_PASSWORD`, `EXCEED_MAX_AUTH_COUNT`, `EXCEED_MAX_*`(한도 초과 계열), `BELOW_MINIMUM_AMOUNT`, `FDS_ERROR`, `NOT_FOUND_PAYMENT_SESSION`(결제 시간 만료) | `FAILED` (사용자가 다시 결제하려면 새 주문) |
-| 우리 쪽 설정·요청 오류: `INVALID_API_KEY`, `UNAUTHORIZED_KEY`(401), `INVALID_CLIENT_KEY`, `INCORRECT_BASIC_AUTH_FORMAT`(`:` 누락, 문서에 따라 401 또는 403), `FORBIDDEN_REQUEST`, `INVALID_REQUEST` | 승인이 실행되지 않았을 가능성이 높지만 단정하지 않는다. `CONFIRMING` 유지, 오류 로그로 남기고 조회로 정리 |
+| 400 `ALREADY_PROCESSING_REQUEST` | `CONFIRMING` 유지, PG 재호출 없이 조회로 확정 |
+| 500 계열(`FAILED_PAYMENT_INTERNAL_SYSTEM_PROCESSING`, `FAILED_INTERNAL_SYSTEM_PROCESSING`, `COMMON_ERROR`, `UNKNOWN_ERROR`), 타임아웃, 네트워크 오류 | `CONFIRMING` 유지, 조회로 확정 (메시지가 "결제 실패"여도 500이면 단정하지 않는다) |
+| 명확한 사용자 측 거절: `REJECT_CARD_PAYMENT`, `INVALID_REJECT_CARD`, `REJECT_CARD_COMPANY`, `REJECT_ACCOUNT_PAYMENT`, `INVALID_STOPPED_CARD`, `INVALID_CARD_NUMBER`, `INVALID_CARD_EXPIRATION`, `INVALID_CARD_LOST_OR_STOLEN`, `INVALID_PASSWORD`, `EXCEED_MAX_AUTH_COUNT`, `EXCEED_MAX_AMOUNT`, `EXCEED_MAX_DAILY_PAYMENT_COUNT`, `EXCEED_MAX_PAYMENT_AMOUNT`, `BELOW_MINIMUM_AMOUNT`, `NOT_FOUND_PAYMENT_SESSION`, `PAY_PROCESS_ABORTED`, `PAY_PROCESS_CANCELED` | `FAILED` (사용자가 다시 결제하려면 새 주문) |
+| 우리 쪽 설정·요청 오류: `INVALID_API_KEY`, `UNAUTHORIZED_KEY`, `INVALID_CLIENT_KEY`, `API_KEY_ACCESS_DENIED`, `FORBIDDEN_REQUEST`, `INVALID_REQUEST`, `INVALID_PAYMENT_KEY` | `CONFIRMING` 유지, 500을 반환하고 운영 오류로 확인 |
+| 위 목록에 없는 코드 | 명확한 거절로 추측하지 않고 `CONFIRMING` 유지 |
 
 조회 결과의 결제 상태 매핑:
 
@@ -67,6 +91,8 @@
 | `ABORTED`(승인 실패), `EXPIRED`(30분 경과) | `FAILED` |
 | `READY`, `IN_PROGRESS` | `CONFIRMING` 유지, 간격을 두고 재확인 |
 | `CANCELED`, `PARTIAL_CANCELED`, `WAITING_FOR_DEPOSIT` | 이번 범위에서 생기지 않아야 하는 상태. 관리자 확인 대상으로 표시 |
+
+2단계에서 `ALREADY_PROCESSED_PAYMENT` 직후 조회 결과가 `FAILED` 또는 `UNKNOWN`이면 로컬 주문을 `FAILED`로 확정하지 않고 `CONFIRMING`으로 유지한다. PG 조회 상태 전체 매핑과 최종 상태 정리는 4단계 복구 스케줄러에서 처리한다.
 
 구현 규칙:
 
@@ -139,4 +165,95 @@
 
 ## 검증 결과
 
-(구현 후 작성)
+### 2단계 — 승인 API (2026-10-14)
+
+- `POST /api/v1/credits/charge-orders/confirm`과 `PgClient` 경계를 추가했다. DB 1과 DB 2는 각각 별도 `@Transactional` 서비스 메서드이며, 둘을 호출하는 승인 오케스트레이터에는 트랜잭션을 두지 않았다.
+- 테스트 전용 `FakePgClient`가 승인·명확한 거절·결과 모름과 호출 지연을 선택할 수 있다. Fake 내부에서 `TransactionSynchronizationManager.isActualTransactionActive()`를 기록하는 MySQL 통합 테스트로 승인 및 조회 호출 모두 트랜잭션 밖(`false`)임을 확인했다.
+- 같은 주문의 동시 승인 테스트는 실제 MySQL에서 고정 스레드 2개를 만들고, 두 스레드가 `ready` 래치에 도착한 뒤 `start` 래치를 동시에 해제한다. Fake PG를 400ms 지연시켜 두 번째 요청이 첫 승인 호출 중 DB 1을 통과하도록 했고, PG 호출 1회·`PAID` 응답 1건·`CONFIRMING` 응답 1건·TOP_UP 1건을 확인했다.
+- 금액 불일치는 `PENDING`을 유지하고 `audit_logs`에 `CHARGE_AMOUNT_MISMATCH`/`CHARGE_ORDER` 기록을 커밋한 다음 400을 반환한다.
+- 공식 문서 출처: 토스페이먼츠 [API 에러 코드](https://docs.tosspayments.com/reference/error-codes), [테스트 환경에서 에러 재현하기](https://docs.tosspayments.com/guides/v2/get-started/environment#테스트-환경에서-에러-재현하기), [LLM Quick Reference](https://docs.tosspayments.com/guides/v2/get-started/llms-quick-reference). 승인 요청은 `POST /v1/payments/confirm`, 본문은 `paymentKey`·`orderId`·`amount`, PG 멱등키는 `Idempotency-Key` 헤더라는 계약을 기준으로 했다.
+- 전체 테스트: `./gradlew test --rerun-tasks` 실행 결과 522개 통과, 실패·오류·건너뜀 0개.
+
+## 구현 단계
+
+### 공통 규칙
+
+- `AGENTS.md`와 기존 코드 컨벤션(패키지 구조, 언어, 테스트 스타일)을 먼저 확인하고 따른다.
+- 토스 API, 필드명, 헤더, 에러 코드, 결제 SDK 메서드는 기억으로 쓰지 않고 `tosspayments-integration-guide` MCP로 확인한 뒤 사용한다. 확인한 공식 문서 출처를 단계 보고에 적는다.
+- 설계 문서와 공식 문서가 다르거나 설계에 빠진 결정이 있으면 추측해서 구현하지 않고 멈춰서 사용자에게 묻는다.
+- 각 단계는 테스트를 먼저 작성하고 실패를 확인한 뒤 구현한다.
+- 단계와 관련 없는 코드는 건드리지 않고 리팩터링하지 않는다.
+- 키 값은 코드와 커밋에 넣지 않는다. `.env`와 환경변수로만 받고 `.env.example`에는 키 이름만 둔다.
+- CI 테스트는 `FakePgClient`만 사용하며 실제 토스 호출을 넣지 않는다.
+
+### 진행 및 리뷰 기준
+
+- 한 번에 한 단계만 구현하고, 사용자가 "다음"이라고 하기 전에는 다음 단계로 넘어가지 않는다.
+- 단계가 끝나면 커밋하지 않고 변경 파일, 추가 테스트와 검증 내용, 테스트 실행 결과, 리뷰할 설계 판단 2~3개를 보고한다. 단계 보고 전문은 `docs/lab/notes/pg-step-{번호}.md`에 저장한다.
+- 구현자가 수정 사항을 반영한 뒤 검증자가 재리뷰 1회를 수행한다.
+- P2 항목은 구현 범위에 섞지 않고 `docs/lab/notes/pg-backlog.md`에 항목별로 기록한다.
+- 단, PG 승인은 됐는데 크레딧이 반영되지 않거나 주문이 복구 불가 상태로 남을 수 있는 문제, 또는 감사 로그 같은 보안 기록이 사라질 수 있는 문제는 P2라도 현재 단계에서 처리한다.
+- 커밋 전에 커밋별 파일 목록을 사용자에게 보여 주고 확인을 받는다.
+
+### 1단계 — 충전 주문 생성
+
+**상태: 완료**
+
+- `POST /api/v1/credits/charge-orders`로 `charge_order(PENDING)`를 저장한다.
+- 금액 경계값 `0`, 음수, `999`, `1,000`, `1,001`, `1,100`, `100,000`, `100,100`을 테스트한다.
+- `orderId`는 `chg_` + 소문자 UUID v4이며, 숫자 PK와 별도 컬럼에 두고 UNIQUE 제약을 건다.
+
+### 2단계 — 승인 API와 PG 추상화
+
+**상태: 완료**
+
+- `PgClient` 인터페이스와 `FakePgClient`를 추가한다.
+- `POST /api/v1/credits/charge-orders/confirm`은 `Idempotency-Key` 헤더를 필수로 받고, 본문으로 `paymentKey`, `orderId`, `amount`를 받는다.
+- DB 1 → 트랜잭션 밖 PG 승인 호출 → DB 2의 3단계 구조로 처리한다.
+- 다음을 테스트한다.
+  - 본인 주문이 아니면 거절하고 상태를 바꾸지 않는다.
+  - 요청 금액이 저장 금액과 다르면 거절하고 PG를 호출하지 않는다.
+  - `PENDING`이 아닌 주문을 응답 정책에 따라 처리한다.
+  - 같은 주문의 동시 승인 요청 2건 중 1건만 PG 호출과 승인을 통과한다.
+  - 같은 `Idempotency-Key` 재요청으로 크레딧이 중복 증가하지 않는다.
+  - PG의 명확한 거절은 `FAILED`로 바꾸고 크레딧을 증가시키지 않는다.
+  - PG 타임아웃·5xx 등 결과 모름은 `CONFIRMING`을 유지하고 크레딧을 증가시키거나 새 결제 시도를 만들지 않는다.
+  - 승인 성공은 `PAID` 전이, `TOP_UP` 기록, 잔액 증가를 한 트랜잭션에서 처리한다.
+  - 모든 경우에 `SUM(credit_transaction.amount) == member.balance`를 유지한다.
+  - Fake 내부에서 `TransactionSynchronizationManager.isActualTransactionActive()`가 `false`인지 확인해 PG 호출이 트랜잭션 밖임을 증명한다.
+- 동시성 검증은 기존 Testcontainers MySQL 방식으로 수행한다.
+
+### 3단계 — 실제 토스 구현체
+
+**상태: 진행 전**
+
+- Spring `RestClient` 기반 실제 토스 구현체를 추가하고 연결·읽기 타임아웃과 PG `Idempotency-Key` 헤더를 설정한다.
+- 자동 테스트에서 실제 토스를 호출하지 않는다. 로컬 샌드박스 수동 검증 방법을 `.http` 파일로 남긴다.
+
+### 4단계 — 복구 스케줄러
+
+**상태: 진행 전**
+
+- 오래 `CONFIRMING`인 주문을 PG 조회 결과에 따라 `PAID` 또는 `FAILED`로 정리한다.
+- 기존 `ReservationCompletionScheduler`의 건별 트랜잭션 패턴을 재사용한다.
+- 조회 결과가 승인됨이면 `PAID`, 실패면 `FAILED`, 조회 실패나 결과 미확정이면 `CONFIRMING` 유지로 테스트한다.
+
+### 5단계 — 웹훅
+
+**상태: 진행 전**
+
+- `PAYMENT_STATUS_CHANGED`를 수신해 즉시 기록하고 200으로 응답하며, 실제 처리는 분리한다.
+- 웹훅 본문의 성공 여부를 신뢰하지 않고 PG 조회 결과로만 DB 2 경로를 호출한다.
+- 중복 수신과 이미 `PAID`인 주문을 무시하는 테스트를 추가한다.
+
+### 6단계 — 프론트 충전 화면과 예약 복귀 흐름
+
+**상태: 진행 전**
+
+- 금액 선택 → 서버 충전 주문 생성 → 결제 SDK 호출 → 결제 요청 순서로 진행한다. 성공·실패 URL 페이지에서는 서버 승인 API만 호출하고, 결제 금액은 서버가 반환한 값만 사용한다.
+- 최초 구현 프롬프트의 "결제위젯 렌더링"은 현재 확정된 결제창형 설계에 따라 결제창 SDK 호출로 구현한다.
+- 예약 결제 확정에서 422 `INSUFFICIENT_BALANCE`를 받으면 "크레딧이 부족합니다. 충전하시겠어요?" 알림창을 표시하고 `[결제하기]`, `[취소]` 버튼을 제공한다.
+- 알림창에 HOLD 남은 시간을 보여 준다. HOLD가 만료되면 다시 예약하라고 안내하며 선점 시간을 연장하지 않는다.
+- 충전 금액 기본값은 부족분을 100원 단위로 올린 값으로 하되 최소 1,000원으로 한다. 허용 여부의 최종 검증은 서버가 수행한다.
+- 충전 후 돌아갈 `returnTo`는 내부 경로만 허용하도록 검증해 오픈 리다이렉트를 방지한다.
+- 충전이 끝나도 예약 결제를 자동 실행하지 않는다. 사용자가 예약 화면에서 결제 버튼을 다시 누른다.

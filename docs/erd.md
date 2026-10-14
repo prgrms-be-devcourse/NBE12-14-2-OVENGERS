@@ -13,8 +13,8 @@
 | `audit_logs` | 김재철 | id, actor_member_id, action, target_type, target_id, reason, before_value, after_value, created_at | 관리 작업(공간 등록/수정, 회원 정지/복구, 강제취소, 크레딧 지급) 기록. 인덱스: `(target_type, target_id)`, V9 `idx_audit_logs_created_id (created_at, id)` |
 | `reservation` | 이태호 | id, member_id, space_id, start_time, end_time, status, price_per_slot_snapshot, total_amount, **hold_expires_at**, **checked_in_at**, **checked_out_at**, cancelled_at, created_at | status: `HELD`/`EXPIRED`/`CONFIRMED`/`IN_USE`/`COMPLETED`/`CANCELLED`/`NO_SHOW` (7개). 슬롯 확보 시 `HELD` 생성(`hold_expires_at`=+10분) → Mock 결제 성공 시 `CONFIRMED` (2단계 플로우). ~~completed_at~~은 제거되어 `checked_out_at`으로 통합(체크아웃 시각 = 완료 시각) |
 | `reservation_slot` | 이태호 | id, reservation_id, space_id, slot_start | 예약이 확보한 30분 단위 시간. **살아있는 점유일 때만 존재**(취소/노쇼/만료 시 하드 삭제). `UNIQUE(space_id, slot_start)`로 중복 점유 방지 |
-| `credit_transaction` | 초기 분담: 미정 (구 `payment` 백한비 영역, V6 파일상 '담당: 미정' 기록; 실제 작성·현재 유지보수 담당 미확인) | id, member_id, amount, type, reservation_id, balance_after, reason, created_at | **크레딧 원장(단일 진실)** — `payment` 테이블을 대체. `amount`는 부호 있음(지급/환급 +, 차감/위약금 -)이며 `SUM(amount) = member.balance`. `type`: SIGNUP_GRANT / ADMIN_GRANT / RESERVATION_CHARGE / REFUND / PENALTY. `reservation_id`는 지급 건일 경우 NULL. `reason`은 ADMIN_GRANT만 필수. `INDEX(member_id, created_at)` |
-| `charge_order` | lab 확장 | id, order_id, member_id, amount, status, created_at | ACTIVE 회원의 PG 크레딧 충전 시도. `id`는 숫자 PK, `order_id`는 `chg_` + 소문자 UUID v4 형식의 별도 UNIQUE 컬럼. 생성 시 상태는 `PENDING` |
+| `credit_transaction` | 초기 분담: 미정 (구 `payment` 백한비 영역, V6 파일상 '담당: 미정' 기록; 실제 작성·현재 유지보수 담당 미확인) | id, member_id, amount, type, reservation_id, charge_order_id, balance_after, reason, created_at | **크레딧 원장(단일 진실)** — `payment` 테이블을 대체. `amount`는 부호 있음(지급/환급 +, 차감/위약금 -)이며 `SUM(amount) = member.balance`. `type`: SIGNUP_GRANT / ADMIN_GRANT / RESERVATION_CHARGE / REFUND / PENALTY / TOP_UP. PG 충전은 `charge_order_id` UNIQUE로 주문당 원장 1건을 강제한다. `INDEX(member_id, created_at)` |
+| `charge_order` | lab 확장 | id, order_id, member_id, amount, status, payment_key, client_idempotency_key, pg_idempotency_key, failure_code, created_at, updated_at | ACTIVE 회원의 PG 크레딧 충전 시도. `id`는 숫자 PK이며 `order_id`, `payment_key`, `pg_idempotency_key`는 각각 UNIQUE. `(member_id, client_idempotency_key)` UNIQUE로 같은 회원이 승인 멱등키를 다른 주문에 재사용하지 못하게 한다. 생성 시 `PENDING`, 승인 시 `CONFIRMING → PAID` 또는 명확한 거절이면 `FAILED` |
 | `reservation_status_history` | 초기 분담: 백한비 / 실제 작성: 이태호 (V3 파일 비고에 '백한비님 대신 이태호가 작성' 명시) | id, reservation_id, changed_by_member_id, from_status, to_status, reason, changed_at | 상태 변경 이력. 최초 생성의 from_status는 NULL, 시스템 작업은 changed_by_member_id NULL 허용. 성공한 전이만 기록 |
 | `door_access_token` | 박창현 | id, reservation_id, token_hash, issued_at, revoked_at, revoke_reason, active_reservation_id | `active_reservation_id`는 `revoked_at IS NULL`일 때만 값을 갖는 생성 컬럼 + `UNIQUE` → 예약당 활성 토큰 최대 1개를 DB 레벨로 강제 (변경 없음, §11 "유지") |
 | `door_access_log` | 박창현 | id, actor_member_id, reservation_id, requested_space_id, result, reason_code, attempted_at | 출입 검증 결과. result: ALLOW / DENY. 식별 불가 대상은 NULL 허용. 세 컬럼 모두 DB 레벨 FK (`fk_door_access_log_actor_member`, `fk_door_access_log_requested_space`, `fk_door_access_log_reservation`) |
@@ -30,6 +30,7 @@ Member 1 --- N Reservation (DB FK: member_id)
 Member 1 --- N RefreshToken (DB FK: member_id)
 Member 1 --- N CreditTransaction (DB FK: member_id)
 Member 1 --- N ChargeOrder (DB FK: member_id)
+ChargeOrder 1 --- 0..1 CreditTransaction (DB FK: charge_order_id, UNIQUE)
 Member 1 --- N ReservationStatusHistory : 변경 수행자 (DB FK: changed_by_member_id, NULL 허용)
 Member 0..1 --- N DoorAccessLog : 출입 요청자 (DB FK: actor_member_id, V5 fk_door_access_log_actor_member, NULL 허용)
 Member 1 --- N AuditLog : 관리 작업 수행자 (논리적 참조: V2 actor_member_id에는 DB FK 제약 없음)
@@ -54,6 +55,7 @@ erDiagram
     member ||--o{ refresh_token : owns
     member ||--o{ credit_transaction : grants
     member ||--o{ charge_order : creates
+    charge_order ||--o| credit_transaction : creates_top_up
     member ||--o{ reservation_status_history : changes
     member o|--o{ door_access_log : attempts
     member ||--o{ audit_logs : performs_logical
@@ -135,7 +137,7 @@ CHECK (status <> 'ANSWERED' OR (answer_content IS NOT NULL AND answered_at IS NO
 | 추가 | `idempotency_key` 테이블 | ERD 반영 + `V7__create_idempotency_key_table.sql`로 결제 멱등성 보장(성공 응답 캐싱) 추가 |
 | 추가 | `idx_audit_logs_created_id (created_at, id)` | `V9__add_audit_logs_created_at_id_index.sql`로 감사 로그 정렬·날짜 필터 최적화 복합 인덱스 추가 |
 | 추가 | `inquiries` 테이블 | ERD 반영 + `V10__create_inquiry_table.sql`로 회원 Q&A 및 관리자 답변 테이블 추가 |
-| 추가 | `charge_order` 테이블 | ERD 반영 + `V13__create_charge_order_table.sql`로 PG 크레딧 충전 주문의 PK, UNIQUE `order_id`, 회원, 금액, 상태, 생성 시각 추가 |
+| 추가 | `charge_order` 테이블 및 `credit_transaction.charge_order_id` | ERD 반영 + `V13__create_charge_order_table.sql`로 PG 충전 주문, UNIQUE `order_id`·`payment_key`·`pg_idempotency_key`, 회원별 UNIQUE `client_idempotency_key`, 상태 추적 컬럼과 주문당 TOP_UP 원장 1건을 보장하는 UNIQUE FK 추가 |
 
 ### 이번 반영에서 함께 발견/수정한 모순
 
