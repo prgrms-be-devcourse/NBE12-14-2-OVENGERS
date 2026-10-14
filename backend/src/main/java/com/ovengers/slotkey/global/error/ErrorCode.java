@@ -52,6 +52,14 @@ public enum ErrorCode {
     IDEMPOTENCY_KEY_REQUIRED(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key 헤더가 필요합니다."),
     WITHDRAWAL_ACTIVE_RESERVATION(HttpStatus.CONFLICT, "WITHDRAWAL_ACTIVE_RESERVATION", "진행 중이거나 예정된 예약이 있어 탈퇴할 수 없습니다."),
 
+    // ── PG Credit Charge ───────────────────────────────
+    CHARGE_ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "CHARGE_ORDER_NOT_FOUND", "존재하지 않는 충전 주문입니다."),
+    CHARGE_ORDER_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "CHARGE_ORDER_AMOUNT_MISMATCH", "충전 주문 금액이 일치하지 않습니다."),
+    CHARGE_ORDER_STATE_CONFLICT(HttpStatus.CONFLICT, "CHARGE_ORDER_STATE_CONFLICT", "현재 충전 주문 상태에서는 승인할 수 없습니다."),
+    IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED", "다른 충전 주문에 사용한 Idempotency-Key입니다."),
+    PAYMENT_DECLINED(HttpStatus.UNPROCESSABLE_ENTITY, "PAYMENT_DECLINED", "결제가 거절되었습니다."),
+    PG_CONFIRMATION_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "PG_CONFIRMATION_ERROR", "PG 승인 요청 설정을 확인해주세요."),
+
     // ── Door Access ──────────────────────────────────────
     ACCESS_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "ACCESS_TOKEN_NOT_FOUND", "출입 토큰을 찾을 수 없습니다."),
     ACTIVE_ACCESS_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "ACTIVE_ACCESS_TOKEN_NOT_FOUND", "활성 출입 토큰을 찾을 수 없습니다."),

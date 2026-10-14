@@ -1,7 +1,11 @@
 package com.ovengers.slotkey.credit.controller;
 
 import com.ovengers.slotkey.credit.dto.request.ChargeOrderCreateRequest;
+import com.ovengers.slotkey.credit.dto.request.ChargeOrderConfirmRequest;
+import com.ovengers.slotkey.credit.dto.response.ChargeOrderConfirmResponse;
 import com.ovengers.slotkey.credit.dto.response.ChargeOrderResponse;
+import com.ovengers.slotkey.credit.entity.ChargeOrderStatus;
+import com.ovengers.slotkey.credit.service.ChargeOrderConfirmService;
 import com.ovengers.slotkey.credit.service.ChargeOrderService;
 import com.ovengers.slotkey.global.common.response.ApiResponse;
 import com.ovengers.slotkey.global.security.AuthPrincipal;
@@ -18,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "크레딧 충전", description = "PG 크레딧 충전 주문 API")
@@ -27,9 +32,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class ChargeOrderController {
 
     private final ChargeOrderService chargeOrderService;
+    private final ChargeOrderConfirmService chargeOrderConfirmService;
 
-    public ChargeOrderController(ChargeOrderService chargeOrderService) {
+    public ChargeOrderController(
+            ChargeOrderService chargeOrderService,
+            ChargeOrderConfirmService chargeOrderConfirmService
+    ) {
         this.chargeOrderService = chargeOrderService;
+        this.chargeOrderConfirmService = chargeOrderConfirmService;
     }
 
     @Operation(
@@ -70,5 +80,30 @@ public class ChargeOrderController {
         );
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "충전 주문 승인",
+            description = "저장된 주문 금액을 검증하고 PG 승인 후 크레딧을 충전합니다."
+    )
+    @PostMapping("/confirm")
+    public ResponseEntity<ApiResponse<ChargeOrderConfirmResponse>> confirm(
+            @Parameter(hidden = true)
+            @CurrentMember AuthPrincipal principal,
+            @Valid @RequestBody ChargeOrderConfirmRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false)
+            String idempotencyKey
+    ) {
+        ChargeOrderConfirmResponse response = chargeOrderConfirmService.confirm(
+                principal.memberId(),
+                request.paymentKey(),
+                request.orderId(),
+                request.amount(),
+                idempotencyKey
+        );
+        HttpStatus status = response.status() == ChargeOrderStatus.CONFIRMING
+                ? HttpStatus.ACCEPTED
+                : HttpStatus.OK;
+        return ResponseEntity.status(status).body(ApiResponse.success(response));
     }
 }

@@ -15,10 +15,16 @@ import java.time.LocalDateTime;
 @Entity
 @Table(
         name = "charge_order",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_charge_order_order_id",
-                columnNames = "order_id"
-        )
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_charge_order_order_id",
+                        columnNames = "order_id"
+                ),
+                @UniqueConstraint(
+                        name = "uk_charge_order_member_client_idempotency",
+                        columnNames = {"member_id", "client_idempotency_key"}
+                )
+        }
 )
 public class ChargeOrder {
 
@@ -39,8 +45,23 @@ public class ChargeOrder {
     @Column(nullable = false, length = 20)
     private ChargeOrderStatus status;
 
+    @Column(name = "payment_key", length = 200, unique = true)
+    private String paymentKey;
+
+    @Column(name = "client_idempotency_key", length = 100)
+    private String clientIdempotencyKey;
+
+    @Column(name = "pg_idempotency_key", length = 100, unique = true)
+    private String pgIdempotencyKey;
+
+    @Column(name = "failure_code", length = 100)
+    private String failureCode;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
 
     protected ChargeOrder() {
     }
@@ -57,6 +78,7 @@ public class ChargeOrder {
         this.amount = amount;
         this.status = status;
         this.createdAt = createdAt;
+        this.updatedAt = createdAt;
     }
 
     public static ChargeOrder createPending(
@@ -96,5 +118,37 @@ public class ChargeOrder {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public String getPaymentKey() {
+        return paymentKey;
+    }
+
+    public String getPgIdempotencyKey() {
+        return pgIdempotencyKey;
+    }
+
+    public String getClientIdempotencyKey() {
+        return clientIdempotencyKey;
+    }
+
+    public String getFailureCode() {
+        return failureCode;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void markPaid(LocalDateTime now) {
+        this.status = ChargeOrderStatus.PAID;
+        this.failureCode = null;
+        this.updatedAt = now;
+    }
+
+    public void markFailed(String failureCode, LocalDateTime now) {
+        this.status = ChargeOrderStatus.FAILED;
+        this.failureCode = failureCode;
+        this.updatedAt = now;
     }
 }
