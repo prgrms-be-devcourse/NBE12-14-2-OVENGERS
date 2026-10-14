@@ -64,11 +64,32 @@ export interface SignupRequest {
   password: string;
   passwordConfirm: string;
   nickname: string;
+  grant: string;
 }
 
 export interface LoginRequest {
   email: string;
   password: string;
+}
+
+export type VerificationPurpose = 'SIGNUP' | 'PASSWORD_RESET';
+
+export interface VerificationIssueResponse {
+  challengeId: number;
+  expiresAt: string;
+  resendAvailableAt: string;
+}
+
+export interface VerificationCheckResponse {
+  grant: string;
+  expiresAt: string;
+}
+
+export interface PasswordResetRequest {
+  email: string;
+  grant: string;
+  password: string;
+  passwordConfirm: string;
 }
 
 /* ------------------------------------------------------------------ 공간 */

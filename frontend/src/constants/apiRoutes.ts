@@ -15,6 +15,9 @@ export const API_ROUTES = {
     refresh: '/auth/refresh',
     logout: '/auth/logout',
     withdraw: '/auth/withdraw',
+    verificationIssue: '/auth/verification/issue',
+    verificationCheck: '/auth/verification/check',
+    passwordReset: '/auth/password-reset',
   },
   members: {
     me: '/members/me',

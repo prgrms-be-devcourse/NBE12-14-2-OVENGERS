@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -10,22 +10,26 @@ import { ROUTES } from '../../constants/routePaths';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
+import EmailVerificationFields from '../../components/auth/EmailVerificationFields';
 
 export default function SignupPage() {
   const { signup } = useAuth();
   const router = useRouter();
   const [form, setForm] = useState({ email: '', password: '', passwordConfirm: '', nickname: '' });
   const [validation, setValidation] = useState<
-    Partial<Record<'email' | 'password' | 'passwordConfirm' | 'nickname', string>>
+    Partial<Record<'email' | 'password' | 'passwordConfirm' | 'nickname' | 'grant', string>>
   >({});
+  const [grant, setGrant] = useState('');
   const { execute, loading, error } = useAction(signup);
+  const handleGrantChange = useCallback((nextGrant: string) => setGrant(nextGrant), []);
 
   const validate = () => {
-    const next: Partial<Record<'email' | 'password' | 'passwordConfirm' | 'nickname', string>> = {};
+    const next: Partial<Record<'email' | 'password' | 'passwordConfirm' | 'nickname' | 'grant', string>> = {};
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) next.email = '이메일 형식을 확인해 주세요.';
     if (form.password.length < 8) next.password = '비밀번호는 8자 이상이어야 합니다.';
     if (form.password !== form.passwordConfirm) next.passwordConfirm = '비밀번호가 일치하지 않습니다.';
     if (!form.nickname.trim()) next.nickname = '닉네임을 입력해 주세요.';
+    if (!grant) next.grant = '이메일 인증을 완료해 주세요.';
     setValidation(next);
     return Object.keys(next).length === 0;
   };
@@ -39,6 +43,7 @@ export default function SignupPage() {
         password: form.password,
         passwordConfirm: form.passwordConfirm,
         nickname: form.nickname,
+        grant,
       });
       router.replace(ROUTES.spaces);
     } catch {
@@ -96,6 +101,13 @@ export default function SignupPage() {
           value={form.nickname}
           onChange={(event) => setForm({ ...form, nickname: event.target.value })}
         />
+
+        <EmailVerificationFields
+          email={form.email}
+          purpose="SIGNUP"
+          onGrantChange={handleGrantChange}
+        />
+        {validation.grant && <p className="form-error" role="alert">{validation.grant}</p>}
 
         <ErrorMessage error={error} />
 

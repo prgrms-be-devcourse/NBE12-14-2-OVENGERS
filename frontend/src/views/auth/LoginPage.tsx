@@ -44,6 +44,9 @@ export default function LoginPage() {
         {searchParams.get('withdrawn') === '1' && (
           <p role="status">회원탈퇴가 완료되었습니다. 이용해 주셔서 감사합니다.</p>
         )}
+        {searchParams.get('reset') === '1' && (
+          <p className="form-success" role="status">비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.</p>
+        )}
         <p>Slot Key 계정으로 로그인해 주세요.</p>
 
         <Input
@@ -68,6 +71,10 @@ export default function LoginPage() {
         <Button type="submit" variant="primary" wide loading={loading}>
           로그인
         </Button>
+
+        <p className="auth-recovery-link">
+          <Link href={ROUTES.passwordReset} className="soft-link">비밀번호를 잊으셨나요?</Link>
+        </p>
 
         <p className="note">
           아직 계정이 없으신가요? <Link href={ROUTES.signup} className="soft-link">회원가입</Link>

@@ -115,6 +115,15 @@ input[type=checkbox]{width:18px;height:18px;min-height:0;accent-color:var(--blue
 .auth-form h1{font-size:2rem}
 .auth-form p{font-size:.95rem}
 .auth-form .wide{margin-top:12px}
+.auth-recovery-link{margin:12px 0 0;text-align:right;font-size:.9rem}
+.verification-box{border:1px solid var(--line);border-radius:14px;padding:18px;margin:22px 0 4px}
+.verification-box legend{padding:0 8px;font-weight:600}
+.verification-box .form-help{margin:0 0 12px}
+.verification-row{display:flex;align-items:flex-end;gap:10px}
+.verification-row .field{flex:1;margin:0}
+.verification-row button{flex:none;margin-bottom:0}
+.verification-box>.small{margin-top:10px}
+.verification-success,.form-success{color:#19794c}
 .form-error{color:var(--red);font-size:.9rem;min-height:24px;margin:10px 0}
 .form-help{font-size:.8rem;color:var(--muted);margin-top:6px;font-weight:400}
 .demo-login{border-top:1px solid var(--line);margin-top:26px;padding-top:20px}
