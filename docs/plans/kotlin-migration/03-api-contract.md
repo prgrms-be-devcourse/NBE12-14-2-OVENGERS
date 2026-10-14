@@ -4,9 +4,9 @@
 
 ## 계약의 기준 파일
 
-- 공통 응답: [`ApiResponse`](../../backend/src/main/java/com/ovengers/slotkey/global/common/response/ApiResponse.java), [`PageResponse`](../../backend/src/main/java/com/ovengers/slotkey/global/common/response/PageResponse.java), [`GlobalExceptionHandler`](../../backend/src/main/java/com/ovengers/slotkey/global/error/GlobalExceptionHandler.java).
-- 바인딩·검증 예: [`SpaceCreateRequest`](../../backend/src/main/java/com/ovengers/slotkey/space/dto/request/SpaceCreateRequest.java), [`SpaceUpdateRequest`](../../backend/src/main/java/com/ovengers/slotkey/space/dto/request/SpaceUpdateRequest.java), [`AdminAuditLogSearchCondition`](../../backend/src/main/java/com/ovengers/slotkey/audit/dto/AdminAuditLogSearchCondition.java), [`ReservationSearchCondition`](../../backend/src/main/java/com/ovengers/slotkey/reservation/dto/request/ReservationSearchCondition.java).
-- 소비자와 명세: [`frontend/src/types/api.ts`](../../frontend/src/types/api.ts), [`docs/api-spec.md`](../../docs/api-spec.md), [`frontend/tests`](../../frontend/tests).
+- 공통 응답: [`ApiResponse`](../../../backend/src/main/java/com/ovengers/slotkey/global/common/response/ApiResponse.java), [`PageResponse`](../../../backend/src/main/java/com/ovengers/slotkey/global/common/response/PageResponse.java), [`GlobalExceptionHandler`](../../../backend/src/main/java/com/ovengers/slotkey/global/error/GlobalExceptionHandler.java).
+- 바인딩·검증 예: [`SpaceCreateRequest`](../../../backend/src/main/java/com/ovengers/slotkey/space/dto/request/SpaceCreateRequest.java), [`SpaceUpdateRequest`](../../../backend/src/main/java/com/ovengers/slotkey/space/dto/request/SpaceUpdateRequest.java), [`AdminAuditLogSearchCondition`](../../../backend/src/main/java/com/ovengers/slotkey/audit/dto/AdminAuditLogSearchCondition.java), [`ReservationSearchCondition`](../../../backend/src/main/java/com/ovengers/slotkey/reservation/dto/request/ReservationSearchCondition.java).
+- 소비자와 명세: [`frontend/src/types/api.ts`](../../../frontend/src/types/api.ts), [`docs/api/api-spec.md`](../../../docs/api/api-spec.md), [`frontend/tests`](../../../frontend/tests).
 
 ## 고정할 계약
 
@@ -20,11 +20,11 @@
 
 ## 실행 순서
 
-1. `docs/api-spec.md`와 `frontend/src/types/api.ts`에서 실제 사용 엔드포인트를 뽑아 **엔드포인트·요청 DTO·응답 DTO·프론트엔드 타입·테스트** 대응표를 만든다. 명세와 코드가 다르면 현재 HTTP 동작을 먼저 확인하고 차이를 기록한다.
+1. `docs/api/api-spec.md`와 `frontend/src/types/api.ts`에서 실제 사용 엔드포인트를 뽑아 **엔드포인트·요청 DTO·응답 DTO·프론트엔드 타입·테스트** 대응표를 만든다. 명세와 코드가 다르면 현재 HTTP 동작을 먼저 확인하고 차이를 기록한다.
 2. 기존 컨트롤러 테스트의 `MockMvc`에 대표 요청을 추가한다. 검증 오류에는 필드 누락과 명시적 `null`을 각각 넣는다. 동적 ID·시각은 입력을 고정하거나 형식과 의미를 검증해 취약한 전체 문자열 스냅샷을 피한다.
 3. Kotlin DTO 전환 시 생성자 인자의 nullable 여부와 기본값을 기존 입력 계약에 맞춘다. Bean Validation은 `@field:NotBlank`, 계산된 `is...` 검증은 필요에 따라 `@get:AssertTrue`처럼 실제 읽는 위치를 지정한다. `@JsonFormat`·OpenAPI 애너테이션도 직렬화/문서 결과로 확인한다.
 4. Java `record` 접근자 `name()`과 Kotlin 프로퍼티 getter의 JVM 호출 형태가 달라질 수 있으므로 Java 호출부를 함께 컴파일한다. 공개 JSON이 같아도 Java 소스 호환이 자동으로 유지되지는 않는다.
-5. 백엔드 변경마다 `cd frontend && node --test tests/*.test.cjs && npx tsc --noEmit`을 실행한다. 현재 [`backend-ci.yml`](../../.github/workflows/backend-ci.yml)의 `build`·`deploy` 어느 작업에도 프론트엔드 검증이 없으므로, 이 결과는 PR 기록에 별도로 남긴다. 계약이 바뀌면 백엔드 DTO·프론트엔드 타입·`docs/api-spec.md`를 같은 변경에서 갱신한다.
+5. 백엔드 변경마다 `cd frontend && node --test tests/*.test.cjs && npx tsc --noEmit`을 실행한다. 현재 [`backend-ci.yml`](../../../.github/workflows/backend-ci.yml)의 `build`·`deploy` 어느 작업에도 프론트엔드 검증이 없으므로, 이 결과는 PR 기록에 별도로 남긴다. 계약이 바뀌면 백엔드 DTO·프론트엔드 타입·`docs/api/api-spec.md`를 같은 변경에서 갱신한다.
 
 ## 완료 조건
 

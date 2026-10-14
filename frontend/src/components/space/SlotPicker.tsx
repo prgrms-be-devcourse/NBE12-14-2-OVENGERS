@@ -4,7 +4,7 @@ import { cx } from '../../utils/format';
 /**
  * 30분 슬롯 선택기.
  * 화면에서 예약 가능으로 보여도 확정은 서버가 판단합니다.
- * 조회 이후 다른 사용자가 먼저 예약할 수 있기 때문입니다(docs/requirements.md 2장).
+ * 조회 이후 다른 사용자가 먼저 예약할 수 있기 때문입니다(docs/product/requirements.md 2장).
  */
 export interface SlotPickerProps {
   slots: DecoratedSlot[];

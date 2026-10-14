@@ -32,15 +32,15 @@
 - **원인**: 여러 엔티티에 대한 비관적 락 획득 순서가 일치하지 않을 경우 DB 수준의 상호 대기가 발생할 수 있음.
 - **해결 및 예방책**:
   - 시스템 전반에 걸쳐 항상 **`Space` 잠금 획득 후 `Reservation` 잠금 획득**이라는 단방향 락 프로토콜을 강제합니다.
-  - 상세 내용은 [`docs/decisions/reservation-concurrency.md`](decisions/reservation-concurrency.md)를 참고합니다.
+  - 상세 내용은 [`docs/decisions/reservation-concurrency.md`](../decisions/reservation-concurrency.md)를 참고합니다.
 
 ### 2.3. 공간 대표 사진 업로드 크기 제한 (`MaxUploadSizeExceededException`)
 - **현상**: 관리자 공간 사진 업로드(`PUT /api/v1/admin/spaces/{spaceId}/image`) 시 5MB를 초과하는 파일을 첨부하면 요청이 거절됨.
 - **원인**: 백엔드 `application.yml` 설정(`spring.servlet.multipart.max-file-size: 5MB`, `max-request-size: 6MB`) 및 `ErrorCode.IMAGE_SIZE_EXCEEDED` 규약에 도달함.
 - **해결 및 처리**:
   - 프론트엔드(`frontend/src/utils/imageValidation.ts`)에서 `MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024`(5MB) 초과 파일 첨부를 사전 차단합니다.
-  - 백엔드 `GlobalExceptionHandler`에서 `MaxUploadSizeExceededException`을 포착하여 **413 Payload Too Large** (`IMAGE_SIZE_EXCEEDED`, "이미지 파일 크기는 최대 5MB까지 가능합니다.")로 규격화 응답합니다 ([`AdminSpaceImageMultipartLimitIntegrationTest`](../backend/src/test/java/com/ovengers/slotkey/space/controller/AdminSpaceImageMultipartLimitIntegrationTest.java) 검증 완료).
-  - 상세 내용은 [`docs/admin-space-image-upload.md`](admin-space-image-upload.md)를 참고합니다.
+  - 백엔드 `GlobalExceptionHandler`에서 `MaxUploadSizeExceededException`을 포착하여 **413 Payload Too Large** (`IMAGE_SIZE_EXCEEDED`, "이미지 파일 크기는 최대 5MB까지 가능합니다.")로 규격화 응답합니다 ([`AdminSpaceImageMultipartLimitIntegrationTest`](../../backend/src/test/java/com/ovengers/slotkey/space/controller/AdminSpaceImageMultipartLimitIntegrationTest.java) 검증 완료).
+  - 상세 내용은 [`docs/api/admin-space-image-upload.md`](../api/admin-space-image-upload.md)를 참고합니다.
 
 ### 2.4. 동일 `Idempotency-Key` 재요청 시 처리
 - **현상**: 네트워크 순단으로 클라이언트가 동일한 `Idempotency-Key`로 결제 요청을 재시도할 때 중복 결제 또는 에러 발생 우려.
@@ -48,7 +48,7 @@
 - **해결책**:
   - 이미 성공한 키로 재요청 인입 시 실제 결제 로직을 재수행하지 않고 보관된 200 성공 응답을 즉시 반환합니다.
   - 실패(예: 잔액 부족 422)한 키로 재요청 시에는 캐시가 없어 재시도가 정상 허용됩니다.
-  - 상세 내용은 [`docs/decisions/reservation-idempotency.md`](decisions/reservation-idempotency.md)를 참고합니다.
+  - 상세 내용은 [`docs/decisions/reservation-idempotency.md`](../decisions/reservation-idempotency.md)를 참고합니다.
 
 ### 2.5. 관리자 회원·문의 목록 조회 시 401 오류 및 강제 로그아웃 (인자 바인딩 및 ERROR 디스패치)
 - **현상**: 관리자 권한으로 정상 로그인하여 유효한 Bearer Access Token을 보유하고 있음에도 `/api/v1/admin/members` 및 `/api/v1/admin/inquiries` 요청 시 401 `AUTHENTICATION_REQUIRED`가 반환되고, 프론트엔드(`client.ts`)의 재시도 실패 후 강제 로그아웃되는 현상 발생.
@@ -71,8 +71,8 @@
 
 세부적인 실행 방법, 빌드 오류 및 환경 변수 설정에 관한 지침은 아래 문서를 참조하십시오:
 
-- 백엔드 실행 및 환경 변수 안내: [`backend/README.md`](../backend/README.md)
-- 프론트엔드 개발 서버 및 프록시 설정: [`frontend/README.md`](../frontend/README.md)
-- 데이터베이스 초기화 및 시드 데이터: [`data-setting/README.md`](../data-setting/README.md)
-- 테스트 실행 전략 및 소스 매핑: [`docs/test-strategy.md`](test-strategy.md)
-- 전체 테스트 실행 결과 집계: [`docs/test-results.md`](test-results.md)
+- 백엔드 실행 및 환경 변수 안내: [`backend/README.md`](../../backend/README.md)
+- 프론트엔드 개발 서버 및 프록시 설정: [`frontend/README.md`](../../frontend/README.md)
+- 데이터베이스 초기화 및 시드 데이터: [`data-setting/README.md`](../../data-setting/README.md)
+- 테스트 실행 전략 및 소스 매핑: [`docs/testing/test-strategy.md`](../testing/test-strategy.md)
+- 전체 테스트 실행 결과 집계: [`docs/testing/test-results.md`](../testing/test-results.md)

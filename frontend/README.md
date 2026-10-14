@@ -48,7 +48,7 @@ NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY=로컬에서_사용할_테스트_클라이�
 
 ## 배포 (AWS S3 + CloudFront)
 
-프로젝트 배포 아키텍처는 2026-09-22 AWS(EC2 + RDS + S3/CloudFront)로 확정되었습니다(`docs/system-architecture.md` 참고).
+프로젝트 배포 아키텍처는 2026-09-22 AWS(EC2 + RDS + S3/CloudFront)로 확정되었습니다(`docs/architecture/system-architecture.md` 참고).
 초기 프로토타입에서 검토되었던 Railway/Vercel은 채택하지 않습니다 (`vercel.json`은 초기 Vite/Vercel 전환 시 잔재 설정).
 
 - **정적 빌드**: S3 호스팅을 위해 `STATIC_EXPORT=true npm run build`를 실행하면 Next.js가 정적 파일(`out/`)을 생성합니다 (`output: 'export'`).
@@ -98,4 +98,4 @@ src
 - **출입 키 원문은 발급 응답에서 한 번만 내려옵니다.** 서버에는 해시만 저장되어 재조회할 수 없습니다.
 
 프론트엔드가 요구하는 결제 API와 경로 기준은
-[../docs/FRONTEND2_PAYMENT_API.md](../docs/FRONTEND2_PAYMENT_API.md)를 참고합니다.
+[../docs/api/FRONTEND2_PAYMENT_API.md](../docs/api/FRONTEND2_PAYMENT_API.md)를 참고합니다.

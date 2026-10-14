@@ -4,18 +4,18 @@
 
 ## 현재 근거와 수정 대상
 
-- [2026-09-24 테스트 기록](../../docs/test-results.md)은 57개 클래스·354개 테스트 통과를 보고한다. 새 실행 결과는 아직 아니다.
-- [테스트 전략](../../docs/test-strategy.md#9-현재-미구현-및-미검증-영역-gap-analysis)은 문의 API 전용 백엔드 테스트 부재를 명시한다.
+- [2026-09-24 테스트 기록](../../../docs/testing/test-results.md)은 57개 클래스·354개 테스트 통과를 보고한다. 새 실행 결과는 아직 아니다.
+- [테스트 전략](../../../docs/testing/test-strategy.md#9-현재-미구현-및-미검증-영역-gap-analysis)은 문의 API 전용 백엔드 테스트 부재를 명시한다.
 - 빈 테스트 5개: `SlotKeyApplicationTests`, `AuthServiceTest`, `MemberAuthorizationServiceTest`, `MockPaymentGatewayTest`, `PaymentServiceTest`. PG 관련 두 클래스는 현재 크레딧 결제 범위와 무관한 흔적으로 기록되어 있다.
-- 문의 대상: [`InquiryController`](../../backend/src/main/java/com/ovengers/slotkey/inquiry/controller/InquiryController.java), [`AdminInquiryController`](../../backend/src/main/java/com/ovengers/slotkey/inquiry/controller/AdminInquiryController.java), [`InquiryService`](../../backend/src/main/java/com/ovengers/slotkey/inquiry/service/InquiryService.java), [`Inquiry`](../../backend/src/main/java/com/ovengers/slotkey/inquiry/entity/Inquiry.java).
+- 문의 대상: [`InquiryController`](../../../backend/src/main/java/com/ovengers/slotkey/inquiry/controller/InquiryController.java), [`AdminInquiryController`](../../../backend/src/main/java/com/ovengers/slotkey/inquiry/controller/AdminInquiryController.java), [`InquiryService`](../../../backend/src/main/java/com/ovengers/slotkey/inquiry/service/InquiryService.java), [`Inquiry`](../../../backend/src/main/java/com/ovengers/slotkey/inquiry/entity/Inquiry.java).
 
 ## 실행 순서
 
-1. **환경과 결과 고정.** Docker가 실행 중인 JDK 21 환경에서 `cd backend && ./gradlew clean build`를 실행한다. 날짜, Git 커밋, JDK·Docker·MySQL 이미지 버전, 테스트 건수와 실패 원인을 `docs/test-results.md`에 새 기록으로 남긴다. [`backend-ci.yml`](../../.github/workflows/backend-ci.yml)의 `build` 작업은 `dev`/`main` 대상 PR과 `dev` 푸시에 실행되므로, 같은 커밋의 해당 작업 결과를 로컬 결과와 나란히 기록한다. `deploy` 작업의 `-x test` 결과를 테스트 통과 증거로 세지 않는다.
+1. **환경과 결과 고정.** Docker가 실행 중인 JDK 21 환경에서 `cd backend && ./gradlew clean build`를 실행한다. 날짜, Git 커밋, JDK·Docker·MySQL 이미지 버전, 테스트 건수와 실패 원인을 `docs/testing/test-results.md`에 새 기록으로 남긴다. [`backend-ci.yml`](../../../.github/workflows/backend-ci.yml)의 `build` 작업은 `dev`/`main` 대상 PR과 `dev` 푸시에 실행되므로, 같은 커밋의 해당 작업 결과를 로컬 결과와 나란히 기록한다. `deploy` 작업의 `-x test` 결과를 테스트 통과 증거로 세지 않는다.
 2. **빈 클래스 판정.** `SlotKeyApplicationTests`에는 실질적인 기동 검증을 추가하거나 기존 통합 테스트의 커버 여부를 확인하고 제거한다. `AuthServiceTest`와 `MemberAuthorizationServiceTest`는 기존 컨트롤러/인가 테스트와 규칙을 매핑하고 빠진 규칙만 작성한다. 사용하지 않는 PG 관련 두 클래스는 제품 범위를 확인한 뒤 정리한다. 테스트 수만 늘리기 위한 형식적 메서드는 추가하지 않는다.
 3. **문의 테스트 추가.** `backend/src/test/java/com/ovengers/slotkey/inquiry/`에 서비스·HTTP/보안 통합 테스트를 둔다. 실 DB 테스트는 기존 `IntegrationTestSupport` 또는 `@ActiveProfiles("test")`와 `MySqlTestContainerConfig`를 사용한다. 답변 시각에는 기존 고정 `Clock` 패턴을 사용한다.
 4. **응답과 DB 상태를 함께 확인.** `MockMvc`에서 인증·권한·`ApiResponse`를 확인하고, 커밋 후 DB를 재조회한다. 거절된 요청은 저장 부작용이 없어야 한다.
-5. **기록 갱신.** 새 테스트의 시나리오를 `docs/test-strategy.md`에 연결하고 전체 실행 결과를 `docs/test-results.md`에 추가한다. 로컬과 CI 결과를 구분한다.
+5. **기록 갱신.** 새 테스트의 시나리오를 `docs/testing/test-strategy.md`에 연결하고 전체 실행 결과를 `docs/testing/test-results.md`에 추가한다. 로컬과 CI 결과를 구분한다.
 
 ## 문의 기능의 최소 시나리오
 

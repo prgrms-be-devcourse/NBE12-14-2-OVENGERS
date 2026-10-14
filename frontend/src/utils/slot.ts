@@ -1,7 +1,7 @@
 /**
  * 30분 슬롯 계산.
  * 예약의 최소 단위는 30분이며, 시작·종료 시각은 30분의 배수여야 합니다.
- * (docs/requirements.md FR-RESV-02)
+ * (docs/product/requirements.md FR-RESV-02)
  */
 
 import type { DecoratedSlot, SlotAvailability } from '../types/api';

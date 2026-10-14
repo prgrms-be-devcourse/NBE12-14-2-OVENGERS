@@ -531,7 +531,7 @@ CHECK (status NOT IN ('IN_USE','COMPLETED') OR checked_in_at IS NOT NULL)
 
 ## 12. 테스트 목록
 
-> **검증 상태 및 소스 근거 구분**: 아래 목록의 규칙들은 실제 백엔드 테스트 소스(`backend/src/test/java`)의 단위·통합 테스트 클래스로 분할 작성되어 있다. 과거 로컬 258개 테스트 통과 스냅샷(`docs/test-results.md`, 2026-09-21 기준)에 포함된 테스트는 당시 합격이 실측되었으나, 이후 추가된 13개 클래스는 당시 실행 대상이 아니었다. 또한 공간 이미지 전용 테스트(34개 XML)는 예약·출입 도메인의 직접 실행 근거가 아니므로, 각 항목은 소스 존재 여부와 시점별 실행 실측 여부를 구분하여 파악해야 한다.
+> **검증 상태 및 소스 근거 구분**: 아래 목록의 규칙들은 실제 백엔드 테스트 소스(`backend/src/test/java`)의 단위·통합 테스트 클래스로 분할 작성되어 있다. 과거 로컬 258개 테스트 통과 스냅샷(`docs/testing/test-results.md`, 2026-09-21 기준)에 포함된 테스트는 당시 합격이 실측되었으나, 이후 추가된 13개 클래스는 당시 실행 대상이 아니었다. 또한 공간 이미지 전용 테스트(34개 XML)는 예약·출입 도메인의 직접 실행 근거가 아니므로, 각 항목은 소스 존재 여부와 시점별 실행 실측 여부를 구분하여 파악해야 한다.
 
 ### 동시성 (실제 소스: `ReservationConcurrencyTest`, `ReservationPaymentConcurrencyTest`, `ReservationCancelConcurrencyTest`, `ReservationAdjacentSlotConcurrencyTest`, `ReservationPartialOverlapConcurrencyTest`, `SpaceReservationLockIntegrationTest`, `DoorAccessTokenConcurrencyTest`, `AdminReservationConcurrencyIntegrationTest` 등)
 
