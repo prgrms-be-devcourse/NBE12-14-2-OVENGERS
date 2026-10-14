@@ -9,8 +9,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.Modifying;
 import java.util.Optional;
+import java.util.List;
 
 public interface VerificationGuardRepository extends JpaRepository<VerificationGuard, Long> {
+
+    List<VerificationGuard> findAllByEmail(String email);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select g

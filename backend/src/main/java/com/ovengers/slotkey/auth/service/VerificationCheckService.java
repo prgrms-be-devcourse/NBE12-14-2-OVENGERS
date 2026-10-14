@@ -2,6 +2,12 @@ package com.ovengers.slotkey.auth.service;
 
 import com.ovengers.slotkey.auth.dto.internal.VerificationCheckResult;
 import com.ovengers.slotkey.auth.entity.*;
+import com.ovengers.slotkey.audit.entity.AuditAction;
+import com.ovengers.slotkey.audit.entity.AuditTargetType;
+import com.ovengers.slotkey.audit.service.AuditLogService;
+import com.ovengers.slotkey.member.entity.Member;
+import com.ovengers.slotkey.member.entity.MemberStatus;
+import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.auth.repository.VerificationChallengeRepository;
 import com.ovengers.slotkey.auth.repository.VerificationGrantRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +30,8 @@ public class VerificationCheckService {
     private final VerificationSecretGenerator secretGenerator;
     private final VerificationSecretHasher secretHasher;
     private final Clock clock;
+    private final MemberRepository memberRepository;
+    private final AuditLogService auditLogService;
 
     @Transactional
     public VerificationCheckResult verify(
@@ -61,6 +69,7 @@ public class VerificationCheckService {
 
             if (blocked) {
                 challenge.invalidate(now);
+                suspendMemberIfNeeded(email);
                 return blockedResult(guard);
             }
 
@@ -87,6 +96,27 @@ public class VerificationCheckService {
                 rawGrant,
                 grant.getExpiresAt(),
                 null
+        );
+    }
+
+    private void suspendMemberIfNeeded(String email) {
+        Member member = memberRepository.findByEmailForUpdate(email)
+                .orElse(null);
+
+        if (member == null || member.getStatus() != MemberStatus.ACTIVE) {
+            return;
+        }
+
+        MemberStatus beforeStatus = member.getStatus();
+        member.updateStatus(MemberStatus.SUSPENDED);
+        auditLogService.log(
+                null,
+                AuditAction.LOCK_MEMBER_BY_VERIFICATION,
+                AuditTargetType.MEMBER,
+                member.getId(),
+                "이메일 인증 실패 3단계 초과",
+                beforeStatus,
+                MemberStatus.SUSPENDED
         );
     }
 

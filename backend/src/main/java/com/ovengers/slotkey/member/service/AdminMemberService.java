@@ -5,6 +5,7 @@ import com.ovengers.slotkey.audit.entity.AuditLog;
 import com.ovengers.slotkey.audit.entity.AuditTargetType;
 import com.ovengers.slotkey.audit.repository.AuditLogRepository;
 import com.ovengers.slotkey.audit.service.AuditLogService;
+import com.ovengers.slotkey.auth.service.VerificationGuardService;
 import com.ovengers.slotkey.credit.service.CreditGrantService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
@@ -33,6 +34,7 @@ public class AdminMemberService {
     private final AuditLogService auditLogService;
     private final CreditGrantService creditGrantService;
     private final Clock clock;
+    private final VerificationGuardService verificationGuardService;
 
     @Transactional(readOnly = true)
     public Page<AdminMemberResponse> getMembers(MemberStatus status, String keyword, Pageable pageable) {
@@ -108,6 +110,11 @@ public class AdminMemberService {
         }
 
         MemberStatus beforeStatus = member.getStatus();
+
+        if (targetStatus == MemberStatus.ACTIVE && member.getEmail() != null) {
+            verificationGuardService.unlockAllForEmail(member.getEmail());
+        }
+
         member.updateStatus(targetStatus);
 
         LocalDateTime changedAt = LocalDateTime.now(clock);

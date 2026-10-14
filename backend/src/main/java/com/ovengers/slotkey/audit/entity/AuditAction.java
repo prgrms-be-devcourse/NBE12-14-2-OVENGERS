@@ -5,6 +5,7 @@ public enum AuditAction {
     MODIFY_SPACE, // 공간 수정
     SUSPEND_MEMBER, // 계정 정지
     REACTIVATE_MEMBER, // 계정 복구
+    LOCK_MEMBER_BY_VERIFICATION, // 인증 실패로 인한 시스템 계정 잠금
     FORCE_CANCEL_RESERVATION, // 관리자 예약 강제 취소
     GRANT_CREDIT // 관리자 크레딧 지급
 }

@@ -6,6 +6,7 @@ import com.ovengers.slotkey.audit.entity.AuditTargetType;
 import com.ovengers.slotkey.audit.repository.AuditLogRepository;
 import com.ovengers.slotkey.audit.service.AuditLogService;
 import com.ovengers.slotkey.credit.service.CreditGrantService;
+import com.ovengers.slotkey.auth.service.VerificationGuardService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.member.dto.response.AdminMemberResponse;
@@ -52,6 +53,9 @@ class AdminMemberServiceTest {
     @Mock
     private CreditGrantService creditGrantService;
 
+    @Mock
+    private VerificationGuardService verificationGuardService;
+
     private Clock clock;
     private AdminMemberService adminMemberService;
 
@@ -67,7 +71,8 @@ class AdminMemberServiceTest {
                 auditLogRepository,
                 auditLogService,
                 creditGrantService,
-                clock
+                clock,
+                verificationGuardService
         );
     }
 
