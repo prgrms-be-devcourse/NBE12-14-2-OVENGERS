@@ -95,7 +95,8 @@
 - PG 결과를 알 수 없거나 이미 `CONFIRMING`인 주문: 202, `data.status = "CONFIRMING"`. PG를 다시 호출하지 않는다.
 - 금액 불일치는 소유권과 회원 `ACTIVE` 검사를 통과한 요청에 한해 `CHARGE_AMOUNT_MISMATCH` 감사 로그를 남긴다. 이후 멱등키 재사용과 겹쳐도 기록하며, 단독이면 `PENDING`을 유지하고 `CHARGE_ORDER_AMOUNT_MISMATCH`(400)를 반환한다. 비소유 요청은 403으로 거절하고 피해자 주문 대상 감사 로그를 만들지 않는다.
 - 승인 요청 시 회원이 `ACTIVE`가 아니면 `PENDING` 유지, PG 미호출, `ACCOUNT_INACTIVE`(403).
-- PG 승인은 확인됐지만 DB 2가 실패하면 원인을 로그로 남기고 `CONFIRMING`을 유지한 채 202를 반환한다. 복구 스케줄러가 후속 정리한다.
+- PG 승인은 확인됐지만 DB 2가 실패하면 원인을 로그로 남긴다. 최종 주문이 `CONFIRMING`이면 202로 후속 복구를 기다리고, 다른 처리와 경합해 이미 `PAID`면 200을 반환하며, `FAILED` 등 그 밖의 상태면 `CHARGE_ORDER_STATE_CONFLICT`(409)를 반환한다. `200 + FAILED` 응답은 허용하지 않는다.
+- 복구 스케줄러는 `CONFIRMING` 전이 후 1분 이상 24시간 미만인 주문을 저장된 `paymentKey`로 조회한다. 전송 실패·타임아웃·5xx·404로 Payment 객체를 받지 못하면 사실 없는 `UNKNOWN`으로 1분 뒤 재시도한다. Payment 객체를 받았으면 `paymentKey`·`orderId`·금액·상태·`currency=KRW`가 모두 맞을 때만 `PAID`/`FAILED`를 반영하고, 필수 필드 누락이나 불일치는 즉시 수동 처리 대상으로 표시한다. 정확히 24시간부터는 자동 조회를 중단한다. 수동 처리 표시와 PG 승인/로컬 `FAILED` 경합은 시스템 작업(`actorMemberId=null`)으로 `CHARGE_RECOVERY_MANUAL_REVIEW` 감사 로그를 남기며 기존 관리자 감사 로그 API에서 조회할 수 있다.
 - 오류: `IDEMPOTENCY_KEY_REQUIRED`(400), `CHARGE_ORDER_AMOUNT_MISMATCH`(400), `AUTHENTICATION_REQUIRED`(401), `FORBIDDEN_NOT_OWNER`(403), `ACCOUNT_INACTIVE`(403), `CHARGE_ORDER_NOT_FOUND`(404), `CHARGE_ORDER_STATE_CONFLICT`(409), `IDEMPOTENCY_KEY_REUSED`(409), `PAYMENT_DECLINED`(422), `PG_CONFIRMATION_ERROR`(500).
 
 > **프론트 예약 흐름 요약**: ① `POST /reservations`로 HOLD 생성(201) → 응답의 `reservationId`, `spaceVersion`, `holdExpiresAt` 보관 → ② 10분 안에 `POST /reservations/{id}/pay`(헤더 `Idempotency-Key`, 바디 `spaceVersion`)로 확정. 한 번의 호출로 결제까지 끝나지 않는다. 응답에 `payment` 객체는 없다.
@@ -313,8 +314,8 @@
 - `GET /api/v1/admin/audit-logs` (ADMIN): 관리자 감사 로그 목록 조회.
   - 쿼리 파라미터(필터):
     - `actorMemberId` (Long): 작업자 ID
-    - `action` (AuditAction): `REGISTER_SPACE`, `MODIFY_SPACE`, `SUSPEND_MEMBER`, `REACTIVATE_MEMBER`, `FORCE_CANCEL_RESERVATION`, `GRANT_CREDIT`
-    - `targetType` (AuditTargetType): `SPACE`, `MEMBER`, `RESERVATION`
+    - `action` (AuditAction): `REGISTER_SPACE`, `MODIFY_SPACE`, `SUSPEND_MEMBER`, `REACTIVATE_MEMBER`, `FORCE_CANCEL_RESERVATION`, `GRANT_CREDIT`, `CHARGE_AMOUNT_MISMATCH`, `CHARGE_RECOVERY_MANUAL_REVIEW`
+    - `targetType` (AuditTargetType): `SPACE`, `MEMBER`, `RESERVATION`, `CHARGE_ORDER`
     - `targetId` (Long): 대상 엔티티 ID
     - `dateFrom` (LocalDate, ISO-8601): 조회 시작일 (KST 00:00:00 이상)
     - `dateTo` (LocalDate, ISO-8601): 조회 종료일 (KST 다음 날 00:00:00 미만, 반개구간)

@@ -1,6 +1,6 @@
 # PG 결제 — 크레딧 충전
 
-> 상태: 구현 중 (3단계 완료, 4단계 진행 전). 작성: 2026-10-06. 결정 반영: 2026-10-14.
+> 상태: 구현 중 (4단계 완료, 5단계 진행 전). 작성: 2026-10-06. 결정 반영: 2026-10-14.
 
 ## 문제
 
@@ -190,6 +190,14 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 - 같은 `paymentKey`를 새 클라이언트 `Idempotency-Key`로 다시 요청해도 `200 PAID`를 반환하고 잔액과 원장이 추가로 바뀌지 않았다. 첫 시도는 만료된 Access Token 때문에 `INVALID_ACCESS_TOKEN`이었고, 재로그인 후 토스 결제 인증의 약 10분 승인 유효시간 안에 성공했다.
 - 공식 문서 출처: 토스페이먼츠 [코어 API](https://docs.tosspayments.com/reference), [결제창형 결제 연동](https://docs.tosspayments.com/guides/v2/payment-widget/integration-window), [인증 및 기타 헤더](https://docs.tosspayments.com/reference/using-api/authorization), [API 에러 코드](https://docs.tosspayments.com/reference/error-codes), [환경 설정](https://docs.tosspayments.com/guides/v2/get-started/environment), [API 키](https://docs.tosspayments.com/reference/using-api/api-keys).
 
+### 4단계 — 복구 스케줄러 (2026-10-14)
+
+- `CONFIRMING` 전이 1분 뒤부터 24시간 전까지 저장된 `paymentKey`로 조회하며, `recovery_next_attempt_at`을 별도로 이동해 50건 제한에서도 뒤 주문이 굶지 않게 했다. 정확히 24시간이 된 주문과 복구 불변식·응답 무결성 위반은 `recovery_exhausted_at`으로 한 번만 수동 처리 표시한다.
+- 조회 응답의 `paymentKey`, `orderId`, `totalAmount`, 원시 상태, `currency=KRW`를 보존·대조한다. Payment 객체 자체를 받지 못한 전송 실패·타임아웃·5xx·404는 사실 없는 `UNKNOWN`으로 재시도하고, Payment 객체를 받았지만 필수 필드가 없거나 값이 다르면 즉시 수동 처리 대상으로 표시한다. 승인 결과는 저장된 클라이언트 멱등키로 기존 DB 2를 재사용하고, 실패 결과는 `PG_STATUS_<원시 상태>`로 기록한다. MID와 오래된 `PENDING` 정리는 백로그로 남겼다.
+- PG 조회는 트랜잭션 밖에서 실행하며 주문별 짧은 트랜잭션과 상태 검사, 주문당 `TOP_UP` UNIQUE로 로컬 부작용을 한 번만 반영한다. `recovery_exhausted_at`을 기록할 때 시스템 작업 감사 로그를 같은 트랜잭션에 한 번만 남긴다. 승인과 로컬 `FAILED` 전이가 경합하면 재개방하거나 예외를 전파하지 않고 실제 `PG_STATUS`·`LOCAL_STATUS`를 감사 로그에 남긴다.
+- 로컬 MySQL 8.4의 10,000행 임시 테이블에서 실제 후보 조건으로 `EXPLAIN`했다. 도래 후보는 `idx_charge_order_recovery_due`, 24시간 초과 후보는 `idx_charge_order_recovery_exhausted`를 각각 `range`로 사용했다. 이 검사는 자동 테스트에 넣지 않았다.
+- 검증 리뷰 P1 반영 뒤 최종 전체 테스트는 `./gradlew test --rerun-tasks`로 80개 테스트 스위트, 582개 테스트가 통과했고 실패·오류·건너뜀은 0개였다. 상세 구현·검증 기록은 `docs/lab/notes/pg-step-4.md`에 둔다.
+
 ## 구현 단계
 
 ### 공통 규칙
@@ -248,11 +256,23 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 
 ### 4단계 — 복구 스케줄러
 
-**상태: 진행 전**
+**상태: 완료 (2026-10-14)**
 
-- 오래 `CONFIRMING`인 주문을 PG 조회 결과에 따라 `PAID` 또는 `FAILED`로 정리한다.
-- 기존 `ReservationCompletionScheduler`의 건별 트랜잭션 패턴을 재사용한다.
-- 조회 결과가 승인됨이면 `PAID`, 실패면 `FAILED`, 조회 실패나 결과 미확정이면 `CONFIRMING` 유지로 테스트한다.
+- 대상은 `CONFIRMING` 전이 시각(`updated_at`)부터 **1분 이상 24시간 미만** 지난 주문이다. 정확히 24시간이 된 주문부터 자동 조회를 중단한다. 주문 생성 시각은 결제창 체류 시간을 포함하므로 기준으로 쓰지 않는다.
+- 1분 `fixedDelay`로 실행하고 최초 실행도 1분 뒤로 미룬다. 한 번에 PG 조회 후보 최대 50건, 24시간 초과 표시 대상 최대 50건을 각각 처리한다. 테스트 프로필에서는 자동 실행을 끄고 스케줄러 메서드를 직접 호출한다.
+- `recovery_next_attempt_at`으로 다음 조회 시각을 관리한다. `PENDING → CONFIRMING` 때 `now + 1분`으로 설정하고, 조회 결과가 `UNKNOWN`이거나 예외가 발생하면 다시 `now + 1분`으로 미룬다. 후보는 이 시각과 id 순서로 골라 장시간 `UNKNOWN`인 주문이 뒤 주문을 굶기지 않게 한다. 재시도 시 `updated_at`은 바꾸지 않아 24시간 한도의 기준을 보존한다.
+- 저장된 `paymentKey`로 PG 결제 조회 API를 호출한다. PG 응답의 `paymentKey`, `orderId`, `totalAmount`, `status`, `currency=KRW`를 로컬 주문과 대조한 뒤에만 결과를 반영한다. MID 대조는 후속 백로그로 둔다.
+- 조회 결과가 `APPROVED`면 주문에 저장된 최초 `client_idempotency_key`를 사용해 2단계 DB 2와 같은 경로로 `PAID` 전이·`TOP_UP` 원장·잔액 증가·성공 멱등 응답 저장을 한 트랜잭션에서 처리한다. 회원이 승인 요청 뒤 정지·탈퇴했더라도 이미 PG 승인이 확인됐으면 회원 행이 존재하는 한 적립한다.
+- 조회 결과가 `FAILED`면 최종 트랜잭션 시점에도 `CONFIRMING`인 주문만 `FAILED`로 바꾸고 `failure_code`에는 `PG_STATUS_<원시 상태>`를 저장한다. `UNKNOWN`과 조회/DB 예외는 `CONFIRMING`을 유지해 다음 주기에 다시 확인한다.
+- **결정 8 명확화:** 복구 필수값(`payment_key`, `client_idempotency_key`, CONFIRMING 시작 시각)이 없으면 자동 보정하거나 `FAILED`로 단정하지 않고 즉시 수동 처리 대상으로 표시한다. PG에서 Payment 객체 자체를 받지 못한 전송 실패·타임아웃·5xx·404는 대조할 사실이 없는 `UNKNOWN`이므로 `CONFIRMING`을 유지해 24시간까지 재시도한다. 반대로 Payment 객체를 받았는데 `paymentKey`·`orderId`·`totalAmount`·원시 상태·`currency` 중 필수값이 없거나 로컬 주문과 다르면 무결성 위반으로 즉시 수동 처리 대상으로 표시한다. 이번 단계에는 orderId 조회 fallback과 새 멱등키 생성을 넣지 않는다.
+- 24시간이 된 주문은 `CONFIRMING`을 유지하고 `recovery_exhausted_at`을 조건부로 한 번만 기록한 뒤 경고 로그를 남긴다. 이후 PG 조회 대상에서 제외하며 같은 주문의 경고를 매분 반복하지 않는다.
+- 후보 조회와 PG 호출에는 트랜잭션을 두지 않고, 최종 반영은 주문 1건당 별도 트랜잭션으로 처리한다. 겹친 실행의 중복 PG GET은 허용하되, 주문 잠금·상태 검사·`credit_transaction.charge_order_id` UNIQUE로 로컬 부작용을 정확히 한 번만 보장한다. PG 통신 중 DB 락은 유지하지 않는다.
+- 최종 반영 시 이미 `PAID`면 성공으로 건너뛰고, 이미 `FAILED`면 자동 재개방하거나 덮어쓰지 않는다. PG 승인이 확인됐는데 로컬이 `FAILED`인 경합은 해당 건에서 잡아 다음 건 처리를 계속하고, 에러 코드가 아니라 실제 PG 상태와 로컬 상태를 시스템 감사 로그에 남긴다. FAILED 조회도 이미 `PAID`인 주문을 덮어쓰지 않는다.
+- 승인 후 DB 2 실패 경합의 HTTP 응답은 `PAID → 200`, `CONFIRMING → 202`, 그 밖의 상태 충돌 → 409로 고정해 `200 + FAILED` 응답을 허용하지 않는다.
+- 후보 조회용 복합 인덱스를 추가한다. 인덱스 사용 여부는 자동 테스트로 고정하지 않고 로컬 MySQL에서 `EXPLAIN`을 한 번 실행해 단계 보고서에 결과를 기록한다.
+- 기존 `ReservationCompletionScheduler`처럼 후보 조정과 건별 처리 빈을 분리하고, 한 건의 예외가 다음 주문 처리를 막지 않게 한다.
+- 자동 테스트는 Fake PG의 승인·실패·모름·예외, 1분/24시간 경계, 24시간 초과 제외와 단일 경고, 이미 `PAID`/`FAILED`인 주문의 경합, 한 건 예외 후 나머지 처리, 50건 초과 공정성, PG 호출의 트랜잭션 밖 실행, 중복 복구의 단일 `TOP_UP`, 응답 무결성 불일치를 검증한다.
+- 오래 `PENDING`인 주문 정리는 이번 단계에 넣지 않고 `docs/lab/notes/pg-backlog.md`에 둔다.
 
 ### 5단계 — 웹훅
 
