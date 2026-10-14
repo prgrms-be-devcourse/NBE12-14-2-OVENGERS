@@ -27,6 +27,7 @@ public enum ErrorCode {
     VERIFICATION_ADMIN_LOCKED(HttpStatus.FORBIDDEN, "VERIFICATION_ADMIN_LOCKED", "이메일 인증이 정지되었습니다. 관리자에게 문의해주세요."),
     VERIFICATION_RESEND_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "VERIFICATION_RESEND_TOO_SOON", "인증번호는 마지막 발송 후 30초가 지나야 다시 요청할 수 있습니다."),
     VERIFICATION_MAIL_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "VERIFICATION_MAIL_FAILED", "인증 메일을 발송하지 못했습니다. 잠시 후 다시 시도해주세요."),
+    VERIFICATION_GRANT_INVALID(HttpStatus.BAD_REQUEST, "VERIFICATION_GRANT_INVALID", "인증 증표가 만료되었거나 사용할 수 없습니다. 이메일 인증을 다시 진행해주세요."),
     //── Refresh_token ─────────────────────────────────────────
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."),
     ACCOUNT_INACTIVE(HttpStatus.FORBIDDEN, "ACCOUNT_INACTIVE", "이용이 제한된 계정입니다."),

@@ -15,6 +15,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.ovengers.slotkey.auth.entity.VerificationGrant;
+import com.ovengers.slotkey.auth.entity.VerificationPurpose;
+import com.ovengers.slotkey.auth.service.VerificationGrantService;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -28,7 +31,7 @@ public class MemberService {
     private final CreditGrantService creditGrantService;
     private final LocalCredentialRepository localCredentialRepository;
     private final Clock clock;
-
+    private final VerificationGrantService verificationGrantService;
     @Value("${app.credit.signup-grant}")
     private int signupGrantAmount;
 
@@ -46,7 +49,8 @@ public class MemberService {
             String email,
             String password,
             String passwordConfirm,
-            String nickname
+            String nickname,
+            String rawGrant
     ) {
         // 비밀번호와 확인값 일치 여부 검사
         if (!password.equals(passwordConfirm)) {
@@ -54,6 +58,14 @@ public class MemberService {
                     ErrorCode.PASSWORD_CONFIRM_MISMATCH
             );
         }
+        // 가입용 증표 검증 및 Guard 잠금 확보
+        VerificationGrant grant = verificationGrantService.requireUsable(
+                email,
+                VerificationPurpose.SIGNUP,
+                rawGrant
+        );
+
+        LocalDateTime now = LocalDateTime.now(clock);
 
         // 이메일 중복 검사
         if (memberRepository.existsByEmail(email)) {
@@ -67,9 +79,12 @@ public class MemberService {
 
         Member member = new Member(email, nickname);
 
+// ① 회원에 이메일 인증 완료 시각 기록
+        member.verifyEmail(grant.getChallenge().getVerifiedAt());
+
         Member savedMember;
 
-        // 회원 저장 + DB UNIQUE 제약에 의한 이메일 중복 처리
+// 회원 저장 + DB UNIQUE 제약에 의한 이메일 중복 처리
         try {
             savedMember = memberRepository.saveAndFlush(member);
         } catch (DataIntegrityViolationException e) {
@@ -83,20 +98,26 @@ public class MemberService {
 
             throw e;
         }
+
+// ② 비밀번호 정보 생성 시 위에서 구한 now 사용
         LocalCredential localCredential = new LocalCredential(
                 savedMember,
                 passwordHash,
-                LocalDateTime.now(clock)
+                now
         );
 
         localCredentialRepository.save(localCredential);
-        // 회원가입 초기 크레딧 지급
+
+// 크레딧 지급 중 영속성 컨텍스트가 비워지기 전에 소비
+        grant.consume(now);
+
+// flushAutomatically가 위 변경을 DB에 반영한 뒤 clear한다.
         creditGrantService.grantSignupCredit(
                 savedMember.getId(),
                 signupGrantAmount
         );
 
-        // 크레딧 지급 후 최신 잔액이 반영된 회원 반환
+// 최신 잔액이 반영된 회원 반환
         return memberRepository.findById(savedMember.getId())
                 .orElseThrow(() ->
                         new BusinessException(ErrorCode.MEMBER_NOT_FOUND)

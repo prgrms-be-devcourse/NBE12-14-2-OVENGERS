@@ -24,6 +24,11 @@ public record SignupRequest(
         @Schema(description = "닉네임 (2~50자)", example = "슬롯유저")
         @NotBlank(message = "닉네임을 입력해주세요.")
         @Size(min = 2, max = 50, message = "닉네임은 2자 이상 50자 이하여야 합니다.")
-        String nickname
+        String nickname,
+
+        @Schema(description = "이메일 인증 완료 후 발급받은 가입용 증표")
+        @NotBlank(message = "이메일 인증 증표를 전달해주세요.")
+        @Size(max = 128, message = "인증 증표 형식이 올바르지 않습니다.")
+        String grant
 ) {
 }

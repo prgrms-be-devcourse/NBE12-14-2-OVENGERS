@@ -48,10 +48,11 @@ public class AuthController {
     @Operation(
             summary = "회원가입",
             description = """
-                이메일, 비밀번호, 비밀번호 확인, 닉네임으로 가입합니다.
-                비밀번호와 확인값이 일치해야 하며, 이미 사용 중인 이메일은 가입할 수 없습니다.
-                가입 성공 시 회원 정보를 반환합니다. 로그인은 별도로 진행해야 합니다.
-                """
+    이메일 인증 완료 후 발급받은 가입용 증표와
+    이메일, 비밀번호, 비밀번호 확인, 닉네임으로 가입합니다.
+    증표는 해당 이메일의 가입용이어야 하며 유효 시간 내에 한 번만 사용할 수 있습니다.
+    가입 성공 시 회원 정보를 반환합니다. 로그인은 별도로 진행해야 합니다.
+    """
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -113,7 +114,8 @@ public class AuthController {
                 request.email(),
                 request.password(),
                 request.passwordConfirm(),
-                request.nickname()
+                request.nickname(),
+                request.grant()
         );
         return ResponseEntity
                 .status(HttpStatus.CREATED)
