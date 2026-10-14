@@ -1,6 +1,6 @@
 # PG 결제 — 크레딧 충전
 
-> 상태: 구현 중 (4단계 완료, 5단계 진행 전). 작성: 2026-10-06. 결정 반영: 2026-10-14.
+> 상태: 구현 중 (6단계 완료, 5단계 진행 전). 작성: 2026-10-06. 결정 반영: 2026-10-14.
 
 ## 문제
 
@@ -198,6 +198,13 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 - 로컬 MySQL 8.4의 10,000행 임시 테이블에서 실제 후보 조건으로 `EXPLAIN`했다. 도래 후보는 `idx_charge_order_recovery_due`, 24시간 초과 후보는 `idx_charge_order_recovery_exhausted`를 각각 `range`로 사용했다. 이 검사는 자동 테스트에 넣지 않았다.
 - 검증 리뷰 P1 반영 뒤 최종 전체 테스트는 `./gradlew test --rerun-tasks`로 80개 테스트 스위트, 582개 테스트가 통과했고 실패·오류·건너뜀은 0개였다. 상세 구현·검증 기록은 `docs/lab/notes/pg-step-4.md`에 둔다.
 
+### 6단계 — 프론트 충전 화면과 예약 복귀 흐름 (2026-10-14)
+
+- 공식 v2 주문서형 SDK 순서인 `widgets({ customerKey: ANONYMOUS })` → 서버 주문 금액 `setAmount()` → `renderPaymentMethods()`·`renderAgreement()` → 버튼의 `requestPayment()`를 적용했다. 클라이언트 키는 `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY`에서만 읽는다.
+- 충전·성공·실패 페이지와 본인 주문 상태 GET을 추가했다. 승인 응답이 `CONFIRMING`이면 3초 간격으로 최대 2분 조회하고, 이후에도 처리 중 화면과 수동 재조회 버튼을 유지한다. 결과 URL 재진입은 서버의 기존 완료 응답으로 수렴하며 승인 시도마다 새 UUID 멱등키를 사용한다.
+- 예약 결제의 잔액 사전 차단을 제거하고 서버의 `INSUFFICIENT_BALANCE` 응답에만 충전 알림창을 연다. HOLD 남은 시간을 유지하며 충전 후 예약 결제를 자동 실행하지 않는다.
+- 검증은 backend 전체 585개와 frontend 전체 36개 단위 테스트, TypeScript, ESLint(오류 0·기존 경고 6), Next.js production build로 수행했다. 실제 토스 주문서 렌더링과 리다이렉트는 테스트 클라이언트 키가 필요한 수동 검증으로 남겼다. 상세 기록은 `docs/lab/notes/pg-step-6.md`에 둔다.
+
 ## 구현 단계
 
 ### 공통 규칙
@@ -284,7 +291,7 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 
 ### 6단계 — 프론트 충전 화면과 예약 복귀 흐름
 
-**상태: 진행 전**
+**상태: 완료 (2026-10-14)**
 
 - 금액 선택 → 서버 충전 주문 생성 → 주문서형 SDK로 결제수단·약관 렌더링 → 결제 요청 순서로 진행한다. 성공·실패 URL 페이지에서는 서버 승인 API만 호출하고, 결제 금액은 서버가 반환한 값만 사용한다.
 - 주문서형 SDK 흐름은 `widgets()` → 서버 충전 주문 생성 응답 금액으로 `setAmount({ currency: 'KRW', value: amount })` → `renderPaymentMethods({ selector: '#payment-method', variantKey: 'DEFAULT' })`와 `renderAgreement({ selector: '#agreement', variantKey: 'AGREEMENT' })` → 결제 버튼에서 `requestPayment({ orderId, orderName, successUrl, failUrl, customerEmail, customerName })` 순서로 구현한다. 결제수단과 필수 약관 동의가 준비되기 전에는 결제 버튼을 활성화하지 않는다. *(2026-10-11 확정, 2026-10-14 복구)*

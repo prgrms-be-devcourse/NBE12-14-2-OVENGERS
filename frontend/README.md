@@ -17,6 +17,12 @@ npm run dev
 BACKEND_ORIGIN=http://localhost:8080
 ```
 
+크레딧 충전 화면을 확인할 때는 같은 파일에 토스페이먼츠 주문서형 테스트 클라이언트 키를 추가합니다.
+
+```bash
+NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY=로컬에서_사용할_테스트_클라이언트_키
+```
+
 | 명령 | 설명 |
 | --- | --- |
 | `npm run dev` | 개발 서버 |
@@ -24,13 +30,14 @@ BACKEND_ORIGIN=http://localhost:8080
 | `npm run start` | 빌드 결과 실행 |
 | `npm run lint` | ESLint 검사 (`next/core-web-vitals` + `next/typescript`) |
 | `npx tsc --noEmit` | 타입 검사만 (빌드 없이) |
-| `node --test tests/*.test.cjs` | 내장 runner 기반 단위 테스트(14개) 실행 |
+| `node --test tests/*.test.cjs` | 내장 runner 기반 단위 테스트 실행 |
 
 ## 환경변수
 
 | 이름 | 쓰이는 곳 | 설명 |
 | --- | --- | --- |
 | `NEXT_PUBLIC_API_BASE_URL` | 브라우저 | API 기본 주소. 미설정 시 `/api/v1` (같은 오리진 → rewrite 경유) |
+| `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY` | 브라우저 | 토스페이먼츠 주문서형 SDK 테스트 클라이언트 키. 충전 화면에서만 사용 |
 | `BACKEND_ORIGIN` | 서버(rewrite) | `/api/v1/*` 를 넘길 백엔드 오리진. 미설정 시 `http://localhost:8080` |
 
 브라우저는 언제나 같은 오리진의 `/api/v1` 로 요청하고, 실제 백엔드로 넘기는 일은
@@ -84,6 +91,8 @@ src
   요청이 `RESERVATION_SLOT_CONFLICT` 를 받으면 슬롯 현황을 다시 불러옵니다.
 - **예약과 결제는 분리됩니다.** 예약 생성은 10분짜리 `HELD` 상태를 만들고
   `/reservations/[reservationId]/payment` 에서 결제해야 `CONFIRMED` 가 됩니다.
+- **크레딧 충전은 주문서형 결제입니다.** `/credits/charge`에서 서버가 만든 주문 금액으로
+  결제수단과 약관을 렌더링하고, 성공 URL에서는 서버 승인 API만 호출합니다.
 - **결제 요청은 `Idempotency-Key` 를 보냅니다.** `useIdempotencyKey` 가 만든 UUID 를 같은 결제 시도
   동안 유지해야 네트워크 재시도에서 크레딧이 중복 차감되지 않습니다.
 - **출입 키 원문은 발급 응답에서 한 번만 내려옵니다.** 서버에는 해시만 저장되어 재조회할 수 없습니다.

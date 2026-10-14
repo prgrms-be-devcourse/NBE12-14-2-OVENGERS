@@ -85,7 +85,14 @@
 - `orderId`: 서버가 `chg_` + 소문자 UUID v4 형식으로 생성한다. DB의 숫자 PK와 별도이며 UNIQUE 제약을 갖는다.
 - 성공: 201, `data` = `{ "orderId": "chg_550e8400-e29b-41d4-a716-446655440000", "amount": 1000, "status": "PENDING" }`.
 
-### 5-0-1. PG 크레딧 충전 승인 — `POST /credits/charge-orders/confirm`
+### 5-0-1. PG 크레딧 충전 주문 상태 조회 — `GET /credits/charge-orders/{orderId}`
+
+- 인증이 필요하며 본인 주문만 조회할 수 있다.
+- 성공: 200, `data` = `{ "orderId": "chg_550e8400-e29b-41d4-a716-446655440000", "amount": 1000, "status": "PENDING|CONFIRMING|PAID|FAILED" }`.
+- 202 승인 응답을 받은 성공 페이지는 이 읽기 전용 API를 3초 간격으로 최대 2분 재조회한다. 그 뒤에도 `CONFIRMING`이면 오류로 바꾸지 않고 처리 중 안내와 수동 재조회 버튼을 유지한다.
+- 오류: `AUTHENTICATION_REQUIRED`(401), `FORBIDDEN_NOT_OWNER`(403), `CHARGE_ORDER_NOT_FOUND`(404).
+
+### 5-0-2. PG 크레딧 충전 승인 — `POST /credits/charge-orders/confirm`
 
 - 인증 및 `Idempotency-Key` 헤더가 필요하다.
 - 요청 바디: `{ "paymentKey": "...", "orderId": "chg_...", "amount": 1000 }`.
