@@ -40,6 +40,10 @@ public class CreditTransaction {
     @JoinColumn(name = "reservation_id")
     private Reservation reservation;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "charge_order_id")
+    private ChargeOrder chargeOrder;
+
     // 해당 거래 처리 후 회원의 크레딧 잔액
     @Column(name = "balance_after", nullable = false)
     private int balanceAfter;
@@ -69,5 +73,22 @@ public class CreditTransaction {
         this.balanceAfter = balanceAfter;
         this.reason = reason;
         this.createdAt = createdAt;
+    }
+
+    public static CreditTransaction topUp(
+            Member member,
+            int amount,
+            ChargeOrder chargeOrder,
+            int balanceAfter,
+            LocalDateTime createdAt
+    ) {
+        CreditTransaction transaction = new CreditTransaction();
+        transaction.member = member;
+        transaction.amount = amount;
+        transaction.type = CreditTransactionType.TOP_UP;
+        transaction.chargeOrder = chargeOrder;
+        transaction.balanceAfter = balanceAfter;
+        transaction.createdAt = createdAt;
+        return transaction;
     }
 }

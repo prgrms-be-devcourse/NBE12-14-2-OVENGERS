@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: optional:file:.env[.properties]
   datasource:
     url: jdbc:mysql://localhost:3306/slotkey?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: root
@@ -23,3 +25,11 @@ app:
     storage-root: ./data/space-images
   verification:
     mail-from: noreply@slotkey.test
+  pg:
+    toss:
+      secret-key: ${TOSS_PAYMENTS_SECRET_KEY:}
+
+slotkey:
+  scheduler:
+    charge-recovery:
+      enabled: true

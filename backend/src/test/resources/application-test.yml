@@ -14,9 +14,18 @@ custom:
     expire-millis: 300000
 
 app:
+  pg:
+    toss:
+      secret-key: test-gsk-dummy-never-call-external-api
+
   space-image:
     storage-root: build/tmp/space-images
   verification:
     # 테스트 전용 공개값. 로컬·운영 비밀키로 사용하지 않는다.
     hash-secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
     mail-from: noreply@slotkey.test
+
+slotkey:
+  scheduler:
+    charge-recovery:
+      enabled: false

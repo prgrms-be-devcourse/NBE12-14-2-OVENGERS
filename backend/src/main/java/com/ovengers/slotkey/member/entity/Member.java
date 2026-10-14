@@ -66,6 +66,11 @@ public class Member extends BaseTimeEntity {
         this.balance = 0;
         return expiredAmount;
     }
+
+    public void addCredits(int amount) {
+        this.balance += amount;
+    }
+
     public boolean isEmailVerified() {
         return emailVerifiedAt != null;
     }

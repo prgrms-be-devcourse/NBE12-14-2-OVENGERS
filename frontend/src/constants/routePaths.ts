@@ -6,6 +6,10 @@ export const ROUTES = {
   passwordReset: '/password-reset',
   myPage: '/mypage',
 
+  creditCharge: '/credits/charge',
+  creditChargeSuccess: '/credits/charge/success',
+  creditChargeFail: '/credits/charge/fail',
+
   spaces: '/spaces',
   spaceDetail: (spaceId: number | string) => `/spaces/${spaceId}`,
 

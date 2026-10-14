@@ -40,8 +40,23 @@ app:
   credit:
     signup-grant: 50000
 
+  pg:
+    toss:
+      base-url: https://api.tosspayments.com
+      secret-key: ${TOSS_PAYMENTS_SECRET_KEY:}
+      connect-timeout: 3s
+      read-timeout: 60s
+
   # 공간 대표 이미지 영구 저장 경로
   # - spring.servlet.multipart.location 은 업로드 처리 중 임시 파싱 디렉터리입니다.
   # - app.space-image.storage-root 는 영구 보관용 디렉터리이며 배포 환경에서는 재시작 후에도 유지되는 지속 디스크여야 합니다.
   space-image:
     storage-root: ${SPACE_IMAGE_STORAGE_ROOT:./data/space-images}
+
+slotkey:
+  scheduler:
+    charge-recovery:
+      enabled: true
+      initial-delay-ms: 60000
+      fixed-delay-ms: 60000
+      batch-size: 50

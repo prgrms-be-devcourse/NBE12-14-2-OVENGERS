@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import Link from 'next/link';
 import { getMe, updateNickname } from '@/api/memberApi';
 import { useAction, useAsync } from '@/hooks/useApi';
 import { useAuth } from '@/hooks/useAuth';
@@ -10,6 +11,7 @@ import { formatCredit } from '@/utils/price';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ErrorMessage from '@/components/common/ErrorMessage';
 import WithdrawalDialog from '@/components/member/WithdrawalDialog';
+import { ROUTES } from '@/constants/routePaths';
 
 export default function MyPage() {
   
@@ -180,7 +182,14 @@ export default function MyPage() {
 
             <dt>보유 크레딧</dt>
             <dd style={{ margin: 0 }}>
-              {formatCredit(member.balance)}
+              <div className="row wrap">
+                <span>{formatCredit(member.balance)}</span>
+                {member.role === 'USER' && (
+                  <Link className="btn small primary" href={ROUTES.creditCharge}>
+                    충전하기
+                  </Link>
+                )}
+              </div>
             </dd>
 
             <dt>가입일</dt>
