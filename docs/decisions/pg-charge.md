@@ -196,14 +196,14 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 - 조회 응답의 `paymentKey`, `orderId`, `totalAmount`, 원시 상태, `currency=KRW`를 보존·대조한다. Payment 객체 자체를 받지 못한 전송 실패·타임아웃·5xx·404는 사실 없는 `UNKNOWN`으로 재시도하고, Payment 객체를 받았지만 필수 필드가 없거나 값이 다르면 즉시 수동 처리 대상으로 표시한다. 승인 결과는 저장된 클라이언트 멱등키로 기존 DB 2를 재사용하고, 실패 결과는 `PG_STATUS_<원시 상태>`로 기록한다. MID와 오래된 `PENDING` 정리는 백로그로 남겼다.
 - PG 조회는 트랜잭션 밖에서 실행하며 주문별 짧은 트랜잭션과 상태 검사, 주문당 `TOP_UP` UNIQUE로 로컬 부작용을 한 번만 반영한다. `recovery_exhausted_at`을 기록할 때 시스템 작업 감사 로그를 같은 트랜잭션에 한 번만 남긴다. 승인과 로컬 `FAILED` 전이가 경합하면 재개방하거나 예외를 전파하지 않고 실제 `PG_STATUS`·`LOCAL_STATUS`를 감사 로그에 남긴다.
 - 로컬 MySQL 8.4의 10,000행 임시 테이블에서 실제 후보 조건으로 `EXPLAIN`했다. 도래 후보는 `idx_charge_order_recovery_due`, 24시간 초과 후보는 `idx_charge_order_recovery_exhausted`를 각각 `range`로 사용했다. 이 검사는 자동 테스트에 넣지 않았다.
-- 검증 리뷰 P1 반영 뒤 최종 전체 테스트는 `./gradlew test --rerun-tasks`로 80개 테스트 스위트, 582개 테스트가 통과했고 실패·오류·건너뜀은 0개였다. 상세 구현·검증 기록은 `docs/lab/notes/pg/step-4.md`에 둔다.
+- 검증 리뷰 P1 반영 뒤 최종 전체 테스트는 `./gradlew test --rerun-tasks`로 80개 테스트 스위트, 582개 테스트가 통과했고 실패·오류·건너뜀은 0개였다.
 
 ### 6단계 — 프론트 충전 화면과 예약 복귀 흐름 (2026-10-14)
 
 - 공식 v2 주문서형 SDK 순서인 `widgets({ customerKey: ANONYMOUS })` → 서버 주문 금액 `setAmount()` → `renderPaymentMethods()`·`renderAgreement()` → 버튼의 `requestPayment()`를 적용했다. 클라이언트 키는 `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY`에서만 읽는다.
 - 충전·성공·실패 페이지와 본인 주문 상태 GET을 추가했다. 승인 응답이 `CONFIRMING`이면 3초 간격으로 최대 2분 조회하고, 이후에도 처리 중 화면과 수동 재조회 버튼을 유지한다. 결과 URL 재진입은 서버의 기존 완료 응답으로 수렴하며 승인 시도마다 새 UUID 멱등키를 사용한다.
 - 예약 결제의 잔액 사전 차단을 제거하고 서버의 `INSUFFICIENT_BALANCE` 응답에만 충전 알림창을 연다. HOLD 남은 시간을 유지하며 충전 후 예약 결제를 자동 실행하지 않는다.
-- 검증은 backend 전체 585개와 frontend 전체 37개 단위 테스트, TypeScript, ESLint(오류 0·기존 경고 6), Next.js production build로 수행했다. 사용자 브라우저 수동 검증에서 주문서형 테스트 결제 성공, `PAID`, 잔액 증가, 성공 페이지 새로고침 시 오류 없음까지 확인했다. 상세 기록은 `docs/lab/notes/pg/step-6.md`에 둔다.
+- 검증은 backend 전체 585개와 frontend 전체 37개 단위 테스트, TypeScript, ESLint(오류 0·기존 경고 6), Next.js production build로 수행했다. 사용자 브라우저 수동 검증에서 주문서형 테스트 결제 성공, `PAID`, 잔액 증가, 성공 페이지 새로고침 시 오류 없음까지 확인했다.
 
 ## 구현 단계
 
@@ -220,9 +220,8 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 ### 진행 및 리뷰 기준
 
 - 한 번에 한 단계만 구현하고, 사용자가 "다음"이라고 하기 전에는 다음 단계로 넘어가지 않는다.
-- 단계가 끝나면 커밋하지 않고 변경 파일, 추가 테스트와 검증 내용, 테스트 실행 결과, 리뷰할 설계 판단 2~3개를 보고한다. 단계 보고 전문은 `docs/lab/notes/pg-step-{번호}.md`에 저장한다.
 - 구현자가 수정 사항을 반영한 뒤 검증자가 재리뷰 1회를 수행한다.
-- P2 항목은 구현 범위에 섞지 않고 `docs/lab/notes/pg/backlog.md`에 항목별로 기록한다.
+- P2 항목은 구현 범위에 섞지 않고 후속 백로그로 관리한다.
 - 단, PG 승인은 됐는데 크레딧이 반영되지 않거나 주문이 복구 불가 상태로 남을 수 있는 문제, 또는 감사 로그 같은 보안 기록이 사라질 수 있는 문제는 P2라도 현재 단계에서 처리한다.
 - 커밋 전에 커밋별 파일 목록을 사용자에게 보여 주고 확인을 받는다.
 
@@ -279,7 +278,7 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 - 후보 조회용 복합 인덱스를 추가한다. 인덱스 사용 여부는 자동 테스트로 고정하지 않고 로컬 MySQL에서 `EXPLAIN`을 한 번 실행해 단계 보고서에 결과를 기록한다.
 - 기존 `ReservationCompletionScheduler`처럼 후보 조정과 건별 처리 빈을 분리하고, 한 건의 예외가 다음 주문 처리를 막지 않게 한다.
 - 자동 테스트는 Fake PG의 승인·실패·모름·예외, 1분/24시간 경계, 24시간 초과 제외와 단일 경고, 이미 `PAID`/`FAILED`인 주문의 경합, 한 건 예외 후 나머지 처리, 50건 초과 공정성, PG 호출의 트랜잭션 밖 실행, 중복 복구의 단일 `TOP_UP`, 응답 무결성 불일치를 검증한다.
-- 오래 `PENDING`인 주문 정리는 이번 단계에 넣지 않고 `docs/lab/notes/pg/backlog.md`에 둔다.
+- 오래 `PENDING`인 주문 정리는 이번 단계에 넣지 않고 후속 백로그로 둔다.
 
 ### 5단계 — 웹훅
 
