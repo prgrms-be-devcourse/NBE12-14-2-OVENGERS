@@ -19,6 +19,8 @@
 | API 문서 | 로컬 서버 기동 시 `http://localhost:8080/swagger-ui/index.html` 접근 가능 (자동화 테스트 통과) |
 | 시연 영상 | 별도 제공 예정 |
 
+> **3차 확장(진행 중):** 토스페이먼츠 테스트 환경 기반 PG 크레딧 충전을 추가했습니다. 예약 결제는 기존대로 크레딧 차감으로 처리합니다.
+
 ## 📋 목차
 
 1. [🎯 프로젝트 목표](#-프로젝트-목표)
@@ -61,6 +63,7 @@
 | 회원 | 이메일·비밀번호 기반 회원가입(가입 크레딧 자동 지급), 로그인/로그아웃, 토큰 재발급, 본인 정보 조회 |
 | 공간 | 공간 목록(지역/가격/시간 필터 지원)·상세 조회, 날짜별 30분 단위 예약 가능 시간 확인, 공개 공간 사진 조회 |
 | 예약 | 30분 단위 예약(HOLD → 결제 확정), 본인 예약 조회·취소·연장, 체크아웃(이용 완료) |
+| 크레딧 충전 | 토스페이먼츠 주문서형 결제위젯으로 크레딧 충전(1,000~100,000원, 100원 단위), 충전 주문 상태 조회, 결과가 불분명한 주문의 자동 복구, 예약 결제 시 잔액 부족이면 충전 안내 |
 | 출입 | 예약 기반 출입 키 발급·재발급·폐기, 모의 출입 검증(최초 체크인 및 재입장 판정), 출입 기록 조회 |
 | 관리자 | 대시보드 현황(서울 기준 활성 예약 및 통계), 공간 등록·수정 및 대표 사진 업로드(5MB), 전체 회원 조회·정지·복구 및 크레딧 지급, 전체 예약 조회 및 사유 기반 강제 취소, 감사 로그 조회 |
 | 문의 | 회원 1:1 문의 작성·목록·상세·수정(답변 전), 관리자 전체 문의 목록·상세 및 답변 등록 |
@@ -72,11 +75,12 @@
 1. **회원가입 및 로그인**: 회원가입 시 기본 크레딧 자동 지급, 로그인 후 JWT 발급
 2. **공간 탐색 및 선택**: 지역/가격/이용 시간대 필터로 공간 조회, 날짜별 30분 슬롯 가용성 확인
 3. **슬롯 임시 확보 (HOLD)**: 원하는 슬롯을 선택하여 예약 생성 요청 (`POST /reservations`), 10분간 슬롯 선점
-4. **결제 확인 및 확정**: `Idempotency-Key` 헤더와 함께 결제 요청 (`POST /reservations/{id}/pay`), 크레딧 차감 후 `CONFIRMED` 전이
-5. **출입 키 발급**: 예약 확정 직후 출입 키 발급 (`POST /reservations/{id}/door-token`), 브라우저 로컬 저장소 보관
-6. **모의 출입 검증 (최초 체크인)**: 예약 시작 15분 이내에 출입 검증 (`POST /door-access/verify`), 문 개방과 함께 `IN_USE` 전이
-7. **이용 및 연장/체크아웃**: 필요 시 뒤 슬롯 연장, 이용 종료 시 체크아웃 (`POST /reservations/{id}/check-out`)
-8. **1:1 문의**: 이용 중 문의 사항 등록 (`POST /inquiries`) 및 답변 확인
+4. **크레딧 충전 (선택)**: 마이페이지 또는 잔액 부족 알림창에서 충전 화면으로 이동 → 금액 선택 → 결제위젯으로 결제 → 서버 승인 후 잔액 반영. 충전 뒤 예약 결제는 자동으로 실행하지 않고 사용자가 다시 결제 버튼을 누릅니다.
+5. **결제 확인 및 확정**: `Idempotency-Key` 헤더와 함께 결제 요청 (`POST /reservations/{id}/pay`), 크레딧 차감 후 `CONFIRMED` 전이
+6. **출입 키 발급**: 예약 확정 직후 출입 키 발급 (`POST /reservations/{id}/door-token`), 브라우저 로컬 저장소 보관
+7. **모의 출입 검증 (최초 체크인)**: 예약 시작 15분 이내에 출입 검증 (`POST /door-access/verify`), 문 개방과 함께 `IN_USE` 전이
+8. **이용 및 연장/체크아웃**: 필요 시 뒤 슬롯 연장, 이용 종료 시 체크아웃 (`POST /reservations/{id}/check-out`)
+9. **1:1 문의**: 이용 중 문의 사항 등록 (`POST /inquiries`) 및 답변 확인
 
 #### 2. 관리자 (ADMIN)
 1. **관리자 로그인**: 사전 등록된 관리자 계정(`admin000@sample.com`)으로 로그인
@@ -89,9 +93,9 @@
 
 ### 구현 범위에서 제외한 기능
 
-- 실제 PG(Payment Gateway) 결제 및 스마트락 하드웨어 연동 — 내부 크레딧 잔액 차감 및 모의 출입 API로 대체
-- 셀프 크레딧 충전 기능 (회원가입 기본 지급 및 관리자 수동 지급으로만 크레딧 증액)
-- 비동기 PG 콜백 (크레딧 차감은 동기적 단일 트랜잭션으로 즉시 처리)
+- 스마트락 하드웨어 연동 — 모의 출입 API로 대체
+- PG는 **크레딧 충전에만** 토스페이먼츠 테스트 환경으로 연동. 예약을 카드로 직접 결제하는 방식은 크레딧 원장 단일화 결정에 따라 채택하지 않음
+- PG 웹훅, 충전 취소(환불), 정기결제 — 후속 과제
 - 다중 건물주별 격리 관리 기능 (현재는 단일 백오피스 관리자 체계)
 - 팀 리더의 대리 예약과 대리 취소, 관리자의 타인 예약 일반 대리 취소/출입 키 발급
 - 회원 등급, 멤버십, 쿠폰, 할인 등 동적 요금 정책
@@ -107,6 +111,7 @@
 | Security | Spring Security 6.3, JJWT 0.12.6 | 무상태 JWT 인증 및 RBAC 인가 제어 (BCrypt 암호화) |
 | Persistence | Spring Data JPA, Hibernate 6.5, Flyway 10.15 | 데이터 영속성 관리 및 버전 기반 DB 마이그레이션 (`ddl-auto: none`) |
 | Database | MySQL 8.4 (utf8mb4) | 회원, 공간, 예약, 슬롯, 원장, 토큰, 감사 로그 저장 |
+| Payment | Toss Payments SDK v2(주문서형 결제위젯) `@tosspayments/tosspayments-sdk ^2.9.0`, Core API(승인·조회) | 테스트 키 기반 크레딧 충전, 서버 승인과 결제 조회 복구 |
 | Test | JUnit 5, Mockito, Testcontainers MySQL | 단위 테스트 및 실제 MySQL 컨테이너 기반 다중 트랜잭션 통합/동시성 테스트 |
 | Frontend | Next.js 16 (App Router), React 19, TypeScript | 반응형 웹 UI, 정적 export 호스팅 및 로컬 개발용 API 프록시 |
 | Styling | Tailwind CSS, CSS Custom Properties | 디자인 토큰 기반 반응형 스타일링 |
@@ -121,6 +126,7 @@ Slot Key는 단일 Spring Boot 백엔드 애플리케이션 내에서 도메인 
 flowchart TD
     USER["사용자 / 관리자"] --> FE["Next.js (App Router)"]
     FE -->|REST API /api/v1| API["Spring Boot Application"]
+    FE -->|결제위젯 SDK · 카드 인증| TOSS["Toss Payments"]
 
     subgraph Backend_Domains["Spring Boot 도메인 구조"]
         API --> AUTH["인증 / 보안 (Auth & Security)"]
@@ -130,23 +136,29 @@ flowchart TD
         AUTH --> MEMBER["회원 (Member)"]
         AUTH --> AUDIT["감사 (Audit Log)"]
         AUTH --> INQUIRY["문의 (Inquiry)"]
+        AUTH --> CHARGE["충전 (Charge Order)"]
 
         RESERVATION --> CREDIT["크레딧 서비스 (Credit Transaction 원장)"]
+        CHARGE --> CREDIT
         SCHEDULER["스케줄러 (HOLD 만료 / 노쇼 / 자동 퇴실)"] --> RESERVATION
+        RECOVERY["충전 복구 스케줄러 (1분 주기)"] --> CHARGE
     end
 
+    CHARGE -->|결제 승인 · 조회 API| TOSS
     SPACE --> DB[("MySQL 8.4")]
     RESERVATION --> DB
     ACCESS --> DB
     MEMBER --> DB
     AUDIT --> DB
     INQUIRY --> DB
+    CHARGE --> DB
     SPACE --> DISK["로컬 파일 시스템 (공간 이미지 저장)"]
 ```
 
 - **예약 도메인**: 2단계 예약(HOLD → 결제 확정)과 슬롯 점유를 조율하며, 취소·연장·체크아웃을 관리합니다.
 - **출입 도메인**: 회원, 예약, 토큰 유효성, 시간대 조건을 종합하여 출입 허용 여부를 판정하고 이력을 기록합니다.
 - **크레딧 서비스**: 실제 외부 결제 없이 `credit_transaction` 원장 테이블을 통해 잔액 차감과 환급의 데이터 무결성을 보장합니다.
+- **충전 도메인**: 충전 주문을 만들고, 토스 승인 API를 DB 트랜잭션 밖에서 호출한 뒤 주문 상태·충전 원장·잔액을 한 트랜잭션으로 반영합니다. 승인 결과가 불분명한 주문은 복구 스케줄러가 토스 결제 조회로 정리합니다.
 - **감사 도메인**: 공간 정보 변경, 회원 상태 변경, 관리자 강제 취소, 크레딧 수동 지급 등 관리자 작업을 독립적으로 기록합니다.
 - **스케줄러**: 만료된 HELD 예약 정리, 노쇼 판정, 종료 시각 경과 이용의 자동 완료(퇴실) 처리를 비동기로 보조합니다.
 
@@ -161,13 +173,14 @@ flowchart TD
 | `reservation` | 예약자, 공간, 이용 시간, 요금 스냅샷, 확정 금액, 예약 상태(HOLD 포함 7단계) 관리 |
 | `reservation_slot` | 예약이 점유한 30분 단위 슬롯과 중복 예약 방지 (`UNIQUE(space_id, slot_start)`) |
 | `reservation_status_history` | 예약 생성·결제·취소·연장·노쇼·완료에 따른 상태 전이 이력 관리 |
-| `credit_transaction` | 회원별 크레딧 지급·차감·환급 원장(부호 있는 금액, `payment` 테이블 대체) 관리 |
+| `credit_transaction` | 회원별 크레딧 지급·차감·환급 원장(부호 있는 금액, `payment` 테이블 대체) 관리. PG 충전은 `TOP_UP` 유형으로 기록하며 `charge_order`와 1:1(UNIQUE)로 연결 |
 | `door_access_token` | 예약에 따른 출입 토큰 발급·폐기 이력 관리 (`UNIQUE(active_reservation_id)`) |
 | `door_access_log` | 모든 출입 허용·거절 결과(`ALLOW`, `DENY`)와 사유 코드 기록 |
 | `refresh_token` | 로그인 연장 토큰의 발급, 만료, 폐기 관리 |
 | `audit_logs` | 공간 수정, 회원 정지/복구, 관리자 강제 취소, 크레딧 수동 지급 등 관리자 작업 기록 |
 | `idempotency_key` | 결제 확정(`POST /reservations/{id}/pay`) 요청의 중복 처리 방지 및 멱등 응답 캐싱 (V7) |
 | `inquiries` | 사용자 1:1 문의 및 관리자 단일 답변(`WAITING`, `ANSWERED`) 관리 (V10) |
+| `charge_order` | PG 충전 주문. 주문번호(`chg_`+UUID), 금액, 상태(`PENDING`, `CONFIRMING`, `PAID`, `FAILED`), 토스 결제 키, 멱등키, 복구 예정·소진 시각 (V13) |
 
 ```mermaid
 erDiagram
@@ -188,6 +201,8 @@ erDiagram
     spaces ||--o{ door_access_log : receives
     member ||--o{ audit_logs : performs
     member ||--o{ idempotency_key : sends
+    member ||--o{ charge_order : creates
+    charge_order ||--o| credit_transaction : creates_top_up
 ```
 
 출입 토큰이 유효하지 않아 예약을 식별할 수 없는 경우를 고려해 `door_access_log.reservation_id`는 `NULL`을 허용합니다. `door_access_token`은 `active_reservation_id`(폐기되지 않은 토큰만 값을 가지는 생성 컬럼)에 `UNIQUE` 제약을 적용해, 예약당 활성 토큰이 최대 1개가 되도록 DB 레벨에서 강제합니다.
@@ -251,6 +266,32 @@ erDiagram
 - 결제가 실패(잔액 부족 등)한 경우에는 트랜잭션이 롤백되어 멱등 레코드가 저장되지 않으므로, 동일 키로 결제를 재시도할 수 있습니다.
 - 동일 키로 상이한 요청 본문(파라미터 변조)을 전송했을 때의 본문 비교 감지 방식 및 오류 정책은 현재 구현되어 있지 않으며 향후 과제([docs/api-spec.md](docs/api-spec.md))로 관리합니다.
 - 상세 규칙은 [docs/decisions/reservation-idempotency.md](docs/decisions/reservation-idempotency.md)를 참고합니다.
+
+### PG 크레딧 충전
+
+```
+[1] POST /credits/charge-orders        서버가 금액 검증 후 주문 생성 (PENDING)
+[2] 결제위젯 결제 (토스)                 성공 URL로 paymentKey · orderId · amount 전달
+[3] POST /credits/charge-orders/confirm (Idempotency-Key 필수)
+    DB 1: 소유권 · 회원 상태 · 금액 검증, PENDING → CONFIRMING, PG 멱등키 저장
+    PG  : 토스 승인 API 호출 (트랜잭션 밖, 연결 3초 · 읽기 60초)
+    DB 2: CONFIRMING → PAID + TOP_UP 원장 + 잔액 증가 (한 트랜잭션)
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: 충전 주문 생성
+    PENDING --> CONFIRMING: 승인 요청 (DB 1)
+    CONFIRMING --> PAID: PG 승인 + DB 2 반영
+    CONFIRMING --> FAILED: PG의 명확한 거절
+    CONFIRMING --> CONFIRMING: 결과 모름 (타임아웃 · 5xx) → 복구 스케줄러 재조회
+```
+
+- **결과 모름은 실패가 아니다**: 타임아웃·5xx·응답 없음은 `FAILED`로 단정하지 않고 `CONFIRMING`으로 남겨, 복구 스케줄러가 토스 결제 조회로 확정합니다(1분 주기, 50건, 24시간 초과 시 감사 로그로 수동 처리).
+- **PG 승인 후 DB 실패**: 돈은 이미 승인됐으므로 `FAILED`로 바꾸지 않고 202 `CONFIRMING`으로 응답한 뒤 복구합니다.
+- **금액 위변조 방지**: 결제 금액은 서버가 저장한 주문 금액과 대조하며, 토스 응답의 주문번호·금액도 다시 대조합니다.
+- **새로고침 대비**: 이미 `PAID`인 주문을 같은 paymentKey로 재요청하면 200 `PAID`를 반환합니다.
+- 상세: [docs/decisions/pg-charge.md](docs/decisions/pg-charge.md)
 
 ### 예약 상태 전이
 
@@ -329,7 +370,7 @@ Access JWT 페이로드에 포함된 `id`, `email`, `role`, 만료 시각을 검
 Authorization: Bearer {accessToken}
 ```
 
-아래 목록은 현재 컨트롤러에 구현된 40개 전체 엔드포인트입니다 (Base URL 제외).
+아래 목록은 현재 컨트롤러에 구현된 45개 전체 엔드포인트입니다 (Base URL 제외).
 
 | 영역 | Method | Endpoint | 설명 |
 | --- | --- | --- | --- |
@@ -337,7 +378,12 @@ Authorization: Bearer {accessToken}
 | 인증 | `POST` | `/auth/login` | 로그인 (Access Token 본문, Refresh Token 쿠키 반환) |
 | 인증 | `POST` | `/auth/refresh` | 토큰 재발급 (Refresh Token 쿠키 검증 후 새 Access Token 발급) |
 | 인증 | `POST` | `/auth/logout` | 로그아웃 (Refresh Token DB 폐기 및 쿠키 만료) |
+| 인증 | `POST` | `/auth/withdraw` | 회원 탈퇴 (현재 비밀번호 확인, 진행 중 예약이 없을 때만) |
 | 회원 | `GET` | `/members/me` | 본인 정보 및 크레딧 잔액 조회 |
+| 회원 | `PATCH` | `/members/me` | 본인 닉네임 수정 |
+| 충전 | `POST` | `/credits/charge-orders` | 충전 주문 생성 (서버 금액 검증) |
+| 충전 | `POST` | `/credits/charge-orders/confirm` | 토스 결제 승인 및 크레딧 반영 (`Idempotency-Key` 필수) |
+| 충전 | `GET` | `/credits/charge-orders/{orderId}` | 본인 충전 주문 상태 조회 (202 이후 재조회용) |
 | 공간 | `GET` | `/spaces` | 공간 목록 조회 (지역, 가격, 시간대 필터 지원) |
 | 공간 | `GET` | `/spaces/{spaceId}` | 공간 상세 정보 조회 |
 | 공간 | `GET` | `/spaces/{spaceId}/slots` | 날짜별 30분 단위 예약 가능 슬롯 조회 |
@@ -386,8 +432,8 @@ Authorization: Bearer {accessToken}
 
 | 계층 | 사용 도구 | 검증 대상 및 실측 결과 |
 | --- | --- | --- |
-| 백엔드 단위·통합 테스트 | JUnit 5, Mockito, Testcontainers MySQL 8.4 | 도메인 단위 로직, 트랜잭션 전파, DB 유니크 제약, 비관적 락 동시성, 다중 스레드 멱등성 검증<br>👉 **57개 테스트 클래스 / 354개 테스트 전원 통과** (실패 0, 에러 0, 스킵 0) |
-| 프론트엔드 단위 테스트 | Node.js Test Runner (`node --test`) | API 클라이언트 에러 처리, 출입 키 저장/파싱, 유효성 검사 등<br>👉 **14개 테스트 전원 통과** (pass 14, fail 0) |
+| 백엔드 단위·통합 테스트 | JUnit 5, Mockito, Testcontainers MySQL 8.4 | 도메인 단위 로직, 트랜잭션 전파, DB 유니크 제약, 비관적 락 동시성, 다중 스레드 멱등성 검증<br>👉 **83개 테스트 클래스 / 654개 테스트 전원 통과** (실패 0, 에러 0, 스킵 0) |
+| 프론트엔드 단위 테스트 | Node.js Test Runner (`node --test`) | API 클라이언트 에러 처리, 출입 키 저장/파싱, 유효성 검사 등<br>👉 **45개 테스트 전원 통과** (pass 45, fail 0) |
 | 정적 분석 및 컴파일 | ESLint, TypeScript (`tsc`) | 프론트엔드 린트 및 타입 무결성 검증 통과 (`npm run lint`, `npx tsc --noEmit`) |
 | API 문서 자동 검증 | MockMvc, Springdoc OpenAPI | Swagger UI 경로 및 OpenAPI 사양 생성 자동 검증 통과 (`/swagger-ui/index.html`) |
 | 운영 배포 및 E2E 브라우저 | — | AWS 클라우드 배포 실측 및 E2E 브라우저 자동화는 추후 과제 |
@@ -410,6 +456,10 @@ Authorization: Bearer {accessToken}
 | 소유권 및 인가 | 일반 회원/관리자 모두 타인 명의 예약 취소 불가, 관리자는 사유 동반 `force-cancel`만 가능 | `ReservationServiceTest`, `AdminReservationServiceTest` |
 | 크레딧 원장 경합 | 회원 상태변경과 크레딧 증가 동시 경합 격리 검증 (전체 원장 SUM 불변식 DB 영속성 검증은 향후 과제) | `MemberCreditConcurrencyTest` |
 | 감사 실패 시 롤백 | 관리자 감사 로그 저장 실패 시 비즈니스 변경(크레딧 지급 등)도 원자적 롤백 | `AuditLogServiceTransactionTest` |
+| 충전 승인 동시성·멱등성 | 같은 주문 동시 승인 시 1건만 PG 호출, 같은 키 재요청 시 1회만 충전 | `ChargeOrderConfirmIntegrationTest` |
+| PG 결과 불분명 | 타임아웃·5xx는 `CONFIRMING` 유지, 크레딧 미반영 | `TossPaymentsPgClientTest`, `ChargeOrderConfirmServiceTest` |
+| 충전 복구 | 조회 결과별 상태 전이, 24시간 초과 수동 처리, 재시도 공정성 | `ChargeOrderRecoveryProcessorIntegrationTest`, `ChargeOrderRecoverySchedulerTest` |
+| 오픈 리다이렉트 방지 | 충전 후 복귀 경로는 같은 오리진 내부 경로만 허용 | `frontend/tests/credit-charge.test.cjs` |
 
 상세한 테스트 전략과 전수 실행 결과 보고서는 [docs/test-strategy.md](docs/test-strategy.md) 및 [docs/test-results.md](docs/test-results.md)를 참고합니다.
 
@@ -482,7 +532,7 @@ cd ..
 
 ```bash
 cd backend
-# 백엔드 서버 1차 기동 (Flyway V1~V10 자동 마이그레이션 수행)
+# 백엔드 서버 1차 기동 (Flyway V1~V13 자동 마이그레이션 수행)
 JWT_SECRET_KEY='local-dev-only-secret-key-must-be-32bytes-or-longer' ./gradlew bootRun
 ```
 - 백엔드 서버 포트: `8080`
@@ -491,6 +541,12 @@ JWT_SECRET_KEY='local-dev-only-secret-key-must-be-32bytes-or-longer' ./gradlew b
 ```bash
 cd ..
 ```
+
+토스 충전을 사용할 때만 아래 키를 설정합니다(없으면 충전 기능만 막히고 나머지는 동작).
+- `backend/.env`: `TOSS_PAYMENTS_SECRET_KEY` (테스트 시크릿 키)
+- `frontend/.env.local`: `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY` (테스트 클라이언트 키)
+- 키는 토스페이먼츠 개발자센터 문서의 공개 테스트 키를 사용하며 저장소에 커밋하지 않습니다.
+- 로컬 실행 오류는 [backend/README.md](backend/README.md)의 "로컬 실행 문제 해결"을 참고합니다.
 
 #### 4. 개발 샘플 데이터 적재 (권장)
 Flyway 테이블 생성이 완료된 후 백엔드가 종료된 상태(MySQL만 실행 중인 상태)에서 저장소 루트 디렉터리에서 시딩 스크립트를 실행합니다 (`data-setting/README.md` 절차 준수).
@@ -580,6 +636,9 @@ DDL은 Flyway로 버전 관리하며, `backend/src/main/resources/db/migration/`
 | `V8` | `V8__rename_space_to_spaces.sql` | `spaces` | `space` → `spaces` 테이블명 복수형 정합화 |
 | `V9` | `V9__add_audit_logs_created_at_id_index.sql` | `audit_logs` | 페이징 성능 최적화 복합 인덱스 (`created_at`, `id`) |
 | `V10` | `V10__create_inquiry_table.sql` | `inquiries` | 1:1 회원 문의 및 관리자 단일 답변 |
+| `V11` | `V11__add_member_withdrawn_at.sql` | `member` | 탈퇴 시각 |
+| `V12` | `V12__add_reservation_search_indexes.sql` | `reservation` | 관리자 예약 검색 인덱스 |
+| `V13` | `V13__create_charge_order_table.sql` | `charge_order`, `credit_transaction` | PG 충전 주문, 충전 원장 연결 |
 
 ## 👥 팀원 및 역할
 
@@ -588,7 +647,7 @@ DDL은 Flyway로 버전 관리하며, `backend/src/main/resources/db/migration/`
 | 김재철 | `space`, `audit_log` | 공간 도메인 CRUD, 관리자 공간 대표 사진 업로드(5MB), 관리자 감사 로그 API | [@Lemnoideae](https://github.com/Lemnoideae) |
 | 박창현 | `door_access_token`, `door_access_log` | 출입 도메인, 출입 키 발급/폐기, 모의 출입 검증(체크인 시간 정책) | [@pch112233456-a11y](https://github.com/pch112233456-a11y) |
 | 백한비 | `payment` (초기 계획) | 크레딧 원장(`credit_transaction`), 예약 상태 전이 이력(`reservation_status_history`) | [@jkidse14](https://github.com/jkidse14) |
-| 이태호 | `reservation`, `reservation_slot` | 예약 도메인(HOLD 2단계, 슬롯 비관적 락, 결제 멱등성, 연장, 체크아웃, 상태 이력) | [@anton061311](https://github.com/anton061311) |
+| 이태호 | `reservation`, `reservation_slot` | 예약 도메인(HOLD 2단계, 슬롯 비관적 락, 결제 멱등성, 연장, 체크아웃, 상태 이력) **+ PG 크레딧 충전(토스페이먼츠 연동, 승인 멱등성, 결제 복구 스케줄러, 충전 화면)** | [@anton061311](https://github.com/anton061311) |
 | 천종원 | `member`, `refresh_token` | 회원 도메인(회원가입, 로그인, JWT/쿠키 토큰 갱신, 회원 정지/복구), 1:1 문의(`inquiries`) | [@vvipia](https://github.com/vvipia) |
 
 ## 🗓️ 개발 일정
@@ -610,7 +669,7 @@ DDL은 Flyway로 버전 관리하며, `backend/src/main/resources/db/migration/`
 - [ ] 계정 정지 즉시 기존 발급된 Access Token 및 출입 키가 차단된다. (무상태 JWT 만료 전 API 허용 및 출입 검증 시 회원 상태 미검사 한계로 향후 보강 과제)
 - [x] 공간 요금 변경 후에도 기존 예약의 스냅샷 요금이 영구 보존된다.
 - [x] 일반 회원과 관리자 모두 예약 소유권 정책을 준수한다. (타인 취소 불가, 관리자 강제취소 분리)
-- [x] 실제 MySQL 환경(Testcontainers)에서 통합·동시성 테스트가 통과한다. (백엔드 354개, 프론트 14개 전원 통과)
+- [x] 실제 MySQL 환경(Testcontainers)에서 통합·동시성 테스트가 통과한다. (백엔드 654개, 프론트 45개 전원 통과)
 - [x] 루트 README, 세부 문서(`docs/`), 스키마, 소스 코드 간 정합성이 일치한다. (대단위 1~7 문서 검토 승인)
 - [ ] AWS 클라우드 배포 환경에서 회원가입 → 예약 → 출입 → 이용 완료 흐름이 동작한다. (인프라 설계 완료, 운영 실측 미검증)
 - [ ] 임의 시점에 `SUM(credit_transaction.amount) == member.balance`가 성립한다. (상태변경-증가 경합 외 DB 전체 합계 불변식 영속성 검증은 향후 과제)
@@ -626,3 +685,5 @@ DDL은 Flyway로 버전 관리하며, `backend/src/main/resources/db/migration/`
 - [인가 정책 및 권한 분리](docs/decisions/authorization-policy.md): 무상태 JWT 인증 및 5대 축 인가 검증
 - [관리자 공간 대표 사진 안내](docs/admin-space-image-upload.md): 5MB 제한, Content-Type 검증, 로컬 정적 서빙 및 MVC 흐름
 - [1:1 문의 기능 요구사항](docs/requirements.md#후속-추가-기능-mvp-이후-확장): 회원 질문-관리자 단일 답변 구조 및 스키마 정책
+- [PG 크레딧 충전](docs/decisions/pg-charge.md): 승인 3단계와 트랜잭션 경계, 결과 미확정 복구, 응답 정책
+- 설계 중(미구현): [예약 대기](docs/decisions/waitlist.md), [Outbox·Kafka](docs/decisions/outbox-kafka.md), [고위험 행위 재인증](docs/decisions/step-up-auth.md)
