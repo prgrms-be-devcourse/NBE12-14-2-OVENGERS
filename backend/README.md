@@ -34,6 +34,17 @@ docker compose up -d
 | `./gradlew build` | 빌드 + 테스트 |
 | `./gradlew test` | 테스트만 (Docker Testcontainers 필요) |
 
+### 3. 로컬 실행 문제 해결
+
+| 증상 | 원인 | 해결 |
+| --- | --- | --- |
+| `docker compose up -d`에서 `The container name "/slotkey-mysql" is already in use` | 이전에 만든 같은 이름의 컨테이너가 남아 있음 | 기존 컨테이너를 그대로 쓰려면 `docker start slotkey-mysql`. 비밀번호가 다르거나 마이그레이션 기록이 꼬였으면 `docker rm -f slotkey-mysql` 후 `docker compose up -d` (로컬 데이터 삭제) |
+| `bootRun`에서 `Communications link failure` / `Connection refused` | MySQL 컨테이너가 떠 있지 않음 | `docker ps --filter name=slotkey-mysql`로 `Up` 상태 확인 후 다시 실행 |
+| `bootRun`에서 `Migration checksum mismatch for migration version N` | 로컬 DB에 적용된 뒤 아직 push되지 않은 마이그레이션 파일이 수정됨(push 전 마이그레이션은 제자리 수정하는 규칙) | 로컬 DB를 초기화한다: `docker exec slotkey-mysql mysql -uroot -proot -e "DROP DATABASE slotkey; CREATE DATABASE slotkey;"` 후 `./gradlew bootRun`. 로컬 회원·예약 데이터는 다시 만들어야 한다 |
+
+- 체크섬 불일치에 `flyway repair`를 쓰지 않는다. 기록된 체크섬만 바뀌고 수정된 컬럼·인덱스는 실제 테이블에 반영되지 않아, 앱은 뜨지만 해당 기능이 실행될 때 실패한다.
+- 공용(배포) DB에 이미 적용된 마이그레이션은 수정하지 않고 새 번호로 추가한다. 위 초기화는 로컬 DB에만 사용한다.
+
 ## 환경변수
 
 | 이름 | 필수 여부 | 설명 |
