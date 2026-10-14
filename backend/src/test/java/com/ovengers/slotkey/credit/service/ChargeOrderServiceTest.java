@@ -118,6 +118,45 @@ class ChargeOrderServiceTest {
         verify(chargeOrderRepository, never()).save(any(ChargeOrder.class));
     }
 
+    @Test
+    @DisplayName("충전 주문 소유자는 현재 주문 상태를 조회한다")
+    void get_ownedOrder_returnsCurrentStatus() {
+        ChargeOrder order = ChargeOrder.createPending(
+                7L,
+                "chg_550e8400-e29b-41d4-a716-446655440000",
+                1_000L,
+                java.time.LocalDateTime.of(2026, 10, 13, 9, 0)
+        );
+        given(chargeOrderRepository.findByOrderId(order.getOrderId()))
+                .willReturn(Optional.of(order));
+
+        ChargeOrderResponse response = chargeOrderService.get(
+                7L,
+                order.getOrderId()
+        );
+
+        assertThat(response.orderId()).isEqualTo(order.getOrderId());
+        assertThat(response.amount()).isEqualTo(1_000L);
+        assertThat(response.status()).isEqualTo(ChargeOrderStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("다른 회원의 충전 주문 상태는 조회할 수 없다")
+    void get_otherMembersOrder_throwsForbiddenNotOwner() {
+        ChargeOrder order = ChargeOrder.createPending(
+                8L,
+                "chg_550e8400-e29b-41d4-a716-446655440000",
+                1_000L,
+                java.time.LocalDateTime.of(2026, 10, 13, 9, 0)
+        );
+        given(chargeOrderRepository.findByOrderId(order.getOrderId()))
+                .willReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> chargeOrderService.get(7L, order.getOrderId()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN_NOT_OWNER);
+    }
+
     private Member activeMember() {
         return new Member("member@test.com", "passwordHash", "member");
     }

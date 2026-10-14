@@ -51,6 +51,16 @@ public class ChargeOrderService {
         return ChargeOrderResponse.from(chargeOrderRepository.save(chargeOrder));
     }
 
+    @Transactional(readOnly = true)
+    public ChargeOrderResponse get(Long memberId, String orderId) {
+        ChargeOrder chargeOrder = chargeOrderRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CHARGE_ORDER_NOT_FOUND));
+        if (!chargeOrder.getMemberId().equals(memberId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN_NOT_OWNER);
+        }
+        return ChargeOrderResponse.from(chargeOrder);
+    }
+
     private void validateActiveMember(Long memberId) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTHENTICATION_REQUIRED));

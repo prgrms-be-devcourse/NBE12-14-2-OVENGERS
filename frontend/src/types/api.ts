@@ -71,6 +71,22 @@ export interface LoginRequest {
   password: string;
 }
 
+/* ------------------------------------------------------------------ 크레딧 충전 */
+
+export type ChargeOrderStatus = 'PENDING' | 'CONFIRMING' | 'PAID' | 'FAILED';
+
+export interface ChargeOrder {
+  orderId: string;
+  amount: number;
+  status: ChargeOrderStatus;
+}
+
+export interface ConfirmChargeOrderRequest {
+  paymentKey: string;
+  orderId: string;
+  amount: number;
+}
+
 /* ------------------------------------------------------------------ 공간 */
 
 export type SpaceStatus = 'ACTIVE' | 'INACTIVE';

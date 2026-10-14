@@ -7,6 +7,7 @@ import { markPaymentCompleted } from '../../utils/paymentCelebration';
 import SpacePhoto from '../../components/space/SpacePhoto';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { ApiError } from '../../api/client';
 import { getMyReservation, payReservation } from '../../api/reservationApi';
 import { getSpace } from '../../api/spaceApi';
 import { useAction, useAsync } from '../../hooks/useApi';
@@ -25,14 +26,17 @@ import HoldCountdown from '../../components/reservation/HoldCountdown';
 import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import Modal from '../../components/common/Modal';
 import { useRouteId } from '@/hooks/useRouteId';
+import { suggestChargeAmount } from '@/utils/creditCharge';
 
 export default function PaymentPage() {
   const reservationId = useRouteId('reservationId');
   const router = useRouter();
 
   // HOLD 직후 예약 화면이 붙여 준 spaceVersion.
-  const spaceVersionParam = useSearchParams().get('spaceVersion');
+  const searchParams = useSearchParams();
+  const spaceVersionParam = searchParams.get('spaceVersion');
 
   const { member, refreshMember } = useAuth();
   const { key: idempotencyKey } = useIdempotencyKey();
@@ -41,6 +45,7 @@ export default function PaymentPage() {
   const acceptedIds = agreementState.reservationId === String(reservationId) ? agreementState.ids : [];
   const agreed = hasAllBookingAgreements(acceptedIds);
   const [locallyExpired, setLocallyExpired] = useState(false);
+  const [insufficientOpen, setInsufficientOpen] = useState(false);
 
   const handleExpire = useCallback(
       () => setLocallyExpired(true),
@@ -67,11 +72,18 @@ export default function PaymentPage() {
             ? Number(spaceVersionParam)
             : (await getSpace(reservation.spaceId)).version;
 
-    await payReservation(
-        reservation.reservationId,
-        { spaceVersion },
-        idempotencyKey,
-    );
+    try {
+      await payReservation(
+          reservation.reservationId,
+          { spaceVersion },
+          idempotencyKey,
+      );
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.code === 'INSUFFICIENT_BALANCE') {
+        setInsufficientOpen(true);
+      }
+      throw caught;
+    }
 
     markPaymentCompleted(reservationId);
 
@@ -143,7 +155,18 @@ export default function PaymentPage() {
       member.balance < reservation.totalAmount;
 
   const paymentDisabled =
-      locallyExpired || insufficient || !agreed;
+      locallyExpired || !agreed;
+
+  const returnTo = `${ROUTES.reservationPayment(reservationId)}${
+      spaceVersionParam === null
+          ? ''
+          : `?spaceVersion=${encodeURIComponent(spaceVersionParam)}`
+  }`;
+
+  const chargeAmount = suggestChargeAmount(
+      reservation.totalAmount,
+      member?.balance,
+  );
 
   return (
       <div className="payment-page">
@@ -417,7 +440,9 @@ export default function PaymentPage() {
               onChange={(ids) => setAgreementState({ reservationId: String(reservationId), ids })}
               disabled={pay.loading || locallyExpired}
             />
-            <ErrorMessage error={pay.error} />
+            <ErrorMessage
+              error={pay.error?.code === 'INSUFFICIENT_BALANCE' ? null : pay.error}
+            />
 
             {insufficient && (
                 <div
@@ -454,6 +479,53 @@ export default function PaymentPage() {
             </Button>
           </aside>
         </div>
+
+        <Modal
+          open={insufficientOpen}
+          title="크레딧이 부족합니다. 충전하시겠어요?"
+          onClose={() => setInsufficientOpen(false)}
+          footer={locallyExpired ? (
+            <>
+              <Button onClick={() => setInsufficientOpen(false)}>닫기</Button>
+              <Button
+                variant="primary"
+                onClick={() => router.push(ROUTES.spaceDetail(reservation.spaceId))}
+              >
+                다시 예약하기
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={() => setInsufficientOpen(false)}>취소</Button>
+              <Button
+                variant="primary"
+                onClick={() => router.push(
+                    `${ROUTES.creditCharge}?amount=${chargeAmount}&returnTo=${encodeURIComponent(returnTo)}`,
+                )}
+              >
+                결제하기
+              </Button>
+            </>
+          )}
+        >
+          {locallyExpired ? (
+            <p>결제 대기 시간이 끝났습니다. 오피스를 다시 선택해 예약해 주세요.</p>
+          ) : (
+            <>
+              <p>
+                부족분을 기준으로 <strong>{formatWon(chargeAmount)}</strong> 충전을 제안합니다.
+                충전 후 이 화면으로 돌아와 예약 결제 버튼을 다시 눌러 주세요.
+              </p>
+              {reservation.holdExpiresAt && (
+                <HoldCountdown
+                  holdExpiresAt={reservation.holdExpiresAt}
+                  onExpire={handleExpire}
+                  compact
+                />
+              )}
+            </>
+          )}
+        </Modal>
       </div>
   );
 }

@@ -19,6 +19,11 @@ export const API_ROUTES = {
   members: {
     me: '/members/me',
   },
+  credits: {
+    chargeOrders: '/credits/charge-orders',
+    chargeOrder: (orderId: string) => `/credits/charge-orders/${orderId}`,
+    confirmChargeOrder: '/credits/charge-orders/confirm',
+  },
   spaces: {
     list: '/spaces',
     detail: (spaceId: number | string) => `/spaces/${spaceId}`,

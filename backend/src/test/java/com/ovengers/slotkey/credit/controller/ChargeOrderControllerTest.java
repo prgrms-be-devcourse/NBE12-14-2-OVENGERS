@@ -32,6 +32,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -102,6 +103,26 @@ class ChargeOrderControllerTest {
                 .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
 
         verifyNoInteractions(chargeOrderService);
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/credits/charge-orders/{orderId}는 본인 주문 상태를 반환한다")
+    void get_ownedOrder_returnsOk() throws Exception {
+        String orderId = "chg_550e8400-e29b-41d4-a716-446655440000";
+        given(chargeOrderService.get(7L, orderId)).willReturn(new ChargeOrderResponse(
+                orderId,
+                1_000L,
+                ChargeOrderStatus.CONFIRMING
+        ));
+
+        mockMvc.perform(get("/api/v1/credits/charge-orders/{orderId}", orderId)
+                        .header("Authorization", "Bearer " + accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.orderId").value(orderId))
+                .andExpect(jsonPath("$.data.amount").value(1_000L))
+                .andExpect(jsonPath("$.data.status").value("CONFIRMING"));
+
+        verify(chargeOrderService).get(7L, orderId);
     }
 
     @Test
@@ -237,7 +258,14 @@ class ChargeOrderControllerTest {
     private MockHttpServletRequestBuilder authenticatedPost(
             String content
     ) {
-        String token = JwtUtil.createToken(
+        return post("/api/v1/credits/charge-orders")
+                .header("Authorization", "Bearer " + accessToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(content);
+    }
+
+    private String accessToken() {
+        return JwtUtil.createToken(
                 secretKey,
                 300_000L,
                 Map.of(
@@ -246,10 +274,6 @@ class ChargeOrderControllerTest {
                         "role", MemberRole.USER.name()
                 )
         );
-        return post("/api/v1/credits/charge-orders")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(content);
     }
 
     private MockHttpServletRequestBuilder authenticatedConfirm(String idempotencyKey) {

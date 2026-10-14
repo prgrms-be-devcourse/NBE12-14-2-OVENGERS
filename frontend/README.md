@@ -37,7 +37,7 @@ NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY=로컬에서_사용할_테스트_클라이�
 | 이름 | 쓰이는 곳 | 설명 |
 | --- | --- | --- |
 | `NEXT_PUBLIC_API_BASE_URL` | 브라우저 | API 기본 주소. 미설정 시 `/api/v1` (같은 오리진 → rewrite 경유) |
-| `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY` | 브라우저 | 토스페이먼츠 주문서형 SDK 테스트 클라이언트 키. 충전 화면에서만 사용 |
+| `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY` | 브라우저 | 토스페이먼츠 주문서형 SDK의 `test_gck_`/`live_gck_` 클라이언트 키. `gsk` 시크릿 키는 거절 |
 | `BACKEND_ORIGIN` | 서버(rewrite) | `/api/v1/*` 를 넘길 백엔드 오리진. 미설정 시 `http://localhost:8080` |
 
 브라우저는 언제나 같은 오리진의 `/api/v1` 로 요청하고, 실제 백엔드로 넘기는 일은

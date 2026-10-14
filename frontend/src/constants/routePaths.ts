@@ -5,6 +5,10 @@ export const ROUTES = {
   signup: '/signup',
   myPage: '/mypage',
 
+  creditCharge: '/credits/charge',
+  creditChargeSuccess: '/credits/charge/success',
+  creditChargeFail: '/credits/charge/fail',
+
   spaces: '/spaces',
   spaceDetail: (spaceId: number | string) => `/spaces/${spaceId}`,
 
