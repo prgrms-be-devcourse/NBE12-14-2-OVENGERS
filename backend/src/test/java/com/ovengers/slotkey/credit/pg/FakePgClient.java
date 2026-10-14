@@ -1,12 +1,16 @@
 package com.ovengers.slotkey.credit.pg;
 
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Component
+@Profile("test")
 public class FakePgClient implements PgClient {
 
     private final AtomicInteger confirmCalls = new AtomicInteger();

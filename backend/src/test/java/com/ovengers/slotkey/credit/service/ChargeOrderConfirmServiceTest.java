@@ -5,6 +5,7 @@ import com.ovengers.slotkey.credit.entity.ChargeOrderStatus;
 import com.ovengers.slotkey.credit.pg.PgClient;
 import com.ovengers.slotkey.credit.pg.PgConfirmRequest;
 import com.ovengers.slotkey.credit.pg.PgConfirmationResult;
+import com.ovengers.slotkey.credit.pg.PgPaymentLookupResult;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.global.idempotency.IdempotencyService;
@@ -16,7 +17,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.sql.SQLException;
@@ -31,9 +31,6 @@ class ChargeOrderConfirmServiceTest {
 
     @Mock
     private ChargeOrderConfirmTransactionService transactionService;
-
-    @Mock
-    private ObjectProvider<PgClient> pgClientProvider;
 
     @Mock
     private PgClient pgClient;
@@ -71,7 +68,7 @@ class ChargeOrderConfirmServiceTest {
 
         ChargeOrderConfirmService service = new ChargeOrderConfirmService(
                 transactionService,
-                pgClientProvider,
+                pgClient,
                 idempotencyService
         );
 
@@ -100,7 +97,7 @@ class ChargeOrderConfirmServiceTest {
         )).willThrow(failure);
         ChargeOrderConfirmService service = new ChargeOrderConfirmService(
                 transactionService,
-                pgClientProvider,
+                pgClient,
                 idempotencyService
         );
 
@@ -138,7 +135,7 @@ class ChargeOrderConfirmServiceTest {
         )).willThrow(failure);
         ChargeOrderConfirmService service = new ChargeOrderConfirmService(
                 transactionService,
-                pgClientProvider,
+                pgClient,
                 idempotencyService
         );
 
@@ -174,7 +171,7 @@ class ChargeOrderConfirmServiceTest {
         )).willThrow(failure);
         ChargeOrderConfirmService service = new ChargeOrderConfirmService(
                 transactionService,
-                pgClientProvider,
+                pgClient,
                 idempotencyService
         );
 
@@ -210,7 +207,6 @@ class ChargeOrderConfirmServiceTest {
                 1_000L,
                 "client-key"
         )).willReturn(ChargeOrderPreparation.callPg(pgRequest));
-        given(pgClientProvider.getObject()).willReturn(pgClient);
         given(pgClient.confirm(pgRequest))
                 .willReturn(PgConfirmationResult.approved("payment-key"));
         given(transactionService.completeApproved(
@@ -221,7 +217,7 @@ class ChargeOrderConfirmServiceTest {
         given(transactionService.currentResponse("chg_order")).willReturn(confirming);
         ChargeOrderConfirmService service = new ChargeOrderConfirmService(
                 transactionService,
-                pgClientProvider,
+                pgClient,
                 idempotencyService
         );
 
@@ -237,5 +233,53 @@ class ChargeOrderConfirmServiceTest {
         assertThat(output)
                 .contains("exceptionClass=BusinessException")
                 .contains("errorCode=CHARGE_ORDER_STATE_CONFLICT");
+    }
+
+    @Test
+    @DisplayName("승인 결과 확인 조회가 불확실하면 주문번호와 조회 분류를 경고로 남긴다")
+    void confirm_lookupUnknown_logsOrderIdAndClassification(CapturedOutput output) {
+        PgConfirmRequest pgRequest = new PgConfirmRequest(
+                "payment-key-sensitive",
+                "chg_order",
+                1_000L,
+                "pg-key"
+        );
+        ChargeOrderConfirmResponse confirming = new ChargeOrderConfirmResponse(
+                "chg_order",
+                1_000L,
+                ChargeOrderStatus.CONFIRMING
+        );
+        given(transactionService.prepare(
+                7L,
+                "payment-key-sensitive",
+                "chg_order",
+                1_000L,
+                "client-key"
+        )).willReturn(ChargeOrderPreparation.callPg(pgRequest), ChargeOrderPreparation.current(confirming));
+        given(pgClient.confirm(pgRequest)).willReturn(PgConfirmationResult.unknown(
+                "ALREADY_PROCESSED_PAYMENT",
+                PgConfirmationResult.UnknownReason.ALREADY_PROCESSED
+        ));
+        given(pgClient.findByPaymentKey("payment-key-sensitive"))
+                .willReturn(PgPaymentLookupResult.unknown());
+        ChargeOrderConfirmService service = new ChargeOrderConfirmService(
+                transactionService,
+                pgClient,
+                idempotencyService
+        );
+
+        ChargeOrderConfirmResponse response = service.confirm(
+                7L,
+                "payment-key-sensitive",
+                "chg_order",
+                1_000L,
+                "client-key"
+        );
+
+        assertThat(response).isEqualTo(confirming);
+        assertThat(output)
+                .contains("orderId=chg_order")
+                .contains("lookupStatus=UNKNOWN")
+                .doesNotContain("payment-key-sensitive");
     }
 }

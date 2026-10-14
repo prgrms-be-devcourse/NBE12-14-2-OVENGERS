@@ -11,16 +11,13 @@ import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.entity.MemberStatus;
 import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.support.IntegrationTestSupport;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.Duration;
@@ -37,7 +34,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
-@Import(ChargeOrderConfirmIntegrationTest.FakePgConfig.class)
 class ChargeOrderConfirmIntegrationTest extends IntegrationTestSupport {
 
     private static final long AMOUNT = 10_000L;
@@ -71,6 +67,13 @@ class ChargeOrderConfirmIntegrationTest extends IntegrationTestSupport {
         ChargeOrderResponse order = chargeOrderService.create(memberId, AMOUNT);
         orderId = order.orderId();
         paymentKey = "payment-" + UUID.randomUUID();
+    }
+
+    @AfterEach
+    void cleanUpChargeData() {
+        jdbcTemplate.update("DELETE FROM credit_transaction");
+        jdbcTemplate.update("DELETE FROM charge_order");
+        jdbcTemplate.update("DELETE FROM idempotency_key");
     }
 
     @Test
@@ -621,10 +624,16 @@ class ChargeOrderConfirmIntegrationTest extends IntegrationTestSupport {
 
         confirm(memberId, "transaction-check");
 
+        String storedPgIdempotencyKey = jdbcTemplate.queryForObject(
+                "SELECT pg_idempotency_key FROM charge_order WHERE order_id = ?",
+                String.class,
+                orderId
+        );
         assertThat(fakePgClient.transactionActiveDuringCalls())
                 .containsExactly(false);
         assertThat(fakePgClient.lastConfirmRequest().idempotencyKey())
-                .isNotBlank();
+                .isEqualTo(storedPgIdempotencyKey)
+                .hasSizeLessThanOrEqualTo(300);
     }
 
     @Test
@@ -810,14 +819,4 @@ class ChargeOrderConfirmIntegrationTest extends IntegrationTestSupport {
         assertThat(ledgerSum).isEqualTo(balance);
     }
 
-    @TestConfiguration(proxyBeanMethods = false)
-    static class FakePgConfig {
-
-        @Bean
-        @Primary
-        FakePgClient fakePgClient() {
-            return new FakePgClient();
-        }
-
-    }
 }

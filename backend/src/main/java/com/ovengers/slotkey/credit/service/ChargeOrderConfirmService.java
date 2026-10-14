@@ -9,7 +9,6 @@ import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.global.idempotency.IdempotencyService;
 import org.hibernate.exception.ConstraintViolationException;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
@@ -23,16 +22,16 @@ public class ChargeOrderConfirmService {
             "uk_charge_order_member_client_idempotency";
 
     private final ChargeOrderConfirmTransactionService transactionService;
-    private final ObjectProvider<PgClient> pgClientProvider;
+    private final PgClient pgClient;
     private final IdempotencyService idempotencyService;
 
     public ChargeOrderConfirmService(
             ChargeOrderConfirmTransactionService transactionService,
-            ObjectProvider<PgClient> pgClientProvider,
+            PgClient pgClient,
             IdempotencyService idempotencyService
     ) {
         this.transactionService = transactionService;
-        this.pgClientProvider = pgClientProvider;
+        this.pgClient = pgClient;
         this.idempotencyService = idempotencyService;
     }
 
@@ -79,7 +78,6 @@ public class ChargeOrderConfirmService {
             return preparation.currentResponse();
         }
 
-        PgClient pgClient = pgClientProvider.getObject();
         PgConfirmationResult result = pgClient.confirm(preparation.pgRequest());
         if (result.type() == PgConfirmationResult.Type.APPROVED) {
             return completeApprovedOrKeepConfirming(
@@ -101,6 +99,12 @@ public class ChargeOrderConfirmService {
                         idempotencyKey
                 );
             }
+            log.warn(
+                    "PG 승인 결과 확인 조회가 확정적이지 않습니다. "
+                            + "orderId={} lookupStatus={}",
+                    orderId,
+                    lookup.status()
+            );
         }
         if (result.unknownReason() == PgConfirmationResult.UnknownReason.MERCHANT_ERROR) {
             throw new BusinessException(ErrorCode.PG_CONFIRMATION_ERROR);
