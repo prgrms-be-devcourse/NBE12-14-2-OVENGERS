@@ -69,14 +69,6 @@ public class VerificationController {
     public ResponseEntity<ApiResponse<VerificationIssueResponse>> issue(
             @Valid @RequestBody VerificationIssueRequest request
     ) {
-        // 복구 대상 확인을 연결하기 전에는 가입 인증만 공개한다.
-        if (request.purpose() != VerificationPurpose.SIGNUP) {
-            throw new BusinessException(
-                    ErrorCode.VALIDATION_FAILED,
-                    "현재는 회원가입용 이메일 인증만 요청할 수 있습니다."
-            );
-        }
-
         ChallengeIssueResult result = challengeService.issue(
                 request.email(),
                 request.purpose()

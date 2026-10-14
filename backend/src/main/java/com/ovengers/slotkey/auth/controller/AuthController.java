@@ -2,6 +2,7 @@ package com.ovengers.slotkey.auth.controller;
 
 import com.ovengers.slotkey.auth.dto.request.LoginRequest;
 import com.ovengers.slotkey.auth.dto.request.SignupRequest;
+import com.ovengers.slotkey.auth.dto.request.PasswordResetRequest;
 import com.ovengers.slotkey.auth.dto.response.LoginResponse;
 import com.ovengers.slotkey.auth.dto.response.SignupResponse;
 import com.ovengers.slotkey.auth.service.AuthService;
@@ -9,6 +10,7 @@ import com.ovengers.slotkey.member.dto.request.MemberWithdrawalRequest;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.service.MemberService;
 import com.ovengers.slotkey.member.service.MemberWithdrawalService;
+import com.ovengers.slotkey.auth.service.PasswordResetService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -37,6 +39,7 @@ public class AuthController {
     private final MemberService memberService;
     private final AuthService authService;
     private final MemberWithdrawalService memberWithdrawalService;
+    private final PasswordResetService passwordResetService;
 
     @Value("${app.auth.cookie.secure}")
     private boolean cookieSecure;
@@ -178,6 +181,19 @@ public class AuthController {
                 .body(ApiResponse.success(
                         new LoginResponse(result.accessToken())
                 ));
+    }
+
+    @PostMapping("/password-reset")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @RequestBody @Valid PasswordResetRequest request
+    ) {
+        passwordResetService.reset(
+                request.email(),
+                request.grant(),
+                request.password(),
+                request.passwordConfirm()
+        );
+        return ResponseEntity.ok(ApiResponse.success());
     }
 
 

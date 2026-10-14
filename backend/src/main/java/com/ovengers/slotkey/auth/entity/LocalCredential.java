@@ -38,4 +38,9 @@ public class LocalCredential {
         this.passwordHash = passwordHash;
         this.passwordChangedAt = passwordChangedAt;
     }
+
+    public void changePassword(String passwordHash, LocalDateTime changedAt) {
+        this.passwordHash = passwordHash;
+        this.passwordChangedAt = changedAt;
+    }
 }

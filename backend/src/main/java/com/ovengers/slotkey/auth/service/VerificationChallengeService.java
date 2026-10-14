@@ -5,6 +5,8 @@ import com.ovengers.slotkey.auth.entity.VerificationChallenge;
 import com.ovengers.slotkey.auth.entity.VerificationGuard;
 import com.ovengers.slotkey.auth.entity.VerificationPurpose;
 import com.ovengers.slotkey.auth.mail.VerificationMailSender;
+import com.ovengers.slotkey.auth.repository.LocalCredentialRepository;
+import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.auth.repository.VerificationChallengeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,8 @@ public class VerificationChallengeService {
     private final VerificationSecretGenerator secretGenerator;
     private final VerificationSecretHasher secretHasher;
     private final VerificationMailSender mailSender;
+    private final MemberRepository memberRepository;
+    private final LocalCredentialRepository localCredentialRepository;
     private final Clock clock;
 
     @Transactional
@@ -83,12 +87,19 @@ public class VerificationChallengeService {
                 challengeRepository.saveAndFlush(challenge);
 
         // 실패 예외가 발생하면 위 DB 변경도 롤백
-        try {
-            mailSender.sendCode(email, purpose, rawCode);
-        } catch (MailException e) {
-            throw new BusinessException(
-                    ErrorCode.VERIFICATION_MAIL_FAILED
-            );
+        boolean sendMail = purpose == VerificationPurpose.SIGNUP
+                || memberRepository.findByEmail(email)
+                .map(member -> localCredentialRepository.existsById(member.getId()))
+                .orElse(false);
+
+        if (sendMail) {
+            try {
+                mailSender.sendCode(email, purpose, rawCode);
+            } catch (MailException e) {
+                throw new BusinessException(
+                        ErrorCode.VERIFICATION_MAIL_FAILED
+                );
+            }
         }
 
         return new ChallengeIssueResult(
