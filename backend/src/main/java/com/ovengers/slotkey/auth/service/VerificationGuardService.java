@@ -31,7 +31,7 @@ public class VerificationGuardService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void unlockAllForEmail(String email) {
-        guardRepository.findAllByEmail(email)
+        guardRepository.findAllByEmailForUpdate(email)
                 .forEach(VerificationGuard::unlockByAdmin);
     }
 }

@@ -51,6 +51,18 @@ public class AdminMemberService {
     // 계정 복구
     @Transactional
     public MemberStatusChangeResponse restore(Long memberId, String reason, Long adminMemberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+
+        if (member.getStatus() == MemberStatus.WITHDRAWN) {
+            throw new BusinessException(ErrorCode.MEMBER_WITHDRAWN);
+        }
+        if (member.getRole() == MemberRole.ADMIN) {
+            throw new BusinessException(ErrorCode.TARGET_IS_ADMIN);
+        }
+
+        // 인증 처리와 같은 순서로 VerificationGuard 잠금을 먼저 확보한다.
+        verificationGuardService.unlockAllForEmail(member.getEmail());
         return changeStatus(memberId, MemberStatus.ACTIVE, reason, adminMemberId, AuditAction.REACTIVATE_MEMBER);
     }
 
@@ -111,10 +123,6 @@ public class AdminMemberService {
 
         MemberStatus beforeStatus = member.getStatus();
 
-        if (targetStatus == MemberStatus.ACTIVE && member.getEmail() != null) {
-            verificationGuardService.unlockAllForEmail(member.getEmail());
-        }
-
         member.updateStatus(targetStatus);
 
         LocalDateTime changedAt = LocalDateTime.now(clock);
@@ -138,7 +146,11 @@ public class AdminMemberService {
                 .findFirstByTargetTypeAndTargetIdAndActionInOrderByCreatedAtDescIdDesc(
                         AuditTargetType.MEMBER,
                         member.getId(),
-                        List.of(AuditAction.SUSPEND_MEMBER, AuditAction.REACTIVATE_MEMBER))
+                        List.of(
+                                AuditAction.SUSPEND_MEMBER,
+                                AuditAction.REACTIVATE_MEMBER,
+                                AuditAction.LOCK_MEMBER_BY_VERIFICATION
+                        ))
                 .orElse(null);
 
         LocalDateTime lastStatusChangedAt = lastStatusChangeLog != null ? lastStatusChangeLog.getCreatedAt() : null;

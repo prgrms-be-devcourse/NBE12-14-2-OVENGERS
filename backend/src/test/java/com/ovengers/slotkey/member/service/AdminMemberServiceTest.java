@@ -151,7 +151,8 @@ class AdminMemberServiceTest {
                                 memberId,
                                 List.of(
                                         AuditAction.SUSPEND_MEMBER,
-                                        AuditAction.REACTIVATE_MEMBER
+                                        AuditAction.REACTIVATE_MEMBER,
+                                        AuditAction.LOCK_MEMBER_BY_VERIFICATION
                                 )
                         )
         ).willReturn(Optional.of(auditLog));
@@ -247,11 +248,13 @@ class AdminMemberServiceTest {
 
         Member member = mock(Member.class);
 
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
         given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(member));
         given(member.getId()).willReturn(memberId);
         given(member.getRole()).willReturn(MemberRole.USER);
         given(member.getStatus())
                 .willReturn(
+                        MemberStatus.SUSPENDED,
                         MemberStatus.SUSPENDED,
                         MemberStatus.SUSPENDED,
                         MemberStatus.ACTIVE
@@ -319,7 +322,7 @@ class AdminMemberServiceTest {
 
         Member member = mock(Member.class);
 
-        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(member));
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
         given(member.getStatus()).willReturn(MemberStatus.ACTIVE);
         given(member.getRole()).willReturn(MemberRole.ADMIN);
 
@@ -419,7 +422,8 @@ class AdminMemberServiceTest {
                                 memberId,
                                 List.of(
                                         AuditAction.SUSPEND_MEMBER,
-                                        AuditAction.REACTIVATE_MEMBER
+                                        AuditAction.REACTIVATE_MEMBER,
+                                        AuditAction.LOCK_MEMBER_BY_VERIFICATION
                                 )
                         )
         ).willReturn(Optional.empty());
