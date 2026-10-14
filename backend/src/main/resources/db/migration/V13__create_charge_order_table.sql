@@ -8,6 +8,8 @@ CREATE TABLE charge_order (
     client_idempotency_key VARCHAR(100) NULL,
     pg_idempotency_key VARCHAR(100) NULL,
     failure_code VARCHAR(100) NULL,
+    recovery_next_attempt_at DATETIME NULL,
+    recovery_exhausted_at DATETIME NULL,
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
     CONSTRAINT uk_charge_order_order_id UNIQUE (order_id),
@@ -15,7 +17,11 @@ CREATE TABLE charge_order (
     CONSTRAINT uk_charge_order_member_client_idempotency
         UNIQUE (member_id, client_idempotency_key),
     CONSTRAINT uk_charge_order_pg_idempotency_key UNIQUE (pg_idempotency_key),
-    CONSTRAINT fk_charge_order_member FOREIGN KEY (member_id) REFERENCES member (id)
+    CONSTRAINT fk_charge_order_member FOREIGN KEY (member_id) REFERENCES member (id),
+    INDEX idx_charge_order_recovery_due
+        (status, recovery_exhausted_at, recovery_next_attempt_at, id),
+    INDEX idx_charge_order_recovery_exhausted
+        (status, recovery_exhausted_at, updated_at, id)
 ) ENGINE = InnoDB;
 
 ALTER TABLE credit_transaction

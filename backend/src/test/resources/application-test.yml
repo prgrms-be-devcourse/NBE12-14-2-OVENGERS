@@ -18,3 +18,8 @@ app:
 
   space-image:
     storage-root: build/tmp/space-images
+
+slotkey:
+  scheduler:
+    charge-recovery:
+      enabled: false

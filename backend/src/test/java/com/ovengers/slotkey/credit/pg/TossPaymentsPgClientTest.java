@@ -13,6 +13,7 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -233,6 +234,38 @@ class TossPaymentsPgClientTest {
         PgPaymentLookupResult result = client.findByPaymentKey("payment-key");
 
         assertThat(result.status()).isEqualTo(PgPaymentLookupResult.Status.UNKNOWN);
+        assertThat(result.paymentObjectReceived()).isFalse();
+        server.verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {404, 500})
+    @DisplayName("조회 HTTP 실패는 Payment 객체가 없는 UNKNOWN으로 분류한다")
+    void findByPaymentKey_httpFailure_hasNoPaymentObject(int status) {
+        server.expect(requestTo(BASE_URL + "/v1/payments/payment-key"))
+                .andRespond(withStatus(HttpStatus.valueOf(status)));
+
+        PgPaymentLookupResult result = client.findByPaymentKey("payment-key");
+
+        assertThat(result.status()).isEqualTo(PgPaymentLookupResult.Status.UNKNOWN);
+        assertThat(result.paymentObjectReceived()).isFalse();
+        server.verify();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("networkFailures")
+    @DisplayName("조회 네트워크 실패는 Payment 객체가 없는 UNKNOWN으로 분류한다")
+    void findByPaymentKey_networkFailure_hasNoPaymentObject(
+            String name,
+            IOException failure
+    ) {
+        server.expect(requestTo(BASE_URL + "/v1/payments/payment-key"))
+                .andRespond(withException(failure));
+
+        PgPaymentLookupResult result = client.findByPaymentKey("payment-key");
+
+        assertThat(result.status()).isEqualTo(PgPaymentLookupResult.Status.UNKNOWN);
+        assertThat(result.paymentObjectReceived()).isFalse();
         server.verify();
     }
 
@@ -358,13 +391,36 @@ class TossPaymentsPgClientTest {
         PgPaymentLookupResult result = client.findByPaymentKey("payment-key");
 
         assertThat(result.status()).isEqualTo(expectedStatus);
-        if (expectedStatus == PgPaymentLookupResult.Status.UNKNOWN) {
-            assertThat(result.paymentKey()).isNull();
-        } else {
-            assertThat(result.paymentKey()).isEqualTo("payment-key");
-        }
+        assertThat(result.paymentKey()).isEqualTo("payment-key");
+        assertThat(result.rawStatus()).isEqualTo(pgStatus);
         assertThat(output.getOut().contains("PG 조회 상태를 확인해야 합니다"))
                 .isEqualTo(expectsWarning);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("조회 결과는 로컬 주문과 대조할 결제 식별 정보와 원시 상태를 보존한다")
+    void findByPaymentKey_preservesPaymentFactsForIntegrityCheck() {
+        server.expect(requestTo(BASE_URL + "/v1/payments/payment-key"))
+                .andRespond(withSuccess("""
+                        {
+                          "paymentKey": "payment-key",
+                          "orderId": "chg_order123",
+                          "status": "DONE",
+                          "totalAmount": 1000,
+                          "currency": "KRW"
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        PgPaymentLookupResult result = client.findByPaymentKey("payment-key");
+
+        assertThat(result.status()).isEqualTo(PgPaymentLookupResult.Status.APPROVED);
+        assertThat(result.paymentObjectReceived()).isTrue();
+        assertThat(result.paymentKey()).isEqualTo("payment-key");
+        assertThat(result.orderId()).isEqualTo("chg_order123");
+        assertThat(result.totalAmount()).isEqualTo(1_000L);
+        assertThat(result.currency()).isEqualTo("KRW");
+        assertThat(result.rawStatus()).isEqualTo("DONE");
         server.verify();
     }
 
@@ -378,6 +434,7 @@ class TossPaymentsPgClientTest {
         PgPaymentLookupResult result = client.findByPaymentKey("payment-key");
 
         assertThat(result.status()).isEqualTo(PgPaymentLookupResult.Status.UNKNOWN);
+        assertThat(result.paymentObjectReceived()).isTrue();
         assertThat(output).contains("PG 조회 상태를 확인해야 합니다");
         server.verify();
     }

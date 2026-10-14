@@ -142,7 +142,12 @@ public class ChargeOrderConfirmService {
                     errorCode,
                     exception
             );
-            return transactionService.currentResponse(orderId);
+            ChargeOrderConfirmResponse current = transactionService.currentResponse(orderId);
+            if (current.status() == ChargeOrderStatus.PAID
+                    || current.status() == ChargeOrderStatus.CONFIRMING) {
+                return current;
+            }
+            throw new BusinessException(ErrorCode.CHARGE_ORDER_STATE_CONFLICT);
         }
     }
 

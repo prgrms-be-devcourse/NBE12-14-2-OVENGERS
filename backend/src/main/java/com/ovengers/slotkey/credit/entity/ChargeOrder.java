@@ -57,6 +57,12 @@ public class ChargeOrder {
     @Column(name = "failure_code", length = 100)
     private String failureCode;
 
+    @Column(name = "recovery_next_attempt_at")
+    private LocalDateTime recoveryNextAttemptAt;
+
+    @Column(name = "recovery_exhausted_at")
+    private LocalDateTime recoveryExhaustedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -140,15 +146,34 @@ public class ChargeOrder {
         return updatedAt;
     }
 
+    public LocalDateTime getRecoveryNextAttemptAt() {
+        return recoveryNextAttemptAt;
+    }
+
+    public LocalDateTime getRecoveryExhaustedAt() {
+        return recoveryExhaustedAt;
+    }
+
     public void markPaid(LocalDateTime now) {
         this.status = ChargeOrderStatus.PAID;
         this.failureCode = null;
+        this.recoveryNextAttemptAt = null;
         this.updatedAt = now;
     }
 
     public void markFailed(String failureCode, LocalDateTime now) {
         this.status = ChargeOrderStatus.FAILED;
         this.failureCode = failureCode;
+        this.recoveryNextAttemptAt = null;
         this.updatedAt = now;
+    }
+
+    public void scheduleNextRecovery(LocalDateTime nextAttemptAt) {
+        this.recoveryNextAttemptAt = nextAttemptAt;
+    }
+
+    public void markRecoveryExhausted(LocalDateTime now) {
+        this.recoveryExhaustedAt = now;
+        this.recoveryNextAttemptAt = null;
     }
 }

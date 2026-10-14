@@ -51,3 +51,11 @@ app:
   # - app.space-image.storage-root 는 영구 보관용 디렉터리이며 배포 환경에서는 재시작 후에도 유지되는 지속 디스크여야 합니다.
   space-image:
     storage-root: ${SPACE_IMAGE_STORAGE_ROOT:./data/space-images}
+
+slotkey:
+  scheduler:
+    charge-recovery:
+      enabled: true
+      initial-delay-ms: 60000
+      fixed-delay-ms: 60000
+      batch-size: 50

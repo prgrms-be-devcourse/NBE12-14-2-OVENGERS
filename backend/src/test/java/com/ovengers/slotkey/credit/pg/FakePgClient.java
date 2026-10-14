@@ -23,6 +23,9 @@ public class FakePgClient implements PgClient {
             PgPaymentLookupResult.unknown();
     private volatile Duration delay = Duration.ZERO;
     private volatile PgConfirmRequest lastConfirmRequest;
+    private volatile RuntimeException lookupException;
+    private volatile Runnable afterLookupDelay = () -> {
+    };
 
     @Override
     public PgConfirmationResult confirm(PgConfirmRequest request) {
@@ -42,6 +45,10 @@ public class FakePgClient implements PgClient {
         );
         lookupCalls.incrementAndGet();
         sleep();
+        afterLookupDelay.run();
+        if (lookupException != null) {
+            throw lookupException;
+        }
         return lookupResult;
     }
 
@@ -64,12 +71,85 @@ public class FakePgClient implements PgClient {
         lookupResult = PgPaymentLookupResult.approved(paymentKey);
     }
 
+    public void lookupReturnsApproved(
+            String paymentKey,
+            String orderId,
+            long totalAmount,
+            String currency
+    ) {
+        lookupResult = PgPaymentLookupResult.approved(
+                paymentKey,
+                orderId,
+                totalAmount,
+                currency,
+                "DONE"
+        );
+    }
+
     public void lookupReturnsFailed(String paymentKey) {
         lookupResult = PgPaymentLookupResult.failed(paymentKey);
     }
 
+    public void lookupReturnsFailed(
+            String paymentKey,
+            String orderId,
+            long totalAmount,
+            String currency,
+            String rawStatus
+    ) {
+        lookupResult = PgPaymentLookupResult.failed(
+                paymentKey,
+                orderId,
+                totalAmount,
+                currency,
+                rawStatus
+        );
+    }
+
     public void lookupReturnsUnknown() {
         lookupResult = PgPaymentLookupResult.unknown();
+    }
+
+    public void lookupReturnsUnknown(
+            String paymentKey,
+            String orderId,
+            long totalAmount,
+            String currency,
+            String rawStatus
+    ) {
+        lookupResult = PgPaymentLookupResult.unknown(
+                paymentKey,
+                orderId,
+                totalAmount,
+                currency,
+                rawStatus
+        );
+    }
+
+    public void lookupReturnsUnknownPaymentObject(
+            String paymentKey,
+            String orderId,
+            Long totalAmount,
+            String currency,
+            String rawStatus
+    ) {
+        lookupResult = new PgPaymentLookupResult(
+                PgPaymentLookupResult.Status.UNKNOWN,
+                paymentKey,
+                orderId,
+                totalAmount,
+                currency,
+                rawStatus,
+                true
+        );
+    }
+
+    public void lookupThrows(RuntimeException exception) {
+        lookupException = exception;
+    }
+
+    public void afterLookupDelay(Runnable action) {
+        afterLookupDelay = action;
     }
 
     public void delay(Duration delay) {
@@ -100,6 +180,9 @@ public class FakePgClient implements PgClient {
         lookupResult = PgPaymentLookupResult.unknown();
         delay = Duration.ZERO;
         lastConfirmRequest = null;
+        lookupException = null;
+        afterLookupDelay = () -> {
+        };
     }
 
     private void sleep() {

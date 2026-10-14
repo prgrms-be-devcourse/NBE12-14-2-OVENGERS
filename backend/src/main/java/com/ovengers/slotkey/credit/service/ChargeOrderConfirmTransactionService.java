@@ -98,6 +98,7 @@ public class ChargeOrderConfirmTransactionService {
         }
 
         String pgIdempotencyKey = UUID.randomUUID().toString();
+        LocalDateTime confirmingAt = LocalDateTime.now(clock);
         int updated = chargeOrderRepository.startConfirming(
                 order.getId(),
                 ChargeOrderStatus.PENDING,
@@ -105,7 +106,8 @@ public class ChargeOrderConfirmTransactionService {
                 paymentKey,
                 clientIdempotencyKey,
                 pgIdempotencyKey,
-                LocalDateTime.now(clock)
+                confirmingAt,
+                confirmingAt.plusMinutes(1)
         );
         if (updated == 1) {
             return ChargeOrderPreparation.callPg(new PgConfirmRequest(

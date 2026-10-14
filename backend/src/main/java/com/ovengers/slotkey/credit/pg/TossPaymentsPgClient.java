@@ -130,25 +130,55 @@ public final class TossPaymentsPgClient implements PgClient {
     private PgPaymentLookupResult mapLookupStatus(PaymentResponse response) {
         if (response.status() == null || response.status().isBlank()) {
             warnManualReview("MISSING");
-            return PgPaymentLookupResult.unknown();
+            return unknownLookup(response);
         }
         return switch (response.status()) {
-            case "DONE" -> PgPaymentLookupResult.approved(response.paymentKey());
-            case "ABORTED", "EXPIRED" -> PgPaymentLookupResult.failed(response.paymentKey());
-            case "READY", "IN_PROGRESS" -> PgPaymentLookupResult.unknown();
+            case "DONE" -> approvedLookup(response);
+            case "ABORTED", "EXPIRED" -> failedLookup(response);
+            case "READY", "IN_PROGRESS" -> unknownLookup(response);
             case "CANCELED" -> {
                 warnManualReview(response.status());
-                yield PgPaymentLookupResult.failed(response.paymentKey());
+                yield failedLookup(response);
             }
             case "PARTIAL_CANCELED", "WAITING_FOR_DEPOSIT" -> {
                 warnManualReview(response.status());
-                yield PgPaymentLookupResult.unknown();
+                yield unknownLookup(response);
             }
             default -> {
                 warnManualReview(response.status());
-                yield PgPaymentLookupResult.unknown();
+                yield unknownLookup(response);
             }
         };
+    }
+
+    private PgPaymentLookupResult approvedLookup(PaymentResponse response) {
+        return PgPaymentLookupResult.approved(
+                response.paymentKey(),
+                response.orderId(),
+                response.totalAmount(),
+                response.currency(),
+                response.status()
+        );
+    }
+
+    private PgPaymentLookupResult failedLookup(PaymentResponse response) {
+        return PgPaymentLookupResult.failed(
+                response.paymentKey(),
+                response.orderId(),
+                response.totalAmount(),
+                response.currency(),
+                response.status()
+        );
+    }
+
+    private PgPaymentLookupResult unknownLookup(PaymentResponse response) {
+        return PgPaymentLookupResult.unknown(
+                response.paymentKey(),
+                response.orderId(),
+                response.totalAmount(),
+                response.currency(),
+                response.status()
+        );
     }
 
     private void warnManualReview(String status) {
@@ -233,7 +263,8 @@ public final class TossPaymentsPgClient implements PgClient {
             String paymentKey,
             String orderId,
             String status,
-            Long totalAmount
+            Long totalAmount,
+            String currency
     ) {
     }
 

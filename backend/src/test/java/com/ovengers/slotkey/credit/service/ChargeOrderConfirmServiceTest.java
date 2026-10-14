@@ -236,6 +236,55 @@ class ChargeOrderConfirmServiceTest {
     }
 
     @Test
+    @DisplayName("PG 승인 뒤 DB 2 경합으로 현재 상태가 FAILED면 200 응답 대신 상태 충돌을 반환한다")
+    void confirm_db2StateConflictWithFailedCurrentState_throwsStateConflict() {
+        PgConfirmRequest pgRequest = new PgConfirmRequest(
+                "payment-key",
+                "chg_order",
+                1_000L,
+                "pg-key"
+        );
+        ChargeOrderConfirmResponse failed = new ChargeOrderConfirmResponse(
+                "chg_order",
+                1_000L,
+                ChargeOrderStatus.FAILED
+        );
+        given(transactionService.prepare(
+                7L,
+                "payment-key",
+                "chg_order",
+                1_000L,
+                "client-key"
+        )).willReturn(ChargeOrderPreparation.callPg(pgRequest));
+        given(pgClient.confirm(pgRequest))
+                .willReturn(PgConfirmationResult.approved("payment-key"));
+        given(transactionService.completeApproved(
+                "chg_order",
+                "payment-key",
+                "client-key"
+        )).willThrow(new BusinessException(ErrorCode.CHARGE_ORDER_STATE_CONFLICT));
+        given(transactionService.currentResponse("chg_order")).willReturn(failed);
+        ChargeOrderConfirmService service = new ChargeOrderConfirmService(
+                transactionService,
+                pgClient,
+                idempotencyService
+        );
+
+        assertThatThrownBy(() -> service.confirm(
+                7L,
+                "payment-key",
+                "chg_order",
+                1_000L,
+                "client-key"
+        ))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue(
+                        "errorCode",
+                        ErrorCode.CHARGE_ORDER_STATE_CONFLICT
+                );
+    }
+
+    @Test
     @DisplayName("승인 결과 확인 조회가 불확실하면 주문번호와 조회 분류를 경고로 남긴다")
     void confirm_lookupUnknown_logsOrderIdAndClassification(CapturedOutput output) {
         PgConfirmRequest pgRequest = new PgConfirmRequest(
