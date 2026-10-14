@@ -7,7 +7,7 @@ Spring Boot 3.3.4 / Java 21 / MySQL 8.4 / Flyway.
 로컬 실행을 위해서는 MySQL 8.4가 `localhost:3306`에 기동되어 있어야 합니다. `backend/docker-compose.yml`을 사용하여 컨테이너를 실행합니다.
 
 ### 1. 환경변수 설정 및 MySQL 컨테이너 기동
-`backend/docker-compose.yml`은 `DB_PASSWORD`를 필수로 요구합니다. 예제 파일을 복사하여 `.env`를 준비하고 로컬 프로필(`application-local.yml`)의 기본 비밀번호인 `root`와 일치시킵니다.
+`backend/docker-compose.yml`은 `DB_PASSWORD`를 필수로 요구합니다. 예제 파일을 복사하여 `.env`를 준비하고 로컬 프로필(`application-local.yml`)의 기본 비밀번호인 `root`와 일치시킵니다. 로컬 프로필은 Spring Config Data로 같은 `.env`를 선택적으로 읽습니다.
 
 ```bash
 # backend/ 디렉터리 기준 (기존 .env 파일이 없을 때만 복사)
@@ -16,21 +16,21 @@ cp -n .env.example .env
 # MySQL 8.4 컨테이너 기동
 docker compose up -d
 ```
-- `.env.example`에는 로컬 개발용 `DB_PASSWORD=root`와 기본 `JWT_SECRET_KEY`가 이미 정의되어 있어, 파일 복사 후 별도의 중복 추가 없이 바로 기동할 수 있습니다.
+- `.env.example`에는 로컬 개발용 `DB_PASSWORD=root`와 기본 `JWT_SECRET_KEY`가 정의되어 있습니다. 선택 환경변수는 빈 값이 기본값을 덮지 않도록 주석 처리되어 있으므로 필요할 때만 주석을 해제합니다.
 - 컨테이너명: `slotkey-mysql`, 포트: `3306`, DB: `slotkey`, 계정: `root` / `root`
 
 ### 2. 백엔드 서버 기동
-`build.gradle`에는 `.env` 자동 로딩 설정이 없으므로, 프로세스 기동 시 필수 환경변수인 `JWT_SECRET_KEY`를 환경변수로 직접 주입하여 실행합니다 (스키마는 Flyway가 첫 기동 때 V1~V10을 자동 생성합니다).
+로컬 프로필은 `backend/.env`를 자동으로 읽습니다. 토스 승인·조회를 사용할 때만 `.env`의 `TOSS_PAYMENTS_SECRET_KEY` 주석을 해제하고 테스트 시크릿 키를 넣습니다. 키와 Authorization 헤더는 로그나 저장소에 남기지 않습니다.
 
 ```bash
-JWT_SECRET_KEY='local-dev-only-secret-key-must-be-32bytes-or-longer' ./gradlew bootRun
+./gradlew bootRun
 ```
 
 `http://localhost:8080` 에서 뜹니다. Swagger UI 는 `/swagger-ui/index.html`.
 
 | 명령 | 설명 |
 | --- | --- |
-| `JWT_SECRET_KEY=... ./gradlew bootRun` | 개발 서버 (local 프로필) |
+| `./gradlew bootRun` | 개발 서버 (local 프로필, `backend/.env` 자동 로딩) |
 | `./gradlew build` | 빌드 + 테스트 |
 | `./gradlew test` | 테스트만 (Docker Testcontainers 필요) |
 
@@ -42,8 +42,11 @@ JWT_SECRET_KEY='local-dev-only-secret-key-must-be-32bytes-or-longer' ./gradlew b
 | `DB_PASSWORD` | **예** (Docker Compose 필수) / 불필요 (Spring local) | `backend/docker-compose.yml` 기동 시 MySQL root 비밀번호로 필수(`backend/.env`). Spring Boot 로컬 실행 시에는 `application-local.yml`의 기본값(`root`)이 적용되므로 Spring 프로세스 환경변수로는 불필요 |
 | `DB_URL` / `DB_USERNAME` | 불필요 (로컬) / **예** (배포) | 로컬에서는 `application-local.yml`이 localhost:3306/slotkey (`root`)로 덮어쓰므로 불필요. 배포 프로필에서만 필요 |
 | `CORS_ALLOWED_ORIGINS` | 아니오 | 미설정 시 `http://localhost:3000` |
+| `TOSS_PAYMENTS_SECRET_KEY` | PG 승인·조회 시 **예** | 토스페이먼츠 테스트 시크릿 키. 로컬 `.env` 또는 프로세스 환경변수로만 주입하며 로그에 남기지 않음 |
 
 로컬 DB 접속 정보(`root` / `root`, 스키마 `slotkey`)는 `application-local.yml` 에 있습니다.
+
+결제창을 포함한 로컬 성공 흐름은 [`tools/pg-sandbox`](../tools/pg-sandbox/README.md)에서 수동 검증합니다. 이 도구는 운영 코드와 `frontend/` 앱에 포함되지 않습니다.
 
 ## 알아둘 점
 

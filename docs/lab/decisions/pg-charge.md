@@ -1,6 +1,6 @@
 # PG 결제 — 크레딧 충전
 
-> 상태: 초안 (구현 전). 작성: 2026-10-06. 결정 반영: 2026-10-06 (범위 확정: 충전 취소 제외). 구현 후 "검증 결과" 칸을 채운다.
+> 상태: 구현 중 (3단계 완료, 4단계 진행 전). 작성: 2026-10-06. 결정 반영: 2026-10-14.
 
 ## 문제
 
@@ -85,18 +85,21 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 
 조회 결과의 결제 상태 매핑:
 
-| 조회한 결제 상태 | 우리 상태 |
-| --- | --- |
-| `DONE` | `PAID` |
-| `ABORTED`(승인 실패), `EXPIRED`(30분 경과) | `FAILED` |
-| `READY`, `IN_PROGRESS` | `CONFIRMING` 유지, 간격을 두고 재확인 |
-| `CANCELED`, `PARTIAL_CANCELED`, `WAITING_FOR_DEPOSIT` | 이번 범위에서 생기지 않아야 하는 상태. 관리자 확인 대상으로 표시 |
+| 조회한 결제 상태 | `PgPaymentLookupResult` | 처리 |
+| --- | --- | --- |
+| `DONE` | `APPROVED` | `PAID` 반영 후보 |
+| `ABORTED`(승인 실패), `EXPIRED`(30분 경과) | `FAILED` | 돈이 나가지 않은 것이 확실하므로 `FAILED` 반영 후보 |
+| `READY`, `IN_PROGRESS` | `UNKNOWN` | `CONFIRMING` 유지, 간격을 두고 재확인 |
+| `CANCELED` | `FAILED` | 취소 완료로 돈이 나가지 않은 것이 확실하므로 경고 로그를 남기고 `FAILED` 반영 후보 |
+| `PARTIAL_CANCELED`, `WAITING_FOR_DEPOSIT` | `UNKNOWN` | 이번 범위에서 생기지 않아야 하므로 경고 로그를 남기고 사람이 확인 |
+
+조회 상태 매핑 원칙은 **돈이 확실히 나가지 않은 경우만 `FAILED`로 분류하고, 애매하면 `UNKNOWN`으로 두고 사람이 확인하는 것**이다.
 
 2단계에서 `ALREADY_PROCESSED_PAYMENT` 직후 조회 결과가 `FAILED` 또는 `UNKNOWN`이면 로컬 주문을 `FAILED`로 확정하지 않고 `CONFIRMING`으로 유지한다. PG 조회 상태 전체 매핑과 최종 상태 정리는 4단계 복구 스케줄러에서 처리한다.
 
 구현 규칙:
 
-- 승인 API 읽기 타임아웃은 **60초**로 둔다(공식 권장). 복구 스케줄러가 `CONFIRMING`을 집어 가는 기준은 이보다 충분히 길게 둬서, 아직 승인 호출 중인 건을 건드리지 않는다.
+- 연결 타임아웃은 **3초**, 승인 API 읽기 타임아웃은 **60초**로 둔다(읽기 시간은 공식 권장). 복구 스케줄러가 `CONFIRMING`을 집어 가는 기준은 이보다 충분히 길게 둬서, 아직 승인 호출 중인 건을 건드리지 않는다.
 - 승인 호출은 `Idempotency-Key` 헤더를 쓴다. 같은 키로 보내면 첫 응답이 반환되고, **본문이 다르면 오류**다. 키는 최대 300자, 유효 기간 15일이다. 주문당 하나를 만들어 요청 전에 저장하고 재시도에도 그대로 쓴다.
 - 조회는 `paymentKey`로도 `orderId`로도 할 수 있다. 응답을 못 받아 `paymentKey`를 모르는 경우에는 `orderId`로 조회한다.
 - 응답 JSON 파싱은 **모르는 필드를 무시**한다(공식 문서: 필드 추가는 버전 없이 반영될 수 있다). Jackson이면 `FAIL_ON_UNKNOWN_PROPERTIES=false`.
@@ -130,7 +133,7 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 - **환불(충전 취소)은 이번 범위에서 제외한다.** 후속 후보: 충전 직후 미사용분 전액 취소.
 - **쓰는 키는 `test_gck_`(클라이언트)와 `test_gsk_`(시크릿)다.** 결제창형(주문서형 포함) 연동 키이며, API 개별 연동 키(`ck`/`sk`)는 결제창 구버전·브랜드페이·자동결제용이라 쓰지 않는다. 클라이언트 키와 시크릿 키는 한 세트로 쓰고, 테스트와 라이브를 섞지 않는다(섞으면 `INVALID_API_KEY`). 전자결제 신청 전에는 문서에 공개된 테스트 키로 연동하고, 내 상점 키는 신청 이후에만 확인할 수 있다. 시크릿 키 API 버전은 `2022-11-16`으로 고정이다. 키 값은 이 저장소에 적지 않는다.
 - **`orderId`는 `chg_` + 소문자 UUID v4로 생성한다.** 주문서형 SDK와 Core API의 허용 형식 중 더 엄격한 Core API 기준(영문 대소문자·숫자·`-`, `_`, 6~64자)에 맞춘다.
-- **샌드박스 키는 환경변수와 로컬 `.env`로만 주입한다.** `.env.example`에는 빈 값의 키 이름만 커밋하고 `.env`는 커밋하지 않는다.
+- **샌드박스 키는 환경변수와 로컬 `.env`로만 주입한다.** `.env.example`에는 선택 키를 빈 값으로 활성화하지 않고 **주석 처리된 키 이름만 커밋**하며 `.env`는 커밋하지 않는다.
 - **CI는 `FakePgClient`만 사용한다.** CI에 PG 키를 넣지 않는다. 실제 샌드박스 호출은 로컬 수동 검증으로만 한다.
 - **PG 호출은 `PgClient` 인터페이스 뒤에 둔다.** HTTP는 Spring의 `RestClient`로 하고 연결·읽기 타임아웃을 설정한다.
 - **허용 충전 금액은 최소·최대 + 100원 단위 규칙으로 한다** (2026-10-07, 단위 목록 대신 선택). 기본값: 최소 1,000원, 최대 100,000원, 100원 단위(예약 요금 단위와 같다). 금액은 원 단위 정수(`long`)로만 다룬다. 경계 테스트: 0, 음수, 999, 1,000, 1,100(허용), 1,001(거절), 100,000, 100,100(거절).
@@ -174,6 +177,19 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 - 공식 문서 출처: 토스페이먼츠 [API 에러 코드](https://docs.tosspayments.com/reference/error-codes), [테스트 환경에서 에러 재현하기](https://docs.tosspayments.com/guides/v2/get-started/environment#테스트-환경에서-에러-재현하기), [LLM Quick Reference](https://docs.tosspayments.com/guides/v2/get-started/llms-quick-reference). 승인 요청은 `POST /v1/payments/confirm`, 본문은 `paymentKey`·`orderId`·`amount`, PG 멱등키는 `Idempotency-Key` 헤더라는 계약을 기준으로 했다.
 - 전체 테스트: `./gradlew test --rerun-tasks` 실행 결과 522개 통과, 실패·오류·건너뜀 0개.
 
+### 3단계 — 실제 토스 구현체 (2026-10-14)
+
+- Spring `RestClient` 기반 실제 `PgClient`를 추가했다. 승인 `POST /v1/payments/confirm`, 조회 `GET /v1/payments/{paymentKey}`, Basic 인증과 PG `Idempotency-Key`를 공식 문서 계약대로 구현했다.
+- 연결 타임아웃 3초·읽기 타임아웃 60초를 설정했다. 5xx와 연결/읽기 타임아웃·소켓 종료는 `UNKNOWN/INDETERMINATE`로 분류한다.
+- test 프로필은 실제 구현체를 제외하고 test source의 `FakePgClient` 하나만 로딩한다. 실제 빈 추가와 함께 승인 서비스는 `ObjectProvider` 대신 일반 생성자 주입을 사용한다.
+- 3단계 신규·회귀 테스트 32개로 헤더·본문, 응답/에러 파싱, 모르는 필드, 네트워크 실패, 로그 민감정보 부재, 조회 상태 8개와 상태 누락, 프로필 격리, 타임아웃, 시크릿 미설정 차단, 속성 문자열 마스킹, 승인 응답 주문·금액 대조를 검증했다.
+- 최초 PG/credit 범위 테스트는 131개 통과, 실패·오류·건너뜀 0개다. 첫 전체 실행에서 PG 통합 테스트가 남긴 `charge_order`와 `idempotency_key` FK가 뒤 테스트를 막는 문제를 확인해 세 PG 테이블을 자식부터 정리하도록 수정했다. 리뷰 수정 후 최종 전체 테스트는 554개 통과, 실패·오류·건너뜀 0개, 78개 클래스다.
+- 공식 문서 공개 테스트 인증으로 실제 호출했다. 인증은 수락됐고 없는 결제 조회는 `404 NOT_FOUND_PAYMENT`, 없는 paymentKey 승인은 `404 NOT_FOUND_PAYMENT_SESSION`의 `{code,message}` 형식이었다. 공개 예시 paymentKey는 현재 200 조회되지 않아 성공 Payment 실응답은 사용자 수동 성공 흐름에서 확인한다.
+- 로컬 수동 검증 도구는 앱이 서빙하지 않는 `tools/pg-sandbox/`에 두었다. 키 값은 저장하지 않고 실행 시 입력/환경변수로만 받는다.
+- 사용자 수동 검증에서 공개 문서용 테스트 키와 결제창형 샌드박스로 테스트 결제를 만들었다. 서버 승인은 `200 PAID`, 잔액은 50,000원에서 51,000원으로 증가했고, `credit_transaction TOP_UP 1,000원` 1행과 `charge_order PAID`를 확인했다.
+- 같은 `paymentKey`를 새 클라이언트 `Idempotency-Key`로 다시 요청해도 `200 PAID`를 반환하고 잔액과 원장이 추가로 바뀌지 않았다. 첫 시도는 만료된 Access Token 때문에 `INVALID_ACCESS_TOKEN`이었고, 재로그인 후 토스 결제 인증의 약 10분 승인 유효시간 안에 성공했다.
+- 공식 문서 출처: 토스페이먼츠 [코어 API](https://docs.tosspayments.com/reference), [결제창형 결제 연동](https://docs.tosspayments.com/guides/v2/payment-widget/integration-window), [인증 및 기타 헤더](https://docs.tosspayments.com/reference/using-api/authorization), [API 에러 코드](https://docs.tosspayments.com/reference/error-codes), [환경 설정](https://docs.tosspayments.com/guides/v2/get-started/environment), [API 키](https://docs.tosspayments.com/reference/using-api/api-keys).
+
 ## 구현 단계
 
 ### 공통 규칙
@@ -183,7 +199,7 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 - 설계 문서와 공식 문서가 다르거나 설계에 빠진 결정이 있으면 추측해서 구현하지 않고 멈춰서 사용자에게 묻는다.
 - 각 단계는 테스트를 먼저 작성하고 실패를 확인한 뒤 구현한다.
 - 단계와 관련 없는 코드는 건드리지 않고 리팩터링하지 않는다.
-- 키 값은 코드와 커밋에 넣지 않는다. `.env`와 환경변수로만 받고 `.env.example`에는 키 이름만 둔다.
+- 키 값은 코드와 커밋에 넣지 않는다. `.env`와 환경변수로만 받고 `.env.example`에는 선택 키를 주석 처리된 키 이름으로만 둔다.
 - CI 테스트는 `FakePgClient`만 사용하며 실제 토스 호출을 넣지 않는다.
 
 ### 진행 및 리뷰 기준
@@ -225,7 +241,7 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 
 ### 3단계 — 실제 토스 구현체
 
-**상태: 진행 전**
+**상태: 완료**
 
 - Spring `RestClient` 기반 실제 토스 구현체를 추가하고 연결·읽기 타임아웃과 PG `Idempotency-Key` 헤더를 설정한다.
 - 자동 테스트에서 실제 토스를 호출하지 않는다. 로컬 샌드박스 수동 검증 방법을 `.http` 파일로 남긴다.
