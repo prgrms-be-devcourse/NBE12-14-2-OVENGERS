@@ -14,10 +14,13 @@ import { ApiError } from '../../api/client';
 import { ERROR_CODE } from '../../constants/errorCodes';
 import { today } from '../../utils/date';
 import { decorateSlots } from '../../utils/slot';
+import { hasReservedFutureSlot, rangeHasReservedSlot, toWaitlistSlots } from '../../utils/waitlist';
+import { cx } from '../../utils/format';
 import { calculateTotal, formatPricePerSlot } from '../../utils/price';
 import { MetaBadge } from '../../components/common/Badge';
 import SpacePhoto from '../../components/space/SpacePhoto';
 import SlotPicker from '../../components/space/SlotPicker';
+import WaitlistApplyPanel from '../../components/waitlist/WaitlistApplyPanel';
 import ReservationSteps from '../../components/reservation/ReservationSteps';
 import PriceSummary from '../../components/reservation/PriceSummary';
 import Button from '../../components/common/Button';
@@ -31,6 +34,8 @@ export default function SpaceDetailPage() {
   const { isAuthenticated } = useAuth();
 
   const [date, setDate] = useState(today());
+  // 'waitlist' 는 예약된 칸을 포함해 구간을 골라 대기를 신청하는 모드다.
+  const [mode, setMode] = useState<'reserve' | 'waitlist'>('reserve');
 
   const fetchSpace = useCallback(() => getSpace(spaceId), [spaceId]);
   const { data: space, loading: spaceLoading, error: spaceError } = useAsync(fetchSpace, [fetchSpace]);
@@ -42,7 +47,15 @@ export default function SpaceDetailPage() {
     () => decorateSlots(slotData?.slots ?? [], date),
     [slotData, date],
   );
-  const selection = useSlotSelection(slots);
+  // 대기 신청은 로그인한 회원이 활성 오피스에서, 예약된 미래 칸이 있을 때만 의미가 있다.
+  const canWaitlist =
+    isAuthenticated && space?.status === SPACE_STATUS.ACTIVE && hasReservedFutureSlot(slots);
+  const waitlistMode = canWaitlist && mode === 'waitlist';
+  const pickerSlots = useMemo(
+    () => (waitlistMode ? toWaitlistSlots(slots) : slots),
+    [waitlistMode, slots],
+  );
+  const selection = useSlotSelection(pickerSlots);
 
   const clientAmount = space ? calculateTotal(space.pricePerSlot, selection.slotCount) : 0;
 
@@ -142,13 +155,41 @@ export default function SpaceDetailPage() {
               />
             </label>
 
+            {canWaitlist && (
+              <div className="tabs" role="group" aria-label="신청 방식">
+                <button
+                  type="button"
+                  className={cx(!waitlistMode && 'active')}
+                  aria-pressed={!waitlistMode}
+                  onClick={() => {
+                    setMode('reserve');
+                    selection.clear();
+                  }}
+                >
+                  바로 예약
+                </button>
+                <button
+                  type="button"
+                  className={cx(waitlistMode && 'active')}
+                  aria-pressed={waitlistMode}
+                  onClick={() => {
+                    setMode('waitlist');
+                    selection.clear();
+                  }}
+                >
+                  빈자리 대기 신청
+                </button>
+              </div>
+            )}
+
             {slotLoading ? (
               <LoadingSpinner label="예약 가능한 시간을 불러오는 중입니다…" />
             ) : slotError ? (
               <ErrorMessage error={slotError} onRetry={() => { void reloadSlots().catch(() => {}); }} />
             ) : (
               <SlotPicker
-                slots={slots}
+                slots={pickerSlots}
+                mode={waitlistMode ? 'waitlist' : 'reserve'}
                 isSelected={selection.isSelected}
                 onSelect={(startTime) => {
                   setError(null);
@@ -161,6 +202,24 @@ export default function SpaceDetailPage() {
         </div>
 
         <aside className="panel sticky">
+          {waitlistMode ? (
+            <>
+              <h2>대기 신청</h2>
+              <WaitlistApplyPanel
+                spaceId={Number(spaceId)}
+                spaceName={space.name}
+                date={date}
+                startTime={selection.startTime}
+                endTime={selection.endTime}
+                needsWaitlist={rangeHasReservedSlot(slots, selection.startTime, selection.endTime)}
+                onStale={() => {
+                  selection.clear();
+                  reloadSlots().catch(() => {});
+                }}
+              />
+            </>
+          ) : (
+          <>
           <h2>예약 내용</h2>
           <PriceSummary
             space={space}
@@ -199,6 +258,8 @@ export default function SpaceDetailPage() {
           <p className="space-note muted">
             선택 중 다른 예약이 먼저 확정될 수 있습니다. 예약 후 10분 안에 크레딧 결제를 완료하면 확정됩니다.
           </p>
+          </>
+          )}
         </aside>
       </div>
     </>

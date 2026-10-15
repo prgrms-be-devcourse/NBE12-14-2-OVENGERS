@@ -14,6 +14,7 @@ export const ROUTES = {
   spaceDetail: (spaceId: number | string) => `/spaces/${spaceId}`,
 
   reservations: '/reservations',
+  waitlist: '/waitlist',
   reservationDetail: (reservationId: number | string) => `/reservations/${reservationId}`,
   reservationPayment: (reservationId: number | string) => `/reservations/${reservationId}/payment`,
 

@@ -27,6 +27,7 @@ import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import Modal from '../../components/common/Modal';
+import InsufficientCreditDialog from '../../components/credit/InsufficientCreditDialog';
 import { useRouteId } from '@/hooks/useRouteId';
 import { suggestChargeAmount } from '@/utils/creditCharge';
 
@@ -468,9 +469,13 @@ export default function PaymentPage() {
                 wide
                 loading={pay.loading}
                 disabled={paymentDisabled}
-                onClick={() =>
-                    pay.execute().catch(() => {})
-                }
+                onClick={() => {
+                    if (insufficient) {
+                        setInsufficientOpen(true);
+                        return;
+                    }
+                    pay.execute().catch(() => {});
+                }}
             >
               {formatWon(
                   reservation.totalAmount,
@@ -480,13 +485,28 @@ export default function PaymentPage() {
           </aside>
         </div>
 
-        <Modal
-          open={insufficientOpen}
-          title="크레딧이 부족합니다. 충전하시겠어요?"
+        <InsufficientCreditDialog
+          open={insufficientOpen && !locallyExpired}
+          chargeAmount={chargeAmount}
+          returnTo={returnTo}
           onClose={() => setInsufficientOpen(false)}
-          footer={locallyExpired ? (
+        >
+          {reservation.holdExpiresAt && (
+            <HoldCountdown
+              holdExpiresAt={reservation.holdExpiresAt}
+              onExpire={handleExpire}
+              compact
+            />
+          )}
+        </InsufficientCreditDialog>
+
+        <Modal
+          open={insufficientOpen && locallyExpired}
+          title="결제 대기 시간이 끝났습니다"
+          onClose={() => setInsufficientOpen(false)}
+          footer={(
             <>
-              <Button onClick={() => setInsufficientOpen(false)}>닫기</Button>
+              <Button className="btn-muted" onClick={() => setInsufficientOpen(false)}>닫기</Button>
               <Button
                 variant="primary"
                 onClick={() => router.push(ROUTES.spaceDetail(reservation.spaceId))}
@@ -494,37 +514,9 @@ export default function PaymentPage() {
                 다시 예약하기
               </Button>
             </>
-          ) : (
-            <>
-              <Button onClick={() => setInsufficientOpen(false)}>취소</Button>
-              <Button
-                variant="primary"
-                onClick={() => router.push(
-                    `${ROUTES.creditCharge}?amount=${chargeAmount}&returnTo=${encodeURIComponent(returnTo)}`,
-                )}
-              >
-                결제하기
-              </Button>
-            </>
           )}
         >
-          {locallyExpired ? (
-            <p>결제 대기 시간이 끝났습니다. 오피스를 다시 선택해 예약해 주세요.</p>
-          ) : (
-            <>
-              <p>
-                부족분을 기준으로 <strong>{formatWon(chargeAmount)}</strong> 충전을 제안합니다.
-                충전 후 이 화면으로 돌아와 예약 결제 버튼을 다시 눌러 주세요.
-              </p>
-              {reservation.holdExpiresAt && (
-                <HoldCountdown
-                  holdExpiresAt={reservation.holdExpiresAt}
-                  onExpire={handleExpire}
-                  compact
-                />
-              )}
-            </>
-          )}
+          <p>결제 대기 시간이 끝났습니다. 오피스를 다시 선택해 예약해 주세요.</p>
         </Modal>
       </div>
   );

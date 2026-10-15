@@ -37,7 +37,7 @@ export default function ReservationListPage() {
         <div>
           <p className="page-kicker">MY RESERVATIONS</p>
           <h1>내 예약</h1>
-          <p>다가오는 일정과 지난 이용 내역을 한눈에 확인하세요.</p>
+          <p>다가오는 일정과 지난 이용 내역을 한눈에 확인하세요. 빈자리 대기는 <Link href={ROUTES.waitlist}>내 대기</Link>에서 볼 수 있어요.</p>
         </div>
         <Link href={ROUTES.spaces} className="btn primary">
           오피스 예약하기

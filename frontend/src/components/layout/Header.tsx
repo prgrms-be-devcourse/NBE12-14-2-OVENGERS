@@ -110,6 +110,8 @@ export default function Header() {
               {!isAdmin && <span className="account-mobile-credit">{formatCredit(member.balance)}</span>}
             </div>
             {!hideMyReservations && <ActiveLink href={ROUTES.reservations}>내 예약</ActiveLink>}
+            {!hideMyReservations && <ActiveLink href={ROUTES.waitlist}>내 대기</ActiveLink>}
+            {!isAdmin && <ActiveLink href={ROUTES.creditCharge}>크레딧 충전하기</ActiveLink>}
             {!isAdmin && <ActiveLink href={ROUTES.inquiries}>내 문의</ActiveLink>}
             <ActiveLink href={ROUTES.myPage}>마이페이지</ActiveLink>
             {isAdmin && <ActiveLink href={ROUTES.adminDashboard}>관리자</ActiveLink>}

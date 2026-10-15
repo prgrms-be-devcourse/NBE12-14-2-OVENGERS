@@ -277,3 +277,29 @@ export interface DoorAccessLog {
   result: AccessResult;
   reasonCode: AccessReasonCode | string | null;
 }
+
+/* ------------------------------------------------------------------ 예약 대기 */
+
+/** 서버 WaitlistStatus. /waitlist/me 는 WAITING 만 돌려준다. */
+export type WaitlistStatus = 'WAITING' | 'CANCELLED' | 'EXPIRED';
+
+/** 대기 1건. startTime·endTime 은 서버 LocalDateTime('2026-10-15T22:30:00'). */
+export interface WaitlistEntry {
+  id: number;
+  spaceId: number;
+  startTime: string;
+  endTime: string;
+  status: WaitlistStatus;
+  /** 같은 공간에서 구간이 겹치는 먼저 신청한 건수 + 1. 안내용이며 자리를 보장하지 않는다. */
+  position: number;
+  createdAt: string;
+}
+
+export interface ApplyWaitlistRequest {
+  spaceId: number;
+  /** 'YYYY-MM-DD' */
+  date: string;
+  /** 'HH:mm' */
+  startTime: string;
+  endTime: string;
+}

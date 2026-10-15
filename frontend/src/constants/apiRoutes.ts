@@ -32,6 +32,12 @@ export const API_ROUTES = {
     detail: (spaceId: number | string) => `/spaces/${spaceId}`,
     slots: (spaceId: number | string) => `/spaces/${spaceId}/slots`,
   },
+  waitlist: {
+    // 예약 대기 신청·내 목록·취소(docs/plans/waitlist-outbox/01-waitlist-rules.md §4).
+    create: '/waitlist',
+    mine: '/waitlist/me',
+    entry: (waitlistEntryId: number | string) => `/waitlist/${waitlistEntryId}`,
+  },
   inquiries: {
     list: '/inquiries',
     detail: (id: number | string) => `/inquiries/${id}`,

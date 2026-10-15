@@ -21,6 +21,8 @@ import ReservationSteps from '../../components/reservation/ReservationSteps';
 import ReservationStatusBadge from '../../components/reservation/ReservationStatusBadge';
 import ReservationStatusHistory from '../../components/reservation/ReservationStatusHistory';
 import CancelRefundInfo from '../../components/reservation/CancelRefundInfo';
+import InsufficientCreditDialog from '../../components/credit/InsufficientCreditDialog';
+import { suggestChargeAmount } from '../../utils/creditCharge';
 import ExtendReservationDialog from '../../components/reservation/ExtendReservationDialog';
 import CheckOutButton from '../../components/reservation/CheckOutButton';
 import ReservationAccessKey from '../../components/access/ReservationAccessKey';
@@ -38,6 +40,7 @@ export default function ReservationDetailPage() {
   const { member, refreshMember } = useAuth();
   const [cancelling, setCancelling] = useState(false);
   const [extending, setExtending] = useState(false);
+  const [shortfall, setShortfall] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const fetchReservation = useCallback(() => getMyReservation(reservationId), [reservationId]);
@@ -54,7 +57,28 @@ export default function ReservationDetailPage() {
 
   const extend = useAction(async ({ newEndTime }: { newEndTime: string }) => {
     if (!reservation) return;
-    await extendReservation(reservationId, { newEndTime, expectedEndTime: reservation.endTime });
+    const extraSlots = Math.max(
+      0,
+      (new Date(newEndTime).getTime() - new Date(reservation.endTime).getTime()) / (30 * 60000),
+    );
+    const extraAmount = Math.round(extraSlots * reservation.pricePerSlotSnapshot);
+    const openShortfall = () => {
+      setExtending(false);
+      setShortfall(suggestChargeAmount(extraAmount, member?.balance));
+    };
+    if (typeof member?.balance === 'number' && member.balance < extraAmount) {
+      openShortfall();
+      return;
+    }
+    try {
+      await extendReservation(reservationId, { newEndTime, expectedEndTime: reservation.endTime });
+    } catch (e) {
+      if ((e as { code?: string })?.code === 'INSUFFICIENT_BALANCE') {
+        openShortfall();
+        return;
+      }
+      throw e;
+    }
     setExtending(false);
     setToast('이용 시간이 연장되었습니다.');
     await refreshMember();
@@ -255,6 +279,12 @@ const endsAt = new Date(`${reservation.endTime}+09:00`);
         <ErrorMessage error={cancel.error} />
       </ConfirmDialog>
 
+      <InsufficientCreditDialog
+        open={shortfall !== null}
+        chargeAmount={shortfall ?? 0}
+        returnTo={ROUTES.reservationDetail(reservationId)}
+        onClose={() => setShortfall(null)}
+      />
       <ExtendReservationDialog
         open={extending}
         currentEndTime={reservation.endTime}
