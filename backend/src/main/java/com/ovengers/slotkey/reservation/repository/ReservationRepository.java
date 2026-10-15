@@ -237,4 +237,27 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             Long memberId,
             List<ReservationStatus> statuses
     );
+
+    /**
+     * 같은 회원·같은 공간에서 구간이 겹치는(startTime < :endTime AND endTime > :startTime)
+     * 유효 점유 예약이 있는지. 점유의 기준은 슬롯 점유 조회(findOccupiedSlotStarts)와 같다 —
+     * occupiedStatuses(CONFIRMED/IN_USE)이거나, HELD이면서 아직 만료되지 않은(:now < holdExpiresAt)
+     * 경우만 점유로 보고, 만료된 HELD와 EXPIRED/CANCELLED/NO_SHOW는 제외한다(core-domain-decisions 2-3).
+     *
+     * 대기 신청의 "본인 점유자 차단"(waitlist 1단계)과 4단계 알림 시점 재검사가 같은 질의를 쓴다.
+     * (member_id, space_id, status, start_time) 인덱스를 전제로 한다.
+     */
+    @Query("SELECT COUNT(r) > 0 FROM Reservation r " +
+            "WHERE r.memberId = :memberId AND r.spaceId = :spaceId " +
+            "AND r.startTime < :endTime AND r.endTime > :startTime " +
+            "AND (r.status IN (:occupiedStatuses) OR (r.status = :heldStatus AND :now < r.holdExpiresAt))")
+    boolean existsOccupyingByMemberAndSpace(
+            @Param("memberId") Long memberId,
+            @Param("spaceId") Long spaceId,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime,
+            @Param("now") LocalDateTime now,
+            @Param("heldStatus") ReservationStatus heldStatus,
+            @Param("occupiedStatuses") List<ReservationStatus> occupiedStatuses
+    );
 }

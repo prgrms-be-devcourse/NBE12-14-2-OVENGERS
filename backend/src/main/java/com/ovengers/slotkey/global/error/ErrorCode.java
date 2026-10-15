@@ -77,6 +77,16 @@ public enum ErrorCode {
     INQUIRY_NOT_FOUND(HttpStatus.NOT_FOUND, "INQUIRY_NOT_FOUND", "존재하지 않는 문의입니다."),
     INQUIRY_ALREADY_ANSWERED(HttpStatus.UNPROCESSABLE_ENTITY, "INQUIRY_ALREADY_ANSWERED", "이미 답변이 등록된 문의는 수정할 수 없습니다."),
 
+    // ── Waitlist (예약 대기) ────────────────────────────
+    WAITLIST_NOT_FOUND(HttpStatus.NOT_FOUND, "WAITLIST_NOT_FOUND", "존재하지 않는 대기 신청입니다."),
+    WAITLIST_NOT_NEEDED(HttpStatus.UNPROCESSABLE_ENTITY, "WAITLIST_NOT_NEEDED",
+                    "해당 시간대는 비어 있어 바로 예약할 수 있습니다."),
+    WAITLIST_ALREADY_HOLDING(HttpStatus.UNPROCESSABLE_ENTITY, "WAITLIST_ALREADY_HOLDING",
+                    "같은 시간대에 본인 예약이 있어 대기를 신청할 수 없습니다."),
+    WAITLIST_DUPLICATE(HttpStatus.CONFLICT, "WAITLIST_DUPLICATE", "이미 신청한 대기입니다."),
+    WAITLIST_LIMIT_EXCEEDED(HttpStatus.UNPROCESSABLE_ENTITY, "WAITLIST_LIMIT_EXCEEDED",
+                    "대기 신청은 최대 3건까지 가능합니다."),
+
     // ── Space 검색 ─────────────────────────────────────
     INVALID_TIME_RANGE(HttpStatus.BAD_REQUEST, "INVALID_TIME_RANGE", "시작 시각은 종료 시각보다 빨라야 합니다.");
 
