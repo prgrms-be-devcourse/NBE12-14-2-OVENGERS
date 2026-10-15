@@ -5,6 +5,8 @@
 > **2026-09-17 갱신 (docs/api)**: 실제 컨트롤러 코드 기준으로 동기화 — Base URL `/api/v1`, 취소 API `POST .../cancel`, 요청/응답 필드, 관리자 예약 목록 필터 미지원, 미구현 API 표시. **프론트는 이 문서를 기준으로 한다.** (claude.ai 프로젝트 문서 `claude/api-명세서.md`는 구버전 — 참고 금지)
 > **2026-09-24 갱신 (대단위 1)**: 컨트롤러·DTO·`SecurityConfig`·`ErrorCode` 전수 조사 기반 정합성 동기화 — 실제 응답 DTO 필드, 엔드포인트별 페이지네이션 반환 형태(`PageResponse` vs Spring `Page`), 오프셋 없는 ISO-8601 LocalDateTime(KST), 멱등성 캐시 동작, 실존 `ErrorCode` 반영 및 미구현/결정 필요 항목(`termsVersion`, 동일 멱등키 충돌 검사, 정지 계정 즉시 차단) 분리 명시.
 
+> **2026-10-15 안내**: 예약 대기 API(`POST /waitlist`, `DELETE /waitlist/{id}`, `GET /waitlist/me`)와 `WAITLIST_*` 에러 코드 5개, `waitlist_entry` 테이블은 **이 문서에 아직 미반영**이다(10/21 5단계에 반영 예정). 구현 상태는 [plans/waitlist-outbox/01-waitlist-rules.md](../plans/waitlist-outbox/01-waitlist-rules.md)와 [lab/notes/waitlist-outbox/](../lab/notes/waitlist-outbox/)를 본다.
+
 ## 공통 사항
 
 - Base URL: `/api/v1` (예: `/spaces` → 실제로는 `/api/v1/spaces`)

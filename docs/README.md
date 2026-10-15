@@ -26,3 +26,4 @@
 - **Kotlin 마이그레이션 준비** — [준비 계획](plans/kotlin-migration/00-kotlin-migration-plan.md) 외 7편.
   이 저장소에서는 Kotlin으로 옮기지 않고, 3차 프로젝트에서 새 저장소에 적용합니다.
 - **인증·인가 고도화** — [Redis 도입 범위와 배경](plans/authorization-improvement-plan/01-redis-adoption-scope.md) · [Redis 인증·인가 설계 초안](plans/authorization-improvement-plan/02-redis-auth-design.md) · [단계별 계획](plans/authorization-improvement-plan/03-auth-improvement-roadmap.md)
+- **예약 대기열 + Outbox + Kafka (10/21)** — [구현 계획](plans/waitlist-outbox/00-waitlist-outbox-plan.md) · [대기 신청 규칙](plans/waitlist-outbox/01-waitlist-rules.md) · [Outbox·Kafka 설계](plans/waitlist-outbox/02-outbox-kafka-design.md)

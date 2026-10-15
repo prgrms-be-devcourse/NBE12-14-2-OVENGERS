@@ -1,6 +1,6 @@
 # Outbox + Kafka — 이벤트 전달
 
-> 상태: 초안 (구현 전). 작성: 2026-10-06. 열린 질문 결정 반영: 2026-10-06.
+> 상태: 초안 (구현 전). 작성: 2026-10-06. 열린 질문 결정 반영: 2026-10-06. 10/21 범위 결정 반영: 2026-10-15.
 
 ## 문제
 
@@ -38,6 +38,10 @@
 - relay는 `ReservationCompletionScheduler`의 `processEach` 패턴(건별 트랜잭션, 한 건 실패해도 계속)을 따른다.
 - 컨슈머는 `processed_event(event_id UNIQUE)`로 중복을 걸러낸다.
 - Kafka는 로컬 docker compose(KRaft 단일 노드)로만 실행한다. 팀 EC2는 Gradle 테스트가 OOM으로 죽은 이력이 있어 얹지 않는다.
+
+## 10/21 범위 (2026-10-15)
+
+이번 구현 범위(1·2단계 생략, 폴링 Outbox → Kafka, `SlotReleased` 1종, 멱등 컨슈머, 테스트 방식)는 [plans/waitlist-outbox](../plans/waitlist-outbox/00-waitlist-outbox-plan.md)에 둔다. 발행 지점 3곳, FK 금지, 토픽 분리, 파티션 키 `spaceId`, 로컬 compose 결정은 이 문서 그대로 유지한다.
 
 ## 검증 계획
 
