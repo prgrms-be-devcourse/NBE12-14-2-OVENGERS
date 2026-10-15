@@ -23,14 +23,16 @@
 
 | 위치 | 상황 | 발행 |
 | --- | --- | --- |
-| `ReservationCancelService.cancel` — 슬롯 삭제 호출 직후 | 본인 취소 | 한다 |
-| `AdminReservationService.forceCancel` — 슬롯 삭제 호출 직후 | 관리자 강제 취소 | 한다 |
-| `ReservationHoldExpirationService.expireHold` — 이력 저장 직후, 전이가 일어난 경우(`updated == 1`)만 | 홀드 만료 (배치와 즉시 정리 두 경로 공통) | 한다 |
+| `ReservationCancelService.cancel` — 환불·위약금·토큰 폐기·상태 이력 저장 뒤, 메서드 끝 | 본인 취소 | 한다 (`CANCELLED`) |
+| `AdminReservationService.forceCancel` — 토큰 폐기·환불·상태 이력·감사 로그 저장 뒤, 응답 조립 전 | 관리자 강제 취소 | 한다 (`FORCE_CANCELLED`) |
+| `ReservationHoldExpirationService.expireHold` — 상태 이력 저장 뒤, 전이가 일어난 경우(`updated == 1`)만 | 홀드 만료 (배치와 즉시 정리 두 경로 공통) | 한다 (`HOLD_EXPIRED`) |
 | `ReservationBatchProcessor.markNoShow` | 노쇼 (시작+15분 경과) | 하지 않는다: 이미 시작 시각이 지난 구간이라 대기자에게 의미가 없다 |
 
-- `expireHold`는 `Propagation.MANDATORY`라서 호출자 트랜잭션 안에서만 돈다. 여기에 기록하면 배치 경로와 다른 사용자의 슬롯 확보 중 즉시 정리 경로가 모두 같은 원자성을 얻는다.
+- 기록은 `SlotReleasedRecorder.record`(`Propagation.MANDATORY`)가 호출자 트랜잭션 안에서 INSERT한다. 트랜잭션이 없으면 `IllegalTransactionStateException`으로 실패하고, 롤백되면 이벤트도 함께 사라진다.
+- `expireHold`도 `MANDATORY`라서 호출자 트랜잭션 안에서만 돈다. 여기에 기록하면 배치 경로와 다른 사용자의 슬롯 확보(`ReservationSlotService.secureSlots`) 중 즉시 정리 경로가 모두 같은 원자성을 얻는다.
+- 위치는 "각 서비스 메서드의 마지막 쓰기"이지 "호출자 트랜잭션 전체의 마지막 쓰기"가 아니다. 즉시 정리 경로에서는 `expireHold` 뒤에 `secureSlots`의 새 슬롯 INSERT가 이어진다. 롤백 원자성은 같고, 잠금 관점의 영향은 [02 설계 문서 §1 relay 제약](../plans/waitlist-outbox/02-outbox-kafka-design.md)에 적었다.
 - 체크아웃과 자동 퇴실은 슬롯을 지우지 않는다. 대상이 아니다.
-- 페이로드는 `reservationId`와 사유만 담는다. 취소·만료 후에도 예약 행은 남으므로 컨슈머가 `spaceId`, `startTime`, `endTime`을 조회한다.
+- 페이로드는 `eventId`, `reservationId`, `reason`, `occurredAt` 4필드다. `spaceId`는 페이로드에 넣지 않고 `partition_key` 컬럼에만 둔다(`aggregate_id` 컬럼도 만들지 않는다). 취소·만료 후에도 예약 행은 남으므로 컨슈머가 `startTime`, `endTime`을 조회한다.
 
 ## 지켜야 할 규칙
 
