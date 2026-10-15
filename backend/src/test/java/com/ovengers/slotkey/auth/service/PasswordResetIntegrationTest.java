@@ -34,6 +34,9 @@ class PasswordResetIntegrationTest {
     private PasswordResetService passwordResetService;
 
     @Autowired
+    private AuthService authService;
+
+    @Autowired
     private com.ovengers.slotkey.member.service.MemberService memberService;
 
     @Autowired
@@ -110,6 +113,20 @@ class PasswordResetIntegrationTest {
         assertThatThrownBy(() -> passwordResetService.reset(
                 email, signupGrant, "New1234!", "New1234!"
         )).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void 비밀번호_재설정_후_새_비밀번호로_로그인할_수_있다() {
+        String email = newEmail();
+        createMember(email, "Old1234!");
+        String grant = issueGrant(email, VerificationPurpose.PASSWORD_RESET);
+
+        passwordResetService.reset(
+                email, grant, "New1234!", "New1234!"
+        );
+
+        assertThat(authService.login(email, "New1234!").accessToken())
+                .isNotBlank();
     }
 
     private Member createMember(String email, String rawPassword) {

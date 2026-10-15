@@ -8,6 +8,7 @@ import com.ovengers.slotkey.auth.mail.VerificationMailSender;
 import com.ovengers.slotkey.auth.service.VerificationChallengeService;
 import com.ovengers.slotkey.auth.service.VerificationCheckService;
 import com.ovengers.slotkey.member.entity.Member;
+import com.ovengers.slotkey.member.entity.MemberRole;
 import com.ovengers.slotkey.member.entity.MemberStatus;
 import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.auth.repository.LocalCredentialRepository;
@@ -25,11 +26,21 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,6 +48,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -50,8 +62,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
 @Import(MySqlTestContainerConfig.class)
-@Transactional
 class V2SecurityRedTest {
+
+    private static final String PASSWORD = "Test1234!";
+    private static final String NEW_PASSWORD = "New1234!";
 
     @Autowired
     private MockMvc mvc;
@@ -73,6 +87,9 @@ class V2SecurityRedTest {
 
     @Autowired
     private VerificationCheckService checkService;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @MockBean
     private VerificationMailSender mailSender;
@@ -173,15 +190,210 @@ class V2SecurityRedTest {
                 .andExpect(status().isTooManyRequests());
     }
 
-    private MvcResult login(String email) throws Exception {
-        String password = "Test1234!";
-        Member member = memberRepository.saveAndFlush(new Member(email, "테스트회원"));
-        localCredentialRepository.saveAndFlush(new LocalCredential(
-                member,
-                passwordEncoder.encode(password),
-                LocalDateTime.now()
-        ));
+    @Test
+    @DisplayName("V2: 정상 사용자는 RT Rotation 후 새 RT로 계속 갱신할 수 있다")
+    void refresh_token_rotation_allows_next_refresh_with_new_token() throws Exception {
+        String email = newEmail("rotation-success");
+        MvcResult login = login(email);
+        Cookie rt1 = refreshCookie(login);
 
+        MvcResult firstRefresh = mvc.perform(post("/api/v1/auth/refresh")
+                        .cookie(rt1))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        Cookie rt2 = refreshCookie(firstRefresh);
+        assertThat(rt2).as("첫 refresh 응답은 RT2를 발급해야 한다")
+                .isNotNull();
+        assertThat(rt2.getValue()).isNotBlank().isNotEqualTo(rt1.getValue());
+
+        MvcResult secondRefresh = mvc.perform(post("/api/v1/auth/refresh")
+                        .cookie(rt2))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        Cookie rt3 = refreshCookie(secondRefresh);
+        assertThat(rt3).as("두 번째 refresh 응답은 RT3를 발급해야 한다")
+                .isNotNull();
+        assertThat(rt3.getValue()).isNotBlank().isNotEqualTo(rt2.getValue());
+    }
+
+    @Test
+    @DisplayName("V2: 비밀번호 재설정 후 기존 Refresh Token은 폐기된다")
+    void password_reset_invalidates_existing_refresh_token() throws Exception {
+        String email = newEmail("password-reset-refresh");
+        MvcResult login = login(email);
+        Cookie oldRefreshToken = refreshCookie(login);
+        String grant = issueGrant(email, VerificationPurpose.PASSWORD_RESET);
+
+        resetPassword(email, grant, NEW_PASSWORD);
+
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .cookie(oldRefreshToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("V2: 비밀번호 재설정은 여러 로그인 세션의 AT와 RT를 모두 폐기한다")
+    void password_reset_invalidates_all_existing_sessions() throws Exception {
+        String email = newEmail("password-reset-sessions");
+        createMemberWithCredential(email, PASSWORD);
+
+        MvcResult firstLogin = loginExisting(email, PASSWORD);
+        MvcResult secondLogin = loginExisting(email, PASSWORD);
+        String at1 = accessToken(firstLogin);
+        String at2 = accessToken(secondLogin);
+        Cookie rt1 = refreshCookie(firstLogin);
+        Cookie rt2 = refreshCookie(secondLogin);
+        assertThat(rt1.getValue()).isNotEqualTo(rt2.getValue());
+
+        String grant = issueGrant(email, VerificationPurpose.PASSWORD_RESET);
+        resetPassword(email, grant, NEW_PASSWORD);
+
+        int at1Status = mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + at1))
+                .andReturn().getResponse().getStatus();
+        int at2Status = mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + at2))
+                .andReturn().getResponse().getStatus();
+        int rt1Status = mvc.perform(post("/api/v1/auth/refresh")
+                        .cookie(rt1))
+                .andReturn().getResponse().getStatus();
+        int rt2Status = mvc.perform(post("/api/v1/auth/refresh")
+                        .cookie(rt2))
+                .andReturn().getResponse().getStatus();
+
+        assertThat(List.of(at1Status, at2Status, rt1Status, rt2Status))
+                .as("비밀번호 재설정 후 모든 기존 세션은 401이어야 한다")
+                .containsOnly(401);
+    }
+
+    @Test
+    @DisplayName("V2: 회원 정지 후 복구해도 정지 전 AT와 RT는 다시 살아나지 않는다")
+    void member_restore_does_not_revive_old_session() throws Exception {
+        String email = newEmail("restore-session");
+        MvcResult login = login(email);
+        String oldAccessToken = accessToken(login);
+        Cookie oldRefreshToken = refreshCookie(login);
+        Member member = memberRepository.findByEmail(email).orElseThrow();
+        Member admin = createAdminWithCredential();
+        String adminAccessToken = accessToken(
+                loginExisting(admin.getEmail(), PASSWORD)
+        );
+
+        mvc.perform(patch("/api/v1/admin/members/{memberId}/suspend", member.getId())
+                        .header("Authorization", "Bearer " + adminAccessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "reason", "V2 레드 테스트 정지"
+                        ))))
+                .andExpect(status().isOk());
+
+        mvc.perform(patch("/api/v1/admin/members/{memberId}/restore", member.getId())
+                        .header("Authorization", "Bearer " + adminAccessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "reason", "V2 레드 테스트 복구"
+                        ))))
+                .andExpect(status().isOk());
+
+        int oldAccessStatus = mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + oldAccessToken))
+                .andReturn().getResponse().getStatus();
+        int oldRefreshStatus = mvc.perform(post("/api/v1/auth/refresh")
+                        .cookie(oldRefreshToken))
+                .andReturn().getResponse().getStatus();
+
+        assertThat(List.of(oldAccessStatus, oldRefreshStatus))
+                .as("회원 정지·복구 후 정지 전 세션은 모두 401이어야 한다")
+                .containsOnly(401);
+    }
+
+    @Test
+    @DisplayName("V2: 회원탈퇴 후 기존 Access Token은 보호 API에서 거부된다")
+    void withdrawal_invalidates_existing_access_token() throws Exception {
+        String email = newEmail("withdrawal");
+        MvcResult login = login(email);
+        String accessToken = accessToken(login);
+
+        mvc.perform(post("/api/v1/auth/withdraw")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "currentPassword", PASSWORD
+                        ))))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("V2: 동일 Refresh Token 동시 사용은 정확히 하나만 성공한다")
+    void same_refresh_token_concurrent_use_allows_exactly_one_request()
+            throws Exception {
+        Cookie refreshToken = refreshCookie(login(newEmail("refresh-concurrent")));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        List<Future<RefreshAttempt>> futures = new ArrayList<>();
+
+        Callable<RefreshAttempt> request = () -> {
+            ready.countDown();
+            if (!start.await(10, TimeUnit.SECONDS)) {
+                return RefreshAttempt.failed(new IllegalStateException(
+                        "동시 refresh 시작 신호 대기 시간 초과"
+                ));
+            }
+            try {
+                MvcResult result = mvc.perform(post("/api/v1/auth/refresh")
+                                .cookie(refreshToken))
+                        .andReturn();
+                return RefreshAttempt.success(
+                        result.getResponse().getStatus(),
+                        result.getResponse().getCookie("refreshToken")
+                );
+            } catch (Throwable failure) {
+                return RefreshAttempt.failed(failure);
+            }
+        };
+
+        try {
+            futures.add(executor.submit(request));
+            futures.add(executor.submit(request));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            List<RefreshAttempt> results = new ArrayList<>();
+            for (Future<RefreshAttempt> future : futures) {
+                results.add(future.get(10, TimeUnit.SECONDS));
+            }
+
+            assertThat(results).allSatisfy(result ->
+                    assertThat(result.failure()).isNull()
+            );
+            assertThat(results.stream().filter(result -> result.status() == 200).toList())
+                    .hasSize(1);
+            assertThat(results.stream().filter(result -> result.status() == 401).toList())
+                    .hasSize(1);
+            assertThat(results.stream()
+                    .filter(result -> result.status() == 200)
+                    .findFirst().orElseThrow().newRefreshToken())
+                    .as("동시 refresh 성공 응답은 새 RT를 발급해야 한다")
+                    .isNotNull();
+        } finally {
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    private MvcResult login(String email) throws Exception {
+        createMemberWithCredential(email, PASSWORD);
+        return loginExisting(email, PASSWORD);
+    }
+
+    private MvcResult loginExisting(String email, String password) throws Exception {
         return mvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
@@ -190,6 +402,53 @@ class V2SecurityRedTest {
                         ))))
                 .andExpect(status().isOk())
                 .andReturn();
+    }
+
+    private void createMemberWithCredential(String email, String password) {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            Member member = memberRepository.save(new Member(email, "테스트회원"));
+            localCredentialRepository.save(new LocalCredential(
+                    member,
+                    passwordEncoder.encode(password),
+                    LocalDateTime.now()
+            ));
+        });
+    }
+
+    private Member createAdminWithCredential() {
+        Member admin = new Member(newEmail("admin"), "관리자");
+        ReflectionTestUtils.setField(admin, "role", MemberRole.ADMIN);
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            memberRepository.save(admin);
+            localCredentialRepository.save(new LocalCredential(
+                    admin,
+                    passwordEncoder.encode(PASSWORD),
+                    LocalDateTime.now()
+            ));
+        });
+        return admin;
+    }
+
+    private void resetPassword(String email, String grant, String password)
+            throws Exception {
+        mvc.perform(post("/api/v1/auth/password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "email", email,
+                                "grant", grant,
+                                "password", password,
+                                "passwordConfirm", password
+                        ))))
+                .andExpect(status().isOk());
+    }
+
+    private Cookie refreshCookie(MvcResult result) {
+        Cookie cookie = result.getResponse().getCookie("refreshToken");
+        assertThat(cookie).as("응답에 Refresh Token 쿠키가 있어야 한다")
+                .isNotNull();
+        assertThat(cookie.getValue()).isNotBlank();
+        return cookie;
     }
 
     private String accessToken(MvcResult result) throws Exception {
@@ -217,5 +476,19 @@ class V2SecurityRedTest {
 
     private String newEmail(String prefix) {
         return "v2-" + prefix + "-" + UUID.randomUUID() + "@example.com";
+    }
+
+    private record RefreshAttempt(
+            int status,
+            Cookie newRefreshToken,
+            Throwable failure
+    ) {
+        private static RefreshAttempt success(int status, Cookie newRefreshToken) {
+            return new RefreshAttempt(status, newRefreshToken, null);
+        }
+
+        private static RefreshAttempt failed(Throwable failure) {
+            return new RefreshAttempt(-1, null, failure);
+        }
     }
 }
