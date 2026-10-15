@@ -69,7 +69,9 @@ public class VerificationCheckService {
 
             if (blocked) {
                 challenge.invalidate(now);
-                suspendMemberIfNeeded(email);
+                if (guard.isAdminLocked()) {
+                    suspendMemberIfNeeded(email);
+                }
                 return blockedResult(guard);
             }
 

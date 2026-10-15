@@ -82,17 +82,21 @@ class VerificationMemberStatusIntegrationTest {
 
         VerificationCheckResult firstBlock = failFiveTimes(email);
         assertThat(firstBlock.status()).isEqualTo(TEMPORARILY_BLOCKED);
+        assertMemberStatus(member.getId(), MemberStatus.ACTIVE);
+        assertVerificationLockAuditCount(member.getId(), 0);
 
         currentTime.updateAndGet(time -> time.plusSeconds(5 * 60L + 30));
         VerificationCheckResult secondBlock = failFiveTimes(email);
         assertThat(secondBlock.status()).isEqualTo(TEMPORARILY_BLOCKED);
+        assertMemberStatus(member.getId(), MemberStatus.ACTIVE);
+        assertVerificationLockAuditCount(member.getId(), 0);
 
         currentTime.updateAndGet(time -> time.plusSeconds(60 * 60L + 30));
         VerificationCheckResult thirdBlock = failFiveTimes(email);
         assertThat(thirdBlock.status()).isEqualTo(ADMIN_LOCKED);
 
-        Member reloaded = memberRepository.findById(member.getId()).orElseThrow();
-        assertThat(reloaded.getStatus()).isEqualTo(MemberStatus.SUSPENDED);
+        assertMemberStatus(member.getId(), MemberStatus.SUSPENDED);
+        assertVerificationLockAuditCount(member.getId(), 1);
 
         var logs = auditLogRepository.searchAuditLogs(
                 null,
@@ -109,6 +113,25 @@ class VerificationMemberStatusIntegrationTest {
         assertThat(log.getActorMemberId()).isNull();
         assertThat(log.getBeforeValue()).isEqualTo("\"ACTIVE\"");
         assertThat(log.getAfterValue()).isEqualTo("\"SUSPENDED\"");
+    }
+
+    private void assertMemberStatus(Long memberId, MemberStatus expectedStatus) {
+        assertThat(memberRepository.findById(memberId).orElseThrow().getStatus())
+                .isEqualTo(expectedStatus);
+    }
+
+    private void assertVerificationLockAuditCount(Long memberId, long expectedCount) {
+        var logs = auditLogRepository.searchAuditLogs(
+                null,
+                AuditAction.LOCK_MEMBER_BY_VERIFICATION,
+                AuditTargetType.MEMBER,
+                memberId,
+                null,
+                null,
+                org.springframework.data.domain.PageRequest.of(0, 10)
+        );
+
+        assertThat(logs.getTotalElements()).isEqualTo(expectedCount);
     }
 
     @Test
