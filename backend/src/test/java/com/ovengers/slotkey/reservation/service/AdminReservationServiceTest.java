@@ -9,6 +9,7 @@ import com.ovengers.slotkey.audit.entity.AuditAction;
 import com.ovengers.slotkey.audit.entity.AuditTargetType;
 import com.ovengers.slotkey.audit.service.AuditLogService;
 import com.ovengers.slotkey.credit.service.CreditService;
+import com.ovengers.slotkey.outbox.SlotReleasedRecorder;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.member.entity.Member;
@@ -82,6 +83,8 @@ class AdminReservationServiceTest {
     @Mock
     private CreditService creditService;
 
+    @Mock
+    private SlotReleasedRecorder slotReleasedRecorder;
     private AdminReservationService adminReservationService;
     private final LocalDateTime now = LocalDateTime.of(2026, 9, 17, 12, 0);
     private LocalDateTime startTime;
@@ -92,7 +95,7 @@ class AdminReservationServiceTest {
         adminReservationService = new AdminReservationService(
                 reservationRepository, reservationSlotRepository, statusHistoryRepository,
                 memberRepository, spaceRepository, auditLogService,
-                doorAccessTokenService, doorAccessLogService, creditService, clock);
+                doorAccessTokenService, doorAccessLogService, creditService, clock, slotReleasedRecorder);
         startTime = LocalDateTime.of(2026, 9, 18, 14, 0);
     }
 
@@ -195,6 +198,7 @@ class AdminReservationServiceTest {
         verify(creditService, never()).refund(any(), any(), anyInt());
         verify(statusHistoryRepository, never()).save(any());
         verify(auditLogService, never()).log(any(), any(), any(), any(), any(), any(), any());
+        verify(slotReleasedRecorder, never()).record(any(), any(), any());
     }
 
     @Test
@@ -238,6 +242,7 @@ class AdminReservationServiceTest {
                 eq(REASON),
                 eq(ReservationStatus.CONFIRMED),
                 eq(ReservationStatus.CANCELLED));
+        verify(slotReleasedRecorder).record(RESERVATION_ID, SPACE_ID, SlotReleasedRecorder.Reason.FORCE_CANCELLED);
     }
 
     @Test
@@ -275,6 +280,7 @@ class AdminReservationServiceTest {
         verify(statusHistoryRepository).save(argThat(history ->
                 history.getFromStatus() == ReservationStatus.IN_USE
                         && history.getToStatus() == ReservationStatus.CANCELLED));
+        verify(slotReleasedRecorder).record(RESERVATION_ID, SPACE_ID, SlotReleasedRecorder.Reason.FORCE_CANCELLED);
     }
 
     @Test
@@ -297,6 +303,7 @@ class AdminReservationServiceTest {
         verify(reservationSlotRepository).deleteByReservationId(RESERVATION_ID);
         verify(creditService, never()).refund(any(), any(), anyInt());
         verify(creditService, never()).penalize(any(), any(), anyInt());
+        verify(slotReleasedRecorder).record(RESERVATION_ID, SPACE_ID, SlotReleasedRecorder.Reason.FORCE_CANCELLED);
     }
 
     @Test
@@ -315,6 +322,7 @@ class AdminReservationServiceTest {
         verify(doorAccessTokenService, never()).revokeByReservation(any(), any(), any());
         verify(statusHistoryRepository, never()).save(any());
         verify(auditLogService, never()).log(any(), any(), any(), any(), any(), any(), any());
+        verify(slotReleasedRecorder, never()).record(any(), any(), any());
     }
 
     @Test

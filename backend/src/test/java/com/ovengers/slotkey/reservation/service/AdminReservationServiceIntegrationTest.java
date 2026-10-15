@@ -48,6 +48,8 @@ class AdminReservationServiceIntegrationTest extends IntegrationTestSupport {
 
     @Autowired
     private AdminReservationService adminReservationService;
+    @Autowired
+    private com.ovengers.slotkey.outbox.OutboxEventRepository outboxEventRepository;
 
     @Autowired
     private ReservationRepository reservationRepository;
@@ -84,6 +86,7 @@ class AdminReservationServiceIntegrationTest extends IntegrationTestSupport {
 
     @BeforeEach
     void setUp() {
+        outboxEventRepository.deleteAllInBatch();
         creditTransactionRepository.deleteAllInBatch();
         auditLogRepository.deleteAllInBatch();
         doorAccessTokenRepository.deleteAllInBatch();

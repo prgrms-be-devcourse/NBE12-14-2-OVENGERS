@@ -187,6 +187,8 @@ class AdminReservationConcurrencyIntegrationTest extends IntegrationTestSupport 
 
     @Autowired
     private ControllableClock clock;
+    @Autowired
+    private com.ovengers.slotkey.outbox.OutboxEventRepository outboxEventRepository;
 
     private Member userMember;
     private Member adminMember;
@@ -239,6 +241,7 @@ class AdminReservationConcurrencyIntegrationTest extends IntegrationTestSupport 
     }
 
     private void cleanUpAll() {
+        outboxEventRepository.deleteAllInBatch();
         auditLogRepository.deleteAllInBatch();
         idempotencyKeyRepository.deleteAllInBatch();
         doorAccessLogRepository.deleteAllInBatch();
@@ -368,6 +371,9 @@ class AdminReservationConcurrencyIntegrationTest extends IntegrationTestSupport 
             List<AuditLog> auditLogs = auditLogRepository.findAll();
             assertThat(auditLogs).hasSize(1);
             assertThat(auditLogs.get(0).getAction()).isEqualTo(AuditAction.FORCE_CANCEL_RESERVATION);
+
+            // outbox: 강제 취소 커밋 1건
+            assertThat(outboxEventRepository.count()).isEqualTo(1);
         });
     }
 
@@ -459,6 +465,8 @@ class AdminReservationConcurrencyIntegrationTest extends IntegrationTestSupport 
                     && tx.getReservation() != null && tx.getReservation().getId().equals(reservationId));
 
             assertThat(auditLogRepository.count()).isZero();
+            // outbox: 강제 취소 롤백으로 0건
+            assertThat(outboxEventRepository.count()).isZero();
         });
     }
 
@@ -560,6 +568,8 @@ class AdminReservationConcurrencyIntegrationTest extends IntegrationTestSupport 
 
             // 감사 로그: 강제 취소 롤백으로 0건
             assertThat(auditLogRepository.count()).isZero();
+            // outbox: 강제 취소 롤백으로 0건
+            assertThat(outboxEventRepository.count()).isZero();
         });
     }
 

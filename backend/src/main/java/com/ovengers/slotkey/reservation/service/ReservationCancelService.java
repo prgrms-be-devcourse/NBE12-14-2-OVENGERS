@@ -2,6 +2,7 @@ package com.ovengers.slotkey.reservation.service;
 
 import com.ovengers.slotkey.access.service.DoorAccessTokenService;
 import com.ovengers.slotkey.credit.service.CreditService;
+import com.ovengers.slotkey.outbox.SlotReleasedRecorder;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.reservation.dto.response.ReservationResponse;
@@ -45,6 +46,7 @@ public class ReservationCancelService {
     private final CreditService creditService;
     private final DoorAccessTokenService doorAccessTokenService;
     private final Clock clock;
+    private final SlotReleasedRecorder slotReleasedRecorder;
 
     @Transactional
     public ReservationResponse cancel(Long memberId, Long reservationId) {
@@ -96,6 +98,8 @@ public class ReservationCancelService {
         reservationStatusHistoryRepository.save(
                 ReservationStatusHistory.of(reservationId, memberId, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLED, null, now)
         );
+
+        slotReleasedRecorder.record(reservationId, reservation.getSpaceId(), SlotReleasedRecorder.Reason.CANCELLED);
 
         Reservation cancelled = reservationRepository.findById(reservationId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));

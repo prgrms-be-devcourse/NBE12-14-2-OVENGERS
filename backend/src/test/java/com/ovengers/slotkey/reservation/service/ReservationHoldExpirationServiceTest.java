@@ -1,6 +1,8 @@
 package com.ovengers.slotkey.reservation.service;
 
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
+import com.ovengers.slotkey.reservation.entity.Reservation;
+import com.ovengers.slotkey.outbox.SlotReleasedRecorder;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationSlotRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationStatusHistoryRepository;
@@ -13,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -37,13 +40,17 @@ class ReservationHoldExpirationServiceTest {
         private ReservationStatusHistoryRepository reservationStatusHistoryRepository;
 
         private ReservationHoldExpirationService expirationService;
+        @Mock
+        private SlotReleasedRecorder slotReleasedRecorder;
 
         @BeforeEach
         void setUp() {
                 expirationService = new ReservationHoldExpirationService(
                                 reservationRepository,
                                 reservationSlotRepository,
-                                reservationStatusHistoryRepository);
+                                reservationStatusHistoryRepository, slotReleasedRecorder);
+                org.mockito.Mockito.lenient().when(reservationRepository.findById(any()))
+                                .thenReturn(Optional.of(Reservation.builder().spaceId(5L).build()));
         }
 
         @Test
@@ -79,6 +86,8 @@ class ReservationHoldExpirationServiceTest {
                                                 && history.getToStatus() == ReservationStatus.EXPIRED
                                                 && "HOLD_EXPIRED".equals(history.getReason())
                                                 && history.getChangedAt().equals(NOW)));
+
+                verify(slotReleasedRecorder).record(RESERVATION_ID, 5L, SlotReleasedRecorder.Reason.HOLD_EXPIRED);
         }
 
         @Test
@@ -108,6 +117,7 @@ class ReservationHoldExpirationServiceTest {
                                 ReservationStatus.EXPIRED);
 
                 verify(reservationStatusHistoryRepository, never()).save(any());
+                verify(slotReleasedRecorder, never()).record(any(), any(), any());
         }
 
         @Test

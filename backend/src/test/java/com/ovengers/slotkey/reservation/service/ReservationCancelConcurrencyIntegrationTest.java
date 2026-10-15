@@ -129,6 +129,7 @@ class ReservationCancelConcurrencyIntegrationTest extends ReservationIntegration
             assertThat(statusOf(reservationA)).isEqualTo(ReservationStatus.CANCELLED.name());
             assertThat(countSlots(reservationA)).isEqualTo(0);
             assertThat(countLedger(reservationA, "REFUND")).isEqualTo(1);
+            assertThat(countOutboxEvents(reservationA)).isEqualTo(1);
 
             // 예약 B: CONFIRMED, endTime 16:00, 슬롯 4개, 차감 원장 1건
             assertThat(statusOf(reservationB)).isEqualTo(ReservationStatus.CONFIRMED.name());
@@ -228,6 +229,7 @@ class ReservationCancelConcurrencyIntegrationTest extends ReservationIntegration
             assertThat(statusOf(reservationA)).isEqualTo(ReservationStatus.CANCELLED.name());
             assertThat(countSlots(reservationA)).isEqualTo(0);
             assertThat(countLedger(reservationA, "REFUND")).isEqualTo(1);
+            assertThat(countOutboxEvents(reservationA)).isEqualTo(1);
 
             // 신규 HOLD: HELD, 슬롯 2개
             assertThat(statusOf(newHoldId)).isEqualTo(ReservationStatus.HELD.name());
@@ -351,6 +353,7 @@ class ReservationCancelConcurrencyIntegrationTest extends ReservationIntegration
             // 만료된 기존 예약: CANCELLED, 슬롯 0개
             assertThat(statusOf(expiredHeldId)).isEqualTo(ReservationStatus.CANCELLED.name());
             assertThat(countSlots(expiredHeldId)).isEqualTo(0);
+            assertThat(countOutboxEvents(expiredHeldId)).isEqualTo(1);
 
             // 신규 HOLD: HELD, 슬롯 2개
             assertThat(holdResponseHolder[0]).isNotNull();
@@ -476,6 +479,7 @@ class ReservationCancelConcurrencyIntegrationTest extends ReservationIntegration
             // 만료된 기존 예약: CANCELLED, 슬롯 0개
             assertThat(statusOf(expiredHeldId)).isEqualTo(ReservationStatus.CANCELLED.name());
             assertThat(countSlots(expiredHeldId)).isEqualTo(0);
+            assertThat(countOutboxEvents(expiredHeldId)).isEqualTo(1);
 
             // 신규 HOLD: HELD, 슬롯 2개
             assertThat(holdResponseHolder[0]).isNotNull();
@@ -598,6 +602,7 @@ class ReservationCancelConcurrencyIntegrationTest extends ReservationIntegration
             // 만료된 기존 예약: CANCELLED, 슬롯 0개
             assertThat(statusOf(expiredHeldId)).isEqualTo(ReservationStatus.CANCELLED.name());
             assertThat(countSlots(expiredHeldId)).isEqualTo(0);
+            assertThat(countOutboxEvents(expiredHeldId)).isEqualTo(1);
 
             // 예약 B: CONFIRMED, 슬롯 4개, 차감 원장 1건
             assertThat(statusOf(reservationB)).isEqualTo(ReservationStatus.CONFIRMED.name());
@@ -613,6 +618,12 @@ class ReservationCancelConcurrencyIntegrationTest extends ReservationIntegration
             executor.shutdownNow();
             assertThat(executor.awaitTermination(15, TimeUnit.SECONDS)).isTrue();
         }
+    }
+
+    private int countOutboxEvents(Long reservationId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM outbox_event WHERE JSON_EXTRACT(payload, '$.reservationId') = ?",
+                Integer.class, reservationId);
     }
 
     private static Throwable capture(Runnable task) {

@@ -2,6 +2,7 @@ package com.ovengers.slotkey.reservation.service;
 
 import com.ovengers.slotkey.access.service.DoorAccessTokenService;
 import com.ovengers.slotkey.credit.service.CreditService;
+import com.ovengers.slotkey.outbox.SlotReleasedRecorder;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.reservation.dto.response.ReservationResponse;
@@ -59,6 +60,8 @@ class ReservationCancelServiceTest {
     private DoorAccessTokenService doorAccessTokenService;
 
     private Clock clock;
+    @Mock
+    private SlotReleasedRecorder slotReleasedRecorder;
     private ReservationCancelService cancelService;
     private LocalDateTime now;
     private LocalDateTime startTime;
@@ -69,7 +72,7 @@ class ReservationCancelServiceTest {
         clock = Clock.fixed(now.atZone(ZONE).toInstant(), ZONE);
         cancelService = new ReservationCancelService(
                 reservationRepository, memberRepository, reservationSlotRepository, reservationStatusHistoryRepository,
-                creditService, doorAccessTokenService, clock);
+                creditService, doorAccessTokenService, clock, slotReleasedRecorder);
         startTime = LocalDateTime.of(2026, 9, 17, 14, 0); // now(13:00) + 1시간
     }
 
@@ -113,6 +116,7 @@ class ReservationCancelServiceTest {
         verify(reservationRepository, never()).cancelIfConfirmedAndBeforeStart(any(), any(), any(), any());
         verify(creditService, never()).refund(any(), any(), anyInt());
         verify(doorAccessTokenService, never()).revokeByReservation(any(), any(), any());
+        verify(slotReleasedRecorder, never()).record(any(), any(), any());
     }
 
     @Test
@@ -158,7 +162,7 @@ class ReservationCancelServiceTest {
         Clock lateClock = Clock.fixed(lateNow.atZone(ZONE).toInstant(), ZONE);
         cancelService = new ReservationCancelService(
                 reservationRepository, memberRepository, reservationSlotRepository, reservationStatusHistoryRepository,
-                creditService, doorAccessTokenService, lateClock);
+                creditService, doorAccessTokenService, lateClock, slotReleasedRecorder);
         Reservation reservation = confirmedReservation(MEMBER_ID);
         given(reservationRepository.findById(RESERVATION_ID))
                 .willReturn(Optional.of(reservation), Optional.of(reservation));
@@ -200,6 +204,7 @@ class ReservationCancelServiceTest {
                 history.getFromStatus() == ReservationStatus.CONFIRMED
                         && history.getToStatus() == ReservationStatus.CANCELLED
                         && history.getChangedByMemberId().equals(MEMBER_ID)));
+        verify(slotReleasedRecorder).record(RESERVATION_ID, 5L, SlotReleasedRecorder.Reason.CANCELLED);
     }
 
     @Test

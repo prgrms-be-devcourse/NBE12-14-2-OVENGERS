@@ -9,6 +9,7 @@ import com.ovengers.slotkey.audit.service.AuditLogService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.member.entity.Member;
+import com.ovengers.slotkey.outbox.SlotReleasedRecorder;
 import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.reservation.dto.response.AdminReservationDetailResponse;
 import com.ovengers.slotkey.reservation.dto.response.AdminReservationResponse;
@@ -55,6 +56,7 @@ public class AdminReservationService {
     private final DoorAccessLogService doorAccessLogService;
     private final CreditService creditService;
     private final Clock clock;
+    private final SlotReleasedRecorder slotReleasedRecorder;
 
     /**
      * 관리자 예약 목록 검색 (조건 필터 및 페이징).
@@ -214,6 +216,8 @@ public class AdminReservationService {
                 previousStatus,
                 ReservationStatus.CANCELLED
         );
+
+        slotReleasedRecorder.record(reservationId, reservation.getSpaceId(), SlotReleasedRecorder.Reason.FORCE_CANCELLED);
 
         // 조건부 UPDATE가 영속성 컨텍스트를 비웠으므로 취소된 최신 상태를 다시 읽어 응답한다.
         Reservation cancelled = reservationRepository.findById(reservationId)

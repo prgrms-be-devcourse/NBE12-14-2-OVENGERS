@@ -63,6 +63,9 @@ public abstract class ReservationIntegrationTestSupport extends IntegrationTestS
         String spaces = inList(spaceIds);
         String reservationsOfSpaces = "SELECT id FROM reservation WHERE space_id IN (" + spaces + ")";
 
+        jdbcTemplate.update("DELETE FROM outbox_event WHERE partition_key IN ("
+                + "SELECT CAST(id AS CHAR) FROM spaces WHERE id IN (" + spaces + "))");
+
         jdbcTemplate.update("DELETE FROM door_access_log WHERE actor_member_id IN (" + members
                 + ") OR reservation_id IN (" + reservationsOfSpaces + ")");
         jdbcTemplate.update("DELETE FROM door_access_token WHERE reservation_id IN (" + reservationsOfSpaces + ")");

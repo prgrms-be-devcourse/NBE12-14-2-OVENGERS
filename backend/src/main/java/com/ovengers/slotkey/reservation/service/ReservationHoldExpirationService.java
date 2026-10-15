@@ -1,6 +1,7 @@
 package com.ovengers.slotkey.reservation.service;
 
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
+import com.ovengers.slotkey.outbox.SlotReleasedRecorder;
 import com.ovengers.slotkey.reservation.entity.ReservationStatusHistory;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationSlotRepository;
@@ -25,6 +26,7 @@ public class ReservationHoldExpirationService {
     private final ReservationRepository reservationRepository;
     private final ReservationSlotRepository reservationSlotRepository;
     private final ReservationStatusHistoryRepository reservationStatusHistoryRepository;
+    private final SlotReleasedRecorder slotReleasedRecorder;
 
     /**
      * 특정 예약의 HOLD 만료 전이, 슬롯 정리, HOLD_EXPIRED 상태 이력 저장을 수행한다.
@@ -50,6 +52,8 @@ public class ReservationHoldExpirationService {
         reservationStatusHistoryRepository.save(
                 ReservationStatusHistory.of(reservationId, null, ReservationStatus.HELD, ReservationStatus.EXPIRED,
                         "HOLD_EXPIRED", now));
+        Long spaceId = reservationRepository.findById(reservationId).orElseThrow().getSpaceId();
+        slotReleasedRecorder.record(reservationId, spaceId, SlotReleasedRecorder.Reason.HOLD_EXPIRED);
         return true;
     }
 }

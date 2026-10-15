@@ -84,6 +84,9 @@ class ReservationCancelConcurrencyTest extends ReservationIntegrationTestSupport
 
     /** CANCELLED이고, 잔액이 정확히 총액만큼 늘었으며, 환불 원장 1건·위약금 없음·슬롯 전부 반환·취소 이력 1건이다. */
     private void assertRefundedExactlyOnce(Long reservationId, int balanceBefore) {
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM outbox_event WHERE JSON_EXTRACT(payload, '$.reservationId') = ?",
+                Integer.class, reservationId)).isEqualTo(1);
         assertThat(statusOf(reservationId)).isEqualTo("CANCELLED");
         assertThat(balanceOf(memberId)).isEqualTo(balanceBefore + TOTAL_AMOUNT);
         assertThat(countLedger(reservationId, "REFUND")).isEqualTo(1);
