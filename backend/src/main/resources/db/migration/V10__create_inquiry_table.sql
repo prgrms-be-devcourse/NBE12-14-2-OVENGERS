@@ -3,7 +3,7 @@
 # 테이블: inquiries
 # 선행 의존(FK 대상): member
 # 비고: 문의 1건당 답변 1건(1:1)으로 단순화한다. 재질문/스레드형 재답변은 범위 밖
-#       (MVP 3대 기능 외 추가 기능, docs/requirements.md 갱신 필요).
+#       (MVP 3대 기능 외 추가 기능, docs/product/requirements.md 갱신 필요).
 
 CREATE TABLE inquiries (
     id                    BIGINT AUTO_INCREMENT PRIMARY KEY,

@@ -2,7 +2,7 @@
 
 /**
  * 로그인하지 않은 접근을 로그인 화면으로 보냅니다.
- * 화면 차단은 편의일 뿐이고 실제 권한 판단은 서버가 합니다(docs/requirements.md 5장).
+ * 화면 차단은 편의일 뿐이고 실제 권한 판단은 서버가 합니다(docs/product/requirements.md 5장).
  */
 
 import { useEffect } from 'react';

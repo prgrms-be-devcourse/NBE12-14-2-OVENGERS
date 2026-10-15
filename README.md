@@ -4,7 +4,7 @@
 
 **Slot Key**는 회의실·공유오피스를 30분 단위로 예약하고, 예약 상태와 이용 시간에 따라 출입 권한을 제공하는 서비스입니다.
 
-주요 도입 고객은 **다수의 오피스 계열 건물을 보유한 건물주**이고, 공간을 찾아 예약하는 회원은 최종 이용자입니다. 건물주에게는 공간과 예약을 운영할 수 있는 백오피스 수단을, 이용자에게는 공간 탐색부터 예약·이용까지 이어지는 흐름을 제공하려는 방향입니다. 현재 구현은 단일 관리자 백오피스로 동작하며, 건물주별 관리 분리 기능은 아직 구현되지 않은 과제입니다([서비스 대상과 가치 가설](docs/requirements.md#서비스-대상과-가치-가설) 참고).
+주요 도입 고객은 **다수의 오피스 계열 건물을 보유한 건물주**이고, 공간을 찾아 예약하는 회원은 최종 이용자입니다. 건물주에게는 공간과 예약을 운영할 수 있는 백오피스 수단을, 이용자에게는 공간 탐색부터 예약·이용까지 이어지는 흐름을 제공하려는 방향입니다. 현재 구현은 단일 관리자 백오피스로 동작하며, 건물주별 관리 분리 기능은 아직 구현되지 않은 과제입니다([서비스 대상과 가치 가설](docs/product/requirements.md#서비스-대상과-가치-가설) 참고).
 
 예약은 슬롯 확보(HOLD, 10분)와 결제 확인 두 단계로 처리하고, 출입 요청마다 **회원 식별·예약 소유권·예약 상태·출입 키 활성 여부와 이용 시간**을 확인합니다. 이번 프로젝트는 동시 예약 방지, 트랜잭션 정합성, 역할·소유권·상태·시간을 조합한 인가를 구현하고 검증하는 데 집중합니다.
 
@@ -217,7 +217,7 @@ erDiagram
 | `idempotency_key` | `idempotency_key` | 별도 독립 테이블로 분리되어 결제 멱등성 보장 (`reservation` 테이블의 컬럼이 아님) |
 | `termsVersion` | 미저장 (결정 필요) | 프론트엔드가 예약 요청 시 전송(`'v1.1'`)하나 서버 DTO/DDL에는 미저장 상태로 향후 과제 관리 |
 
-공간 요금이 변경되더라도 기존 예약의 `price_per_slot_snapshot`과 `total_amount`는 변경되지 않습니다. 상세 DDL 및 스키마 구조는 [docs/erd.md](docs/erd.md)를 참고합니다.
+공간 요금이 변경되더라도 기존 예약의 `price_per_slot_snapshot`과 `total_amount`는 변경되지 않습니다. 상세 DDL 및 스키마 구조는 [docs/architecture/erd.md](docs/architecture/erd.md)를 참고합니다.
 
 ## 📐 핵심 설계
 
@@ -264,7 +264,7 @@ erDiagram
 - 동일 회원이 동일 예약 경로에 동일한 멱등 키로 이미 성공(200 OK)한 요청을 재전송하면, 결제 및 상태 전이를 재실행하지 않고 캐시된 200 성공 응답을 그대로 반환합니다.
 - 동일 키로 완전히 동시에 결제 확정 요청이 경합하면, DB의 조건부 UPDATE(`confirmIfHeldAndNotExpired`)에 의해 1건만 성공하고 밀린 요청은 `409 RESERVATION_STATE_CONFLICT`를 반환받습니다. 이후 동일 키로 재요청 시 먼저 저장된 200 OK 응답을 재생받습니다.
 - 결제가 실패(잔액 부족 등)한 경우에는 트랜잭션이 롤백되어 멱등 레코드가 저장되지 않으므로, 동일 키로 결제를 재시도할 수 있습니다.
-- 동일 키로 상이한 요청 본문(파라미터 변조)을 전송했을 때의 본문 비교 감지 방식 및 오류 정책은 현재 구현되어 있지 않으며 향후 과제([docs/api-spec.md](docs/api-spec.md))로 관리합니다.
+- 동일 키로 상이한 요청 본문(파라미터 변조)을 전송했을 때의 본문 비교 감지 방식 및 오류 정책은 현재 구현되어 있지 않으며 향후 과제([docs/api/api-spec.md](docs/api/api-spec.md))로 관리합니다.
 - 상세 규칙은 [docs/decisions/reservation-idempotency.md](docs/decisions/reservation-idempotency.md)를 참고합니다.
 
 ### PG 크레딧 충전
@@ -424,7 +424,7 @@ Authorization: Bearer {accessToken}
 - 결제 확정(`/pay`) 요청에는 중복 처리를 방지하는 `Idempotency-Key` 헤더가 필수입니다.
 - 본인 예약 조회·취소·연장·출입 토큰 발급·체크아웃은 예약자 본인만 가능합니다.
 - 관리자 강제 취소는 별도 관리자 API에서 사유와 감사 로그를 기록하여 처리합니다.
-- 상세 요청·응답 규격과 오류 코드는 [docs/api-spec.md](docs/api-spec.md) 및 Swagger UI(`/swagger-ui/index.html`)에서 확인하실 수 있습니다.
+- 상세 요청·응답 규격과 오류 코드는 [docs/api/api-spec.md](docs/api/api-spec.md) 및 Swagger UI(`/swagger-ui/index.html`)에서 확인하실 수 있습니다.
 
 ### 🧪 테스트 전략 및 결과
 
@@ -461,7 +461,7 @@ Authorization: Bearer {accessToken}
 | 충전 복구 | 조회 결과별 상태 전이, 24시간 초과 수동 처리, 재시도 공정성 | `ChargeOrderRecoveryProcessorIntegrationTest`, `ChargeOrderRecoverySchedulerTest` |
 | 오픈 리다이렉트 방지 | 충전 후 복귀 경로는 같은 오리진 내부 경로만 허용 | `frontend/tests/credit-charge.test.cjs` |
 
-상세한 테스트 전략과 전수 실행 결과 보고서는 [docs/test-strategy.md](docs/test-strategy.md) 및 [docs/test-results.md](docs/test-results.md)를 참고합니다.
+상세한 테스트 전략과 전수 실행 결과 보고서는 [docs/testing/test-strategy.md](docs/testing/test-strategy.md) 및 [docs/testing/test-results.md](docs/testing/test-results.md)를 참고합니다.
 
 ## 🚀 프로젝트 구조 및 실행
 
@@ -483,18 +483,18 @@ NBE12-14-2-OVENGERS/
 
 ### 상세 설계 및 정책 문서 (`docs/`)
 
-- [요구사항 정의서 (docs/requirements.md)](docs/requirements.md)
-- [시스템 아키텍처 (docs/system-architecture.md)](docs/system-architecture.md)
-- [데이터베이스 ERD (docs/erd.md)](docs/erd.md)
-- [REST API 명세서 (docs/api-spec.md)](docs/api-spec.md)
+- [요구사항 정의서 (docs/product/requirements.md)](docs/product/requirements.md)
+- [시스템 아키텍처 (docs/architecture/system-architecture.md)](docs/architecture/system-architecture.md)
+- [데이터베이스 ERD (docs/architecture/erd.md)](docs/architecture/erd.md)
+- [REST API 명세서 (docs/api/api-spec.md)](docs/api/api-spec.md)
 - [핵심 도메인 설계 결정 (docs/core-domain-decisions.md)](docs/core-domain-decisions.md)
-- [관리자 공간 대표 사진 안내 (docs/admin-space-image-upload.md)](docs/admin-space-image-upload.md)
-- [프론트엔드 결제 연동 가이드 (docs/FRONTEND2_PAYMENT_API.md)](docs/FRONTEND2_PAYMENT_API.md)
-- [UI 디자인 및 화면 흐름 결정 (docs/UI_DESIGN_DECISIONS.md)](docs/UI_DESIGN_DECISIONS.md)
-- [예약 약관 및 취소/환불 규정 검토 (docs/booking-terms-review.md)](docs/booking-terms-review.md)
-- [테스트 전략 문서 (docs/test-strategy.md)](docs/test-strategy.md)
-- [테스트 실행 결과서 (docs/test-results.md)](docs/test-results.md)
-- [트러블슈팅 가이드 (docs/troubleshooting.md)](docs/troubleshooting.md)
+- [관리자 공간 대표 사진 안내 (docs/api/admin-space-image-upload.md)](docs/api/admin-space-image-upload.md)
+- [프론트엔드 결제 연동 가이드 (docs/api/FRONTEND2_PAYMENT_API.md)](docs/api/FRONTEND2_PAYMENT_API.md)
+- [UI 디자인 및 화면 흐름 결정 (docs/product/UI_DESIGN_DECISIONS.md)](docs/product/UI_DESIGN_DECISIONS.md)
+- [예약 약관 및 취소/환불 규정 검토 (docs/product/booking-terms-review.md)](docs/product/booking-terms-review.md)
+- [테스트 전략 문서 (docs/testing/test-strategy.md)](docs/testing/test-strategy.md)
+- [테스트 실행 결과서 (docs/testing/test-results.md)](docs/testing/test-results.md)
+- [트러블슈팅 가이드 (docs/operations/troubleshooting.md)](docs/operations/troubleshooting.md)
 - [예약 동시성 제어 정책 (docs/decisions/reservation-concurrency.md)](docs/decisions/reservation-concurrency.md)
 - [예약 결제 멱등성 정책 (docs/decisions/reservation-idempotency.md)](docs/decisions/reservation-idempotency.md)
 - [출입 키 발급 및 검증 정책 (docs/decisions/access-key-policy.md)](docs/decisions/access-key-policy.md)
@@ -683,7 +683,7 @@ DDL은 Flyway로 버전 관리하며, `backend/src/main/resources/db/migration/`
 - [예약 결제 멱등성 정책](docs/decisions/reservation-idempotency.md): Idempotency-Key 헤더 기반 200 OK 응답 캐싱
 - [출입 키 발급 및 검증 정책](docs/decisions/access-key-policy.md): 예약당 활성 토큰 1개 제약, 체크인 시간 정책, 토큰 해시 저장
 - [인가 정책 및 권한 분리](docs/decisions/authorization-policy.md): 무상태 JWT 인증 및 5대 축 인가 검증
-- [관리자 공간 대표 사진 안내](docs/admin-space-image-upload.md): 5MB 제한, Content-Type 검증, 로컬 정적 서빙 및 MVC 흐름
-- [1:1 문의 기능 요구사항](docs/requirements.md#후속-추가-기능-mvp-이후-확장): 회원 질문-관리자 단일 답변 구조 및 스키마 정책
+- [관리자 공간 대표 사진 안내](docs/api/admin-space-image-upload.md): 5MB 제한, Content-Type 검증, 로컬 정적 서빙 및 MVC 흐름
+- [1:1 문의 기능 요구사항](docs/product/requirements.md#후속-추가-기능-mvp-이후-확장): 회원 질문-관리자 단일 답변 구조 및 스키마 정책
 - [PG 크레딧 충전](docs/decisions/pg-charge.md): 승인 3단계와 트랜잭션 경계, 결과 미확정 복구, 응답 정책
 - 설계 중(미구현): [예약 대기](docs/decisions/waitlist.md), [Outbox·Kafka](docs/decisions/outbox-kafka.md), [고위험 행위 재인증](docs/decisions/step-up-auth.md)

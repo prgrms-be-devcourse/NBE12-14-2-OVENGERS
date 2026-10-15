@@ -8,7 +8,7 @@ export interface BookingTerm {
   sections: { title: string; paragraphs: string[] }[];
 }
 
-// Mock-service draft. Research, scope and legal-review requirements: docs/booking-terms-review.md.
+// Mock-service draft. Research, scope and legal-review requirements: docs/product/booking-terms-review.md.
 export const BOOKING_TERMS: BookingTerm[] = [
   {
     "id": "payment",

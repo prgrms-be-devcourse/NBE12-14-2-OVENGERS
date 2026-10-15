@@ -1,7 +1,7 @@
 /**
  * 서버 응답·요청 타입.
  *
- * 기준 문서: docs/api-spec.md, docs/core-domain-decisions.md.
+ * 기준 문서: docs/api/api-spec.md, docs/core-domain-decisions.md.
  * 서버 DTO 가 바뀌면 이 파일을 먼저 고치고, 컴파일 오류가 가리키는 화면을 따라갑니다.
  */
 

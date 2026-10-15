@@ -2,7 +2,7 @@
  * 로그인 상태를 앱 전역에서 공유합니다.
  *
  * 화면에서 관리자 메뉴를 숨기는 것은 편의일 뿐이고, 실제 권한 판단은 서버가 합니다
- * (docs/requirements.md 5장). 여기의 role 값을 근거로 보안을 가정하지 않습니다.
+ * (docs/product/requirements.md 5장). 여기의 role 값을 근거로 보안을 가정하지 않습니다.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';

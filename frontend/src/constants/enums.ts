@@ -1,6 +1,6 @@
 /**
  * 서버 Enum 값과 화면 표기를 함께 정의합니다.
- * 값 목록의 기준은 docs/core-domain-decisions.md(확정본)와 docs/api-spec.md 입니다.
+ * 값 목록의 기준은 docs/core-domain-decisions.md(확정본)와 docs/api/api-spec.md 입니다.
  *
  * tone 은 global.css 의 badge 클래스(green / red / gray / cyan)에 대응합니다.
  */
@@ -85,7 +85,7 @@ export const ACCESS_RESULT_META: Record<AccessResult, Meta> = {
 
 /**
  * 출입 거절 사유 코드 → 사용자에게 보여줄 문구.
- * docs/api-spec.md 7장 door-access/verify 의 reasonCode 값 기준.
+ * docs/api/api-spec.md 7장 door-access/verify 의 reasonCode 값 기준.
  */
 const ACCESS_REASON_LABEL: Record<AccessReasonCode, string> = {
   ALLOWED: '출입이 허용되었습니다.',

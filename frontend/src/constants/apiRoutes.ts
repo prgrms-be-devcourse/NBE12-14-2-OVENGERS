@@ -1,7 +1,7 @@
 /**
  * 백엔드 엔드포인트 경로를 한곳에 모읍니다.
  *
- * 기준 문서: docs/api-spec.md (2026-09-15, core-domain-decisions.md 확정본 반영).
+ * 기준 문서: docs/api/api-spec.md (2026-09-15, core-domain-decisions.md 확정본 반영).
  * 화면·API 모듈에서 경로 문자열을 직접 쓰지 않는 이유는, 경로가 바뀌어도 이 파일만
  * 고치면 되도록 하기 위함입니다.
  */

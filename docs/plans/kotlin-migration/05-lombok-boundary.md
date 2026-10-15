@@ -4,7 +4,7 @@
 
 ## 현재 경계
 
-운영 Java 파일 70개가 Lombok을 import한다. [`Space`](../../backend/src/main/java/com/ovengers/slotkey/space/entity/Space.java), [`Reservation`](../../backend/src/main/java/com/ovengers/slotkey/reservation/entity/Reservation.java), [`Inquiry`](../../backend/src/main/java/com/ovengers/slotkey/inquiry/entity/Inquiry.java)는 builder·getter·무인자 생성자에 의존한다. [`SpaceResponse`](../../backend/src/main/java/com/ovengers/slotkey/space/dto/response/SpaceResponse.java)는 `record`이지만 Lombok builder를 사용한다. 서비스/컨트롤러의 `@RequiredArgsConstructor`와 테스트의 `@InjectMocks`도 호출 형태에 영향을 준다.
+운영 Java 파일 70개가 Lombok을 import한다. [`Space`](../../../backend/src/main/java/com/ovengers/slotkey/space/entity/Space.java), [`Reservation`](../../../backend/src/main/java/com/ovengers/slotkey/reservation/entity/Reservation.java), [`Inquiry`](../../../backend/src/main/java/com/ovengers/slotkey/inquiry/entity/Inquiry.java)는 builder·getter·무인자 생성자에 의존한다. [`SpaceResponse`](../../../backend/src/main/java/com/ovengers/slotkey/space/dto/response/SpaceResponse.java)는 `record`이지만 Lombok builder를 사용한다. 서비스/컨트롤러의 `@RequiredArgsConstructor`와 테스트의 `@InjectMocks`도 호출 형태에 영향을 준다.
 
 ## 조사와 수정 방법
 
