@@ -65,7 +65,22 @@
   - `ErrorDispatchSecurityIntegrationTest` (임베디드 컨테이너 실제 ERROR 디스패치 500 보존 검증) 통과.
   - 실제 8080 백엔드 및 3000 프록시를 통한 관리자 회원/문의 목록 200 OK 및 브라우저 UI 정상 렌더링 확인.
 
+### 2.6. 백엔드 전체 테스트 도중 Testcontainers MySQL OOM 비정상 종료
+- **현상**: `./gradlew test` (또는 `./gradlew build`) 전체 실행 중 `AdminSpaceSecurityIntegrationTest`(11건), `SpaceRepositoryTest`(19건) 등 총 30건의 테스트가 트랜잭션 시작 전 `CannotCreateTransactionException` 및 DB 연결 확보 실패(`CommunicationsException`)로 실패하고, Hikari 커넥션 대기(약 30초)가 반복되어 전체 테스트 시간이 약 15분 지연됨.
+- **근본 원인 (Root Cause)**:
+  - Spring TestContext Framework는 서로 다른 설정을 가진 테스트 컨텍스트를 기본 최대 32개까지 메모리 캐시에 유지함.
+  - `MySqlTestContainerConfig`에서 `@ServiceConnection`으로 생성된 `mysql:8.4` 컨테이너의 수명주기가 Spring 테스트 컨텍스트에 바인딩되어 있어, 슬라이스/보안/Mock 차이 등으로 새 컨텍스트가 생성되는 동안 이전 MySQL 컨테이너가 종료되지 않고 계속 누적됨.
+  - Docker VM의 가용 메모리(약 3.65GiB)를 초과하면서 Docker 커널의 OOM Killer가 `mysqld` 프로세스를 강제 종료(`global_oom`, `Killed process (mysqld)`)하여 연결이 거부됨.
+- **해결책 (Resolution)**:
+  - `backend/build.gradle`의 `tasks.named('test')` 블록에 테스트 JVM 시스템 프로퍼티 `systemProperty 'spring.test.context.cache.maxSize', '2'` 추가.
+  - 컨텍스트 캐시 상한을 2로 제한하여, 사용이 완료된 이전 테스트 컨텍스트가 캐시에서 퇴출(evict)될 때 바인딩된 Testcontainers MySQL 컨테이너가 즉시 정상 종료되도록 유도함.
+- **검증**:
+  - `AdminSpaceSecurityIntegrationTest`(11건), `SpaceRepositoryTest`(19건) 선행 단독 실행 30건 전수 통과.
+  - `./gradlew build --no-daemon --rerun-tasks` 실행으로 694건 집계, 성공 682건·실패 0건·에러 0건·스킵 12건(기존 정상 스킵 범위 보존).
+  - Docker 이벤트 모니터링(`docker events`) 및 컨테이너 실시간 추적을 통해 최대 동시 MySQL 컨테이너 수가 3개 이하로 제한되고, 생성된 25개 테스트 컨테이너가 테스트 종료 후 100% 정상 정리(`destroy: 25`)됨을 확인. 이번 3.65GiB 환경의 전체 실행에서 Docker VM 내 새 OOM 0건 확인.
+
 ---
+
 
 ## 3. 관련 실행 및 설정 문서 안내
 
