@@ -36,6 +36,16 @@ spring:
       "[mail.smtp.timeout]": 5000
       "[mail.smtp.writetimeout]": 5000
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      properties:
+        # 값은 slotkey.kafka 한 곳에서만 정의한다(불변식: send-timeout > delivery-timeout > request-timeout)
+        "[max.block.ms]": ${slotkey.kafka.max-block-ms}
+        "[request.timeout.ms]": ${slotkey.kafka.request-timeout-ms}
+        "[delivery.timeout.ms]": ${slotkey.kafka.delivery-timeout-ms}
+
 custom:
   jwt:
     secret-key: ${JWT_SECRET_KEY}
@@ -68,6 +78,16 @@ app:
     storage-root: ${SPACE_IMAGE_STORAGE_ROOT:./data/space-images}
 
 slotkey:
+  kafka:
+    enabled: ${SLOTKEY_KAFKA_ENABLED:false}
+    send-timeout-ms: 6000
+    delivery-timeout-ms: 5000
+    request-timeout-ms: 3000
+    max-block-ms: 3000
+  outbox:
+    relay:
+      batch-size: 50
+      fixed-delay-ms: 1000
   scheduler:
     charge-recovery:
       enabled: true

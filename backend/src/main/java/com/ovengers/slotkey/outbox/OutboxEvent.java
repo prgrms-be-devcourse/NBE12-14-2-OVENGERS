@@ -40,4 +40,10 @@ public class OutboxEvent {
         this.attempts = 0;
         this.createdAt = createdAt;
     }
+
+    public Long getId() { return id; }
+    public String getEventId() { return eventId; }
+    public String getTopic() { return topic; }
+    public String getPartitionKey() { return partitionKey; }
+    public String getPayload() { return payload; }
 }
