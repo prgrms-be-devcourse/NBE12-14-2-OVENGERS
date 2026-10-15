@@ -77,6 +77,7 @@ public abstract class ReservationIntegrationTestSupport extends IntegrationTestS
         jdbcTemplate.update("DELETE FROM reservation WHERE space_id IN (" + spaces + ") OR member_id IN (" + members + ")");
         jdbcTemplate.update("DELETE FROM waitlist_entry WHERE member_id IN (" + members
                 + ") OR space_id IN (" + spaces + ")");
+        jdbcTemplate.update("DELETE FROM notification WHERE member_id IN (" + members + ")");
         jdbcTemplate.update("DELETE FROM audit_logs WHERE actor_member_id IN (" + members + ")");
         jdbcTemplate.update("DELETE FROM spaces WHERE id IN (" + spaces + ")");
         jdbcTemplate.update("DELETE FROM member WHERE id IN (" + members + ")");

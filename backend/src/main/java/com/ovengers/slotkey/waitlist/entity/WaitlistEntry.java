@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.DynamicUpdate;
 
 import java.time.LocalDateTime;
 
@@ -16,9 +17,14 @@ import java.time.LocalDateTime;
  * 예약 성사를 보장하지 않는다(docs/plans/waitlist-outbox/00-waitlist-outbox-plan.md §2 — 전원 알림 + 선착순).
  *
  * member/space에 FK를 걸지 않고 id만 들고 있다(01 문서 "데이터와 API").
+ * `@DynamicUpdate`: 바뀐 컬럼만 UPDATE한다. 없으면 취소(`cancel()`) flush가 전체 컬럼을 쓰면서, 그 사이
+ * 컨슈머가 기록한 last_notified_at을 읽은 시점의 값(null)으로 되돌린다(lost update, step-1-review.md M3).
+ * 알림 시각 기록 쪽은 `WaitlistEntryRepository.markNotified`(조건부 UPDATE)가 맡는다.
+ *
  * 신규 코드이므로 Lombok을 쓰지 않는다(AGENTS.md).
  */
 @Entity
+@DynamicUpdate
 @Table(name = "waitlist_entry")
 public class WaitlistEntry {
 

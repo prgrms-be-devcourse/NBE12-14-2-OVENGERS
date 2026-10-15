@@ -38,6 +38,9 @@ spring:
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # 컨슈머가 relay보다 늦게 떠도 이벤트를 잃지 않는다. 재생돼도 핸들러가 "지금" 기준으로 대상을 고른다.
+      auto-offset-reset: earliest
     producer:
       acks: all
       properties:

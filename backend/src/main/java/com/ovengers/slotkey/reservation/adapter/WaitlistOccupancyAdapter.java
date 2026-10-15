@@ -4,10 +4,12 @@ import com.ovengers.slotkey.reservation.entity.ReservationStatus;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationSlotRepository;
 import com.ovengers.slotkey.waitlist.service.ReservationOccupancyProvider;
+import com.ovengers.slotkey.waitlist.service.ReservationRangeProvider;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * waitlist 도메인의 ReservationOccupancyProvider 포트 구현체.
@@ -21,7 +23,7 @@ import java.util.List;
  * 신규 코드이므로 Lombok을 쓰지 않는다(AGENTS.md).
  */
 @Component
-public class WaitlistOccupancyAdapter implements ReservationOccupancyProvider {
+public class WaitlistOccupancyAdapter implements ReservationOccupancyProvider, ReservationRangeProvider {
 
     /** 슬롯 점유 조회용. 이미 끝난 예약(COMPLETED)도 그 슬롯은 남의 것이므로 점유로 본다. */
     private static final List<ReservationStatus> SLOT_OCCUPIED_STATUSES = List.of(
@@ -66,5 +68,11 @@ public class WaitlistOccupancyAdapter implements ReservationOccupancyProvider {
         return reservationRepository.existsOccupyingByMemberAndSpace(
                 memberId, spaceId, startTime, endTime, now,
                 ReservationStatus.HELD, OWN_OCCUPYING_STATUSES);
+    }
+
+    @Override
+    public Optional<ReservationRange> findRange(Long reservationId) {
+        return reservationRepository.findById(reservationId)
+                .map(r -> new ReservationRange(r.getSpaceId(), r.getStartTime(), r.getEndTime()));
     }
 }

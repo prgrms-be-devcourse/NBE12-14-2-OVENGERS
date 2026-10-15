@@ -3,6 +3,7 @@ package com.ovengers.slotkey.waitlist.repository;
 import com.ovengers.slotkey.waitlist.entity.WaitlistEntry;
 import com.ovengers.slotkey.waitlist.entity.WaitlistStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -41,6 +42,30 @@ public interface WaitlistEntryRepository extends JpaRepository<WaitlistEntry, Lo
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime,
             @Param("id") Long id,
+            @Param("status") WaitlistStatus status,
+            @Param("now") LocalDateTime now);
+
+    /**
+     * 알림 시각 기록. 엔터티를 읽지 않고 이 컬럼 하나만 조건부로 UPDATE한다 — 컨슈머가 취소(`cancel()`)와
+     * 겹쳐도 status/active를 되돌리지 않고, 이미 취소된 행(WAITING이 아님)은 0건이 갱신되어 건너뛴다.
+     * 반환값은 갱신 행 수(1이면 성공).
+     */
+    @Modifying
+    @Query("UPDATE WaitlistEntry w SET w.lastNotifiedAt = :now WHERE w.id = :id AND w.status = :status")
+    int markNotified(@Param("id") Long id, @Param("now") LocalDateTime now, @Param("status") WaitlistStatus status);
+
+    /**
+     * 슬롯 해제 알림의 후보. 같은 공간의 활성 WAITING 중 시작이 아직 미래이고 해제 구간과 겹치는 항목이다.
+     * "신청 구간 전체가 비었는가"와 회원 상태, 본인 점유는 호출자가 이어서 검사한다.
+     */
+    @Query("SELECT w FROM WaitlistEntry w " +
+            "WHERE w.spaceId = :spaceId AND w.status = :status AND w.startTime > :now " +
+            "AND w.startTime < :endTime AND w.endTime > :startTime " +
+            "ORDER BY w.id")
+    List<WaitlistEntry> findNotificationCandidates(
+            @Param("spaceId") Long spaceId,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime,
             @Param("status") WaitlistStatus status,
             @Param("now") LocalDateTime now);
 }
