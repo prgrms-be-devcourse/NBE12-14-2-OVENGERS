@@ -52,6 +52,9 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - name: Build static export
+        env:
+          # 브라우저에 노출되는 공개 클라이언트 키(test_gck_/live_gck_). 시크릿 키(gsk)는 절대 넣지 않는다.
+          NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY: ${{ vars.NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY }}
         run: STATIC_EXPORT=true npm run build
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
