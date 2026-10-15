@@ -15,8 +15,14 @@ public class SmtpVerificationMailSender
 
     public SmtpVerificationMailSender(
             JavaMailSender mailSender,
-            @Value("${app.verification.mail-from}") String from
+            @Value("${app.verification.mail-from}") String from,
+            @Value("${spring.mail.username}") String smtpUsername
     ) {
+        if (!from.equals(smtpUsername)) {
+            throw new IllegalStateException(
+                    "VERIFICATION_MAIL_FROM must match SPRING_MAIL_USERNAME"
+            );
+        }
         this.mailSender = mailSender;
         this.from = from;
     }

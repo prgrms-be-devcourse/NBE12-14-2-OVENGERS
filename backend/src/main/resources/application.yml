@@ -22,6 +22,19 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  mail:
+    host: ${SPRING_MAIL_HOST:smtp.gmail.com}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME}
+    password: ${SPRING_MAIL_PASSWORD}
+    default-encoding: UTF-8
+    properties:
+      "[mail.smtp.auth]": true
+      "[mail.smtp.starttls.enable]": true
+      "[mail.smtp.starttls.required]": true
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 5000
+      "[mail.smtp.writetimeout]": 5000
 
 custom:
   jwt:
@@ -37,6 +50,7 @@ app:
       same-site: Lax
   verification:
     hash-secret: ${VERIFICATION_HASH_SECRET}
+    mail-from: ${VERIFICATION_MAIL_FROM}
   credit:
     signup-grant: 50000
 
