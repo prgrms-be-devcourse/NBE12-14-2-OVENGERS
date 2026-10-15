@@ -2,7 +2,7 @@
 # 담당: 이태호 (reservation, reservation_slot)
 # 테이블: reservation, reservation_slot, reservation_status_history
 # 선행 의존(FK 대상): member, space
-# 참고: docs/architecture/erd.md, docs/decisions/reservation-concurrency.md, docs/core-domain-decisions.md
+# 참고: docs/erd.md, docs/decisions/reservation-concurrency.md, docs/core-domain-decisions.md
 # 비고: reservation_status_history는 백한비님 대신 이태호가 작성
 #
 # 2026-09-15 수정(core-domain-decisions.md §11 반영):
