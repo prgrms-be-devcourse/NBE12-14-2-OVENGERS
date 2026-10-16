@@ -5,6 +5,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import java.time.LocalDateTime;
 
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
@@ -13,4 +17,8 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     Page<Notification> findAllByMemberIdOrderByIdDesc(Long memberId, Pageable pageable);
 
     long countByMemberIdAndReadAtIsNull(Long memberId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Notification n SET n.readAt = :readAt WHERE n.memberId = :memberId AND n.readAt IS NULL")
+    int markAllRead(@Param("memberId") Long memberId, @Param("readAt") LocalDateTime readAt);
 }

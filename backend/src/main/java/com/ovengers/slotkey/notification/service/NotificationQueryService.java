@@ -6,6 +6,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.Clock;
+import java.time.LocalDateTime;
 
 /**
  * 내 알림 조회. 모든 질의가 memberId 조건을 포함하므로 타인의 알림은 목록에도 개수에도 잡히지 않는다
@@ -16,9 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class NotificationQueryService {
 
     private final NotificationRepository notificationRepository;
+    private final Clock clock;
 
-    public NotificationQueryService(NotificationRepository notificationRepository) {
+    public NotificationQueryService(NotificationRepository notificationRepository, Clock clock) {
         this.notificationRepository = notificationRepository;
+        this.clock = clock;
     }
 
     public Page<NotificationResponse> getMyNotifications(Long memberId, Pageable pageable) {
@@ -28,5 +32,10 @@ public class NotificationQueryService {
 
     public long countUnread(Long memberId) {
         return notificationRepository.countByMemberIdAndReadAtIsNull(memberId);
+    }
+
+    @Transactional
+    public int readAll(Long memberId) {
+        return notificationRepository.markAllRead(memberId, LocalDateTime.now(clock));
     }
 }
