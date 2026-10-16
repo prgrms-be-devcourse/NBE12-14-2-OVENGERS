@@ -303,6 +303,73 @@ class SlotReleasedHandlerTest extends ReservationIntegrationTestSupport {
         assertThat(notificationCount(laterEntry)).isZero();
     }
 
+    @Test
+    @DisplayName("대기 구간이 해제 구간보다 넓어도(나머지도 비어 있으면) 알림이 가고, 일부만 겹쳐도 가능하다")
+    void handle_widerOrPartiallyOverlappingRange_isNotifiedWhenAllFree() {
+        Long wider = waiting(createMember(0), spaceId, tomorrowAt(13, 0), tomorrowAt(16, 0));
+        Long partial = waiting(createMember(0), spaceId, tomorrowAt(14, 30), tomorrowAt(15, 30));
+
+        handler.handle(eventId, releasedReservationId);
+
+        assertThat(notificationCount(wider)).isEqualTo(1);
+        assertThat(notificationCount(partial)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("같은 대기 항목에 서로 다른 이벤트가 두 번 오면 알림이 2건이고 알림 시각이 갱신된다")
+    void handle_twoDifferentEventsForSameEntry_notifiesTwice() {
+        Long entryId = waiting(createMember(0), spaceId, start, end);
+        String secondEventId = UUID.randomUUID().toString();
+        try {
+            handler.handle(eventId, releasedReservationId);
+            LocalDateTime first = lastNotifiedAt(entryId);
+            jdbcTemplate.update("UPDATE waitlist_entry SET last_notified_at = ? WHERE id = ?",
+                    first.minusHours(1), entryId);
+
+            handler.handle(secondEventId, releasedReservationId);
+
+            assertThat(notificationCount(entryId)).isEqualTo(2);
+            assertThat(lastNotifiedAt(entryId)).isAfter(first.minusHours(1));
+        } finally {
+            jdbcTemplate.update("DELETE FROM processed_event WHERE event_id = ?", secondEventId);
+        }
+    }
+
+    @Test
+    @DisplayName("한 건이라도 알림 저장이 실패하면 같은 이벤트의 앞선 알림·알림 시각·처리 기록이 모두 롤백된다")
+    void handle_failureOnLaterCandidate_rollsBackEverything() {
+        Long okMember = createMember(0);
+        Long conflictMember = createMember(0);
+        Long okEntry = waiting(okMember, spaceId, start, end);
+        Long conflictEntry = waiting(conflictMember, spaceId, start, end);
+        // 나중 후보(id가 큰 쪽)의 (event_id, waitlist_entry_id)를 선점해 두 번째 알림 INSERT를 실패시킨다.
+        jdbcTemplate.update("INSERT INTO notification (member_id, waitlist_entry_id, event_id, message, created_at) "
+                + "VALUES (?, ?, ?, 'x', NOW())", conflictMember, conflictEntry, eventId);
+
+        try {
+            handler.handle(eventId, releasedReservationId);
+        } catch (RuntimeException expected) {
+            // 두 번째 후보의 중복 알림 INSERT 실패
+        }
+
+        assertThat(notificationCount(okEntry)).isZero();
+        assertThat(lastNotifiedAtIsSet(okEntry)).isFalse();
+        assertThat(processedCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("공간 이름이 최대 길이(100자)여도 알림 문구가 컬럼 한도(500자) 안에 들어간다")
+    void handle_longestSpaceName_messageFitsColumn() {
+        jdbcTemplate.update("UPDATE spaces SET name = ? WHERE id = ?", "가".repeat(100), spaceId);
+        Long entryId = waiting(createMember(0), spaceId, start, end);
+
+        handler.handle(eventId, releasedReservationId);
+
+        String message = jdbcTemplate.queryForObject(
+                "SELECT message FROM notification WHERE waitlist_entry_id = ?", String.class, entryId);
+        assertThat(message).contains("가".repeat(100)).hasSizeLessThanOrEqualTo(500);
+    }
+
     // ---------- 헬퍼 ----------
 
     private Long waiting(Long memberId, Long space, LocalDateTime from, LocalDateTime to) {
@@ -326,6 +393,11 @@ class SlotReleasedHandlerTest extends ReservationIntegrationTestSupport {
 
     private String statusOfEntry(Long entryId) {
         return jdbcTemplate.queryForObject("SELECT status FROM waitlist_entry WHERE id = ?", String.class, entryId);
+    }
+
+    private LocalDateTime lastNotifiedAt(Long entryId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT last_notified_at FROM waitlist_entry WHERE id = ?", LocalDateTime.class, entryId);
     }
 
     private boolean lastNotifiedAtIsSet(Long entryId) {

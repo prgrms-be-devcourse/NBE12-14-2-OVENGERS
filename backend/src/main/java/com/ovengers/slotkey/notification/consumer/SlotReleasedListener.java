@@ -38,7 +38,10 @@ public class SlotReleasedListener {
         }
         JsonNode eventId = node.get("eventId");
         JsonNode reservationId = node.get("reservationId");
-        if (eventId == null || !eventId.isTextual() || reservationId == null || !reservationId.canConvertToLong()) {
+        // 1.5 같은 실수는 canConvertToLong()이 true라 1로 잘려 엉뚱한 예약을 가리키므로 정수만 받는다.
+        // 빈 eventId는 모든 빈 이벤트를 "이미 처리함"으로 묶어 버리므로 거른다.
+        if (eventId == null || !eventId.isTextual() || eventId.asText().isBlank()
+                || reservationId == null || !reservationId.isIntegralNumber() || !reservationId.canConvertToLong()) {
             throw new IllegalArgumentException("SlotReleased payload needs eventId and reservationId");
         }
         handler.handle(eventId.asText(), reservationId.asLong());
