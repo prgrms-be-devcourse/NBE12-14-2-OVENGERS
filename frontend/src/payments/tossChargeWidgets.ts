@@ -66,6 +66,10 @@ export async function setupChargeWidgets({
   agreement.on('agreementStatusChange', ({ agreedRequiredTerms }) => {
     onAgreementChange(agreedRequiredTerms);
   });
+  // 토스 약관 위젯은 기본으로 전체 동의 상태로 그려지지만 사용자가 바꿀 때만 이벤트를 보낸다.
+  // 최초 상태를 알려 주지 않으면 이미 체크돼 있어도 결제 버튼이 비활성으로 남는다.
+  // 동의 여부는 requestPayment 에서 토스가 한 번 더 검증한다.
+  onAgreementChange(true);
 
   return {
     requestPayment: async (request) => {

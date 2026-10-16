@@ -52,6 +52,9 @@ test('setupChargeWidgets follows the official checkout-style SDK sequence', asyn
     amount: 1_000,
     onAgreementChange: (agreed) => agreementStates.push(agreed),
   });
+  // 위젯은 기본 동의 상태로 그려지므로 이벤트가 없어도 최초에 동의로 알린다.
+  assert.deepEqual(agreementStates, [true]);
+  agreementListener({ agreedRequiredTerms: false, agreements: [] });
   agreementListener({ agreedRequiredTerms: true, agreements: [] });
   await session.requestPayment({
     orderId: 'chg_order',
@@ -81,7 +84,7 @@ test('setupChargeWidgets follows the official checkout-style SDK sequence', asyn
     ['destroyPaymentMethods'],
     ['destroyAgreement'],
   ]);
-  assert.deepEqual(agreementStates, [true]);
+  assert.deepEqual(agreementStates, [true, false, true]);
 });
 test('setupChargeWidgets removes payment methods when agreement rendering fails', async () => {
   let destroyed = 0;
