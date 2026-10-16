@@ -54,6 +54,12 @@ public class ChargeOrder {
     @Column(name = "pg_idempotency_key", length = 100, unique = true)
     private String pgIdempotencyKey;
 
+    @Column(name = "payment_method", length = 30)
+    private String paymentMethod;
+
+    @Column(name = "payment_provider", length = 30)
+    private String paymentProvider;
+
     @Column(name = "failure_code", length = 100)
     private String failureCode;
 
@@ -152,6 +158,20 @@ public class ChargeOrder {
 
     public LocalDateTime getRecoveryExhaustedAt() {
         return recoveryExhaustedAt;
+    }
+
+    /** PG가 알려 준 결제수단(표시용). 결제 처리와 무관하며 값이 없으면 기록하지 않는다. */
+    public void recordPaymentMethod(String paymentMethod, String paymentProvider) {
+        this.paymentMethod = paymentMethod;
+        this.paymentProvider = paymentProvider;
+    }
+
+    public String getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public String getPaymentProvider() {
+        return paymentProvider;
     }
 
     public void markPaid(LocalDateTime now) {

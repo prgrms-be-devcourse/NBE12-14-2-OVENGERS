@@ -25,6 +25,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class ChargeOrderConfirmServiceTest {
@@ -233,6 +236,54 @@ class ChargeOrderConfirmServiceTest {
         assertThat(output)
                 .contains("exceptionClass=BusinessException")
                 .contains("errorCode=CHARGE_ORDER_STATE_CONFLICT");
+    }
+
+    private ChargeOrderConfirmService approvedFlow(PgConfirmationResult approved, ChargeOrderConfirmResponse paid) {
+        PgConfirmRequest pgRequest = new PgConfirmRequest("payment-key", "chg_order", 1_000L, "pg-key");
+        given(transactionService.prepare(7L, "payment-key", "chg_order", 1_000L, "client-key"))
+                .willReturn(ChargeOrderPreparation.callPg(pgRequest));
+        given(pgClient.confirm(pgRequest)).willReturn(approved);
+        given(transactionService.completeApproved("chg_order", "payment-key", "client-key")).willReturn(paid);
+        return new ChargeOrderConfirmService(transactionService, pgClient, idempotencyService);
+    }
+
+    @Test
+    @DisplayName("승인 성공 뒤 PG가 알려 준 결제수단을 충전 주문에 기록한다")
+    void confirm_approved_recordsPaymentMethod() {
+        ChargeOrderConfirmResponse paid = new ChargeOrderConfirmResponse("chg_order", 1_000L, ChargeOrderStatus.PAID);
+        ChargeOrderConfirmService service = approvedFlow(
+                PgConfirmationResult.approved("payment-key", "간편결제", "토스페이"), paid);
+
+        ChargeOrderConfirmResponse response = service.confirm(7L, "payment-key", "chg_order", 1_000L, "client-key");
+
+        assertThat(response).isEqualTo(paid);
+        verify(transactionService).recordPaymentMethod("chg_order", "간편결제", "토스페이");
+    }
+
+    @Test
+    @DisplayName("결제수단 기록이 실패해도 충전 결과(PAID)는 그대로 반환한다")
+    void confirm_paymentMethodRecordFailure_doesNotAffectCharge() {
+        ChargeOrderConfirmResponse paid = new ChargeOrderConfirmResponse("chg_order", 1_000L, ChargeOrderStatus.PAID);
+        ChargeOrderConfirmService service = approvedFlow(
+                PgConfirmationResult.approved("payment-key", "카드", null), paid);
+        willThrow(new IllegalStateException("db down"))
+                .given(transactionService).recordPaymentMethod("chg_order", "카드", null);
+
+        ChargeOrderConfirmResponse response = service.confirm(7L, "payment-key", "chg_order", 1_000L, "client-key");
+
+        assertThat(response).isEqualTo(paid);
+    }
+
+    @Test
+    @DisplayName("PG가 결제수단을 주지 않으면 기록 단계를 건너뛴다")
+    void confirm_withoutPaymentMethod_skipsRecording() {
+        ChargeOrderConfirmResponse paid = new ChargeOrderConfirmResponse("chg_order", 1_000L, ChargeOrderStatus.PAID);
+        ChargeOrderConfirmService service = approvedFlow(PgConfirmationResult.approved("payment-key"), paid);
+
+        service.confirm(7L, "payment-key", "chg_order", 1_000L, "client-key");
+
+        verify(transactionService, never()).recordPaymentMethod(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test

@@ -26,7 +26,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
@@ -262,6 +266,36 @@ class ChargeOrderControllerTest {
                 .header("Authorization", "Bearer " + accessToken())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(content);
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/credits/charge-orders는 본인 충전 내역을 페이지로 반환한다")
+    void list_returnsMyHistoryPage() throws Exception {
+        given(chargeOrderService.getMyHistory(org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.any()))
+                .willReturn(new PageImpl<>(List.of(
+                        new com.ovengers.slotkey.credit.dto.response.ChargeOrderHistoryResponse(
+                                "chg_1", 5_000L, ChargeOrderStatus.PAID, "간편결제", "토스페이",
+                                LocalDateTime.of(2026, 10, 13, 9, 0), LocalDateTime.of(2026, 10, 13, 9, 1))),
+                        PageRequest.of(0, 10), 1));
+
+        mockMvc.perform(get("/api/v1/credits/charge-orders")
+                        .header("Authorization", "Bearer " + accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].orderId").value("chg_1"))
+                .andExpect(jsonPath("$.data.content[0].amount").value(5_000L))
+                .andExpect(jsonPath("$.data.content[0].status").value("PAID"))
+                .andExpect(jsonPath("$.data.content[0].paymentMethod").value("간편결제"))
+                .andExpect(jsonPath("$.data.content[0].paymentProvider").value("토스페이"))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    @DisplayName("인증 없이 충전 내역을 조회하면 401을 반환한다")
+    void list_withoutAuthentication_returnsUnauthorized() throws Exception {
+        mockMvc.perform(get("/api/v1/credits/charge-orders"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(chargeOrderService);
     }
 
     private String accessToken() {

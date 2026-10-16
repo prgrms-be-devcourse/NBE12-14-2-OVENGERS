@@ -112,6 +112,45 @@ class TossPaymentsPgClientTest {
     }
 
     @Test
+    @DisplayName("승인 응답의 결제수단(method)과 간편결제 제공사(easyPay.provider)를 결과에 담는다")
+    void confirm_readsPaymentMethodAndEasyPayProvider() {
+        server.expect(requestTo(BASE_URL + "/v1/payments/confirm"))
+                .andRespond(withSuccess("""
+                        {
+                          "paymentKey": "payment-key",
+                          "orderId": "chg_order123",
+                          "status": "DONE",
+                          "totalAmount": 1000,
+                          "method": "간편결제",
+                          "easyPay": {"provider": "토스페이", "amount": 1000}
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        PgConfirmationResult result = client.confirm(request());
+
+        assertThat(result.type()).isEqualTo(PgConfirmationResult.Type.APPROVED);
+        assertThat(result.paymentMethod()).isEqualTo("간편결제");
+        assertThat(result.paymentProvider()).isEqualTo("토스페이");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("결제수단이 응답에 없으면 null로 두고 승인은 그대로 성공한다")
+    void confirm_withoutMethod_stillApproved() {
+        server.expect(requestTo(BASE_URL + "/v1/payments/confirm"))
+                .andRespond(withSuccess("""
+                        {"paymentKey": "payment-key", "orderId": "chg_order123", "status": "DONE", "totalAmount": 1000}
+                        """, MediaType.APPLICATION_JSON));
+
+        PgConfirmationResult result = client.confirm(request());
+
+        assertThat(result.type()).isEqualTo(PgConfirmationResult.Type.APPROVED);
+        assertThat(result.paymentMethod()).isNull();
+        assertThat(result.paymentProvider()).isNull();
+        server.verify();
+    }
+
+    @Test
     @DisplayName("4xx 에러 객체는 기존 오류 분류기의 명확한 거절로 연결한다")
     void confirm_userDecline_usesErrorClassifier(CapturedOutput output) {
         server.expect(requestTo(BASE_URL + "/v1/payments/confirm"))

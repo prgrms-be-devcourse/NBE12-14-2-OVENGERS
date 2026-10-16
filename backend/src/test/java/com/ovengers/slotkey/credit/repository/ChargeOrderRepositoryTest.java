@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -176,5 +177,31 @@ class ChargeOrderRepositoryTest extends IntegrationTestSupport {
                 confirmingAt.plusMinutes(1)
         );
         return order;
+    }
+
+    @Test
+    @DisplayName("내 충전 내역은 본인의 PAID·FAILED만 최신순으로 반환하고 PENDING과 타인 주문은 제외한다")
+    void findHistory_returnsOwnVisibleOrdersNewestFirst() {
+        Member me = memberRepository.save(new Member("history-me@test.com", "내역회원"));
+        Member other = memberRepository.save(new Member("history-other@test.com", "타인회원"));
+        LocalDateTime now = LocalDateTime.of(2026, 10, 16, 9, 0);
+
+        ChargeOrder paid = ChargeOrder.createPending(me.getId(), "chg_hist_paid", 5_000L, now);
+        paid.markPaid(now.plusMinutes(1));
+        chargeOrderRepository.save(paid);
+        chargeOrderRepository.save(ChargeOrder.createPending(me.getId(), "chg_hist_pending", 1_000L, now.plusMinutes(2)));
+        chargeOrderRepository.save(ChargeOrder.createPending(other.getId(), "chg_hist_other", 2_000L, now.plusMinutes(3)));
+        ChargeOrder newer = ChargeOrder.createPending(me.getId(), "chg_hist_paid2", 3_000L, now.plusMinutes(4));
+        newer.markPaid(now.plusMinutes(5));
+        chargeOrderRepository.saveAndFlush(newer);
+
+        var page = chargeOrderRepository.findByMemberIdAndStatusInOrderByIdDesc(
+                me.getId(),
+                Set.of(ChargeOrderStatus.PAID, ChargeOrderStatus.CONFIRMING, ChargeOrderStatus.FAILED),
+                PageRequest.of(0, 10));
+
+        assertThat(page.getContent()).extracting(ChargeOrder::getOrderId)
+                .containsExactly("chg_hist_paid2", "chg_hist_paid");
+        assertThat(page.getTotalElements()).isEqualTo(2);
     }
 }

@@ -80,11 +80,13 @@ public class ChargeOrderConfirmService {
 
         PgConfirmationResult result = pgClient.confirm(preparation.pgRequest());
         if (result.type() == PgConfirmationResult.Type.APPROVED) {
-            return completeApprovedOrKeepConfirming(
+            ChargeOrderConfirmResponse approved = completeApprovedOrKeepConfirming(
                     orderId,
                     paymentKey,
                     idempotencyKey
             );
+            recordPaymentMethodQuietly(orderId, result);
+            return approved;
         }
         if (result.type() == PgConfirmationResult.Type.DECLINED) {
             transactionService.completeDeclined(orderId, result.errorCode());
@@ -117,6 +119,22 @@ public class ChargeOrderConfirmService {
                         idempotencyKey
                 )
                 .currentResponse();
+    }
+
+    /** 표시용 결제수단 기록. 실패해도 이미 확정된 충전 결과를 바꾸지 않는다. */
+    private void recordPaymentMethodQuietly(String orderId, PgConfirmationResult result) {
+        if (result.paymentMethod() == null) {
+            return;
+        }
+        try {
+            transactionService.recordPaymentMethod(orderId, result.paymentMethod(), result.paymentProvider());
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "결제수단 기록에 실패했습니다. orderId={} exceptionClass={}",
+                    orderId,
+                    exception.getClass().getSimpleName()
+            );
+        }
     }
 
     private ChargeOrderConfirmResponse completeApprovedOrKeepConfirming(

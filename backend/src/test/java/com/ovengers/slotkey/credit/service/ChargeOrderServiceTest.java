@@ -19,7 +19,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import java.time.Clock;
+import java.util.List;
+import java.util.Set;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Optional;
@@ -159,5 +165,30 @@ class ChargeOrderServiceTest {
 
     private Member activeMember() {
         return new Member("member@test.com", "member");
+    }
+
+    @Test
+    @DisplayName("내 충전 내역은 PAID·CONFIRMING·FAILED 주문만 조회하고 PENDING(미결제 시도)은 제외한다")
+    void getMyHistory_excludesPendingOrders() {
+        Pageable pageable = PageRequest.of(0, 10);
+        ChargeOrder paid = ChargeOrder.createPending(7L, "chg_paid", 5_000L,
+                java.time.LocalDateTime.of(2026, 10, 13, 9, 0));
+        paid.markPaid(java.time.LocalDateTime.of(2026, 10, 13, 9, 1));
+        paid.recordPaymentMethod("간편결제", "토스페이");
+        given(chargeOrderRepository.findByMemberIdAndStatusInOrderByIdDesc(
+                7L,
+                Set.of(ChargeOrderStatus.PAID, ChargeOrderStatus.CONFIRMING, ChargeOrderStatus.FAILED),
+                pageable))
+                .willReturn(new PageImpl<>(List.of(paid), pageable, 1));
+
+        Page<com.ovengers.slotkey.credit.dto.response.ChargeOrderHistoryResponse> result =
+                chargeOrderService.getMyHistory(7L, pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getContent().get(0).orderId()).isEqualTo("chg_paid");
+        assertThat(result.getContent().get(0).amount()).isEqualTo(5_000L);
+        assertThat(result.getContent().get(0).status()).isEqualTo(ChargeOrderStatus.PAID);
+        assertThat(result.getContent().get(0).paymentMethod()).isEqualTo("간편결제");
+        assertThat(result.getContent().get(0).paymentProvider()).isEqualTo("토스페이");
     }
 }

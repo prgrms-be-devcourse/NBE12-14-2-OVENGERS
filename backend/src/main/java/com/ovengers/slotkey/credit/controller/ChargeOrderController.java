@@ -8,6 +8,10 @@ import com.ovengers.slotkey.credit.entity.ChargeOrderStatus;
 import com.ovengers.slotkey.credit.service.ChargeOrderConfirmService;
 import com.ovengers.slotkey.credit.service.ChargeOrderService;
 import com.ovengers.slotkey.global.common.response.ApiResponse;
+import com.ovengers.slotkey.global.common.response.PageResponse;
+import com.ovengers.slotkey.credit.dto.response.ChargeOrderHistoryResponse;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import com.ovengers.slotkey.global.security.AuthPrincipal;
 import com.ovengers.slotkey.global.security.CurrentMember;
 import io.swagger.v3.oas.annotations.Operation;
@@ -82,6 +86,20 @@ public class ChargeOrderController {
         );
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "내 충전 내역 조회",
+            description = "인증 회원 본인의 PG 충전 내역(PAID·CONFIRMING·FAILED)을 최신순으로 조회합니다."
+    )
+    @GetMapping
+    public ApiResponse<PageResponse<ChargeOrderHistoryResponse>> list(
+            @Parameter(hidden = true)
+            @CurrentMember AuthPrincipal principal,
+            @PageableDefault(size = 10) Pageable pageable
+    ) {
+        return ApiResponse.success(PageResponse.from(
+                chargeOrderService.getMyHistory(principal.memberId(), pageable)));
     }
 
     @Operation(

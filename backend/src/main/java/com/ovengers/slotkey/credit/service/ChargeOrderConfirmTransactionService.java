@@ -177,6 +177,16 @@ public class ChargeOrderConfirmTransactionService {
         return response;
     }
 
+    /**
+     * PG가 알려 준 결제수단을 표시용으로 기록한다. 충전 확정(completeApproved)과 별도 트랜잭션이라
+     * 이 기록이 실패해도 크레딧 충전에는 영향이 없다.
+     */
+    @Transactional
+    public void recordPaymentMethod(String orderId, String paymentMethod, String paymentProvider) {
+        chargeOrderRepository.findByOrderId(orderId)
+                .ifPresent(order -> order.recordPaymentMethod(paymentMethod, paymentProvider));
+    }
+
     @Transactional
     public void completeDeclined(String orderId, String errorCode) {
         ChargeOrder order = chargeOrderRepository.findByOrderIdForUpdate(orderId)

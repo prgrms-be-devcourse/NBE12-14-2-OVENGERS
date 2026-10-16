@@ -8,12 +8,17 @@ import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.entity.MemberStatus;
 import com.ovengers.slotkey.member.repository.MemberRepository;
+import com.ovengers.slotkey.credit.dto.response.ChargeOrderHistoryResponse;
+import com.ovengers.slotkey.credit.entity.ChargeOrderStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -59,6 +64,16 @@ public class ChargeOrderService {
             throw new BusinessException(ErrorCode.FORBIDDEN_NOT_OWNER);
         }
         return ChargeOrderResponse.from(chargeOrder);
+    }
+
+    /** 내 충전 내역. 결제가 시도되지 않은 PENDING 주문은 노출하지 않는다. */
+    @Transactional(readOnly = true)
+    public Page<ChargeOrderHistoryResponse> getMyHistory(Long memberId, Pageable pageable) {
+        return chargeOrderRepository.findByMemberIdAndStatusInOrderByIdDesc(
+                memberId,
+                Set.of(ChargeOrderStatus.PAID, ChargeOrderStatus.CONFIRMING, ChargeOrderStatus.FAILED),
+                pageable
+        ).map(ChargeOrderHistoryResponse::from);
     }
 
     private void validateActiveMember(Long memberId) {

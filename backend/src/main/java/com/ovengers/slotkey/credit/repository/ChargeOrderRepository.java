@@ -6,16 +6,25 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface ChargeOrderRepository extends JpaRepository<ChargeOrder, Long> {
 
     Optional<ChargeOrder> findByOrderId(String orderId);
+
+    /** 내 충전 내역(최신순). 상태를 직접 넘겨 미결제 시도(PENDING)를 제외한다. */
+    Page<ChargeOrder> findByMemberIdAndStatusInOrderByIdDesc(
+            Long memberId,
+            Collection<com.ovengers.slotkey.credit.entity.ChargeOrderStatus> statuses,
+            Pageable pageable
+    );
 
     Optional<ChargeOrder> findByMemberIdAndClientIdempotencyKey(
             Long memberId,

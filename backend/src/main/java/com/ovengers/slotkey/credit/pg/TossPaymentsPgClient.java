@@ -67,7 +67,11 @@ public final class TossPaymentsPgClient implements PgClient {
             if (response != null
                     && "DONE".equals(response.status())
                     && matchesRequest(response, request)) {
-                return PgConfirmationResult.approved(response.paymentKey());
+                return PgConfirmationResult.approved(
+                        response.paymentKey(),
+                        response.method(),
+                        response.easyPay() == null ? null : response.easyPay().provider()
+                );
             }
             PgConfirmationResult result = indeterminate();
             String errorCode = response != null && "DONE".equals(response.status())
@@ -264,8 +268,14 @@ public final class TossPaymentsPgClient implements PgClient {
             String orderId,
             String status,
             Long totalAmount,
-            String currency
+            String currency,
+            String method,
+            EasyPay easyPay
     ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record EasyPay(String provider) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
