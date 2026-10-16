@@ -452,3 +452,12 @@
 - 매출·건수·슬롯 수가 모두 0인 공간은 저장하지 않으므로 순위에 나타나지 않는다. 비활성(`INACTIVE`) 공간도 과거 실적이 있으면 포함되며 `spaceStatus`로 구분한다.
 - **확정 시각**: 일간은 매일, 주간은 월요일, 월간은 매월 1일 00:01(KST)에 방금 끝난 기간을 계산한다. 서버가 꺼져 있었거나 계산이 실패해 확정 행이 없는 끝난 기간은 서버 시작 시와 매일 확정 직후에 최근 31일 범위(`slotkey.scheduler.space-ranking.backfill-days`)에서 다시 채운다. 이미 행이 있는 기간은 다시 계산하지 않는다. 데이터 범위는 `[기간 시작 00:00:00, 다음 기간 시작 00:00:00)`이다. 00:01 이후에 늦게 반영된 거래는 확정값에 들어가지 않는다.
 - **동점 처리**: `NET_REVENUE`는 순매출 → 예약 건수 → `spaceId` 오름차순, `RESERVATION_COUNT`는 예약 건수 → 순매출 → `spaceId`, `SLOT_COUNT`는 슬롯 수 → 예약 건수 → `spaceId`다. 값이 같아도 `rank`는 겹치지 않고 이 순서대로 1, 2, 3으로 매긴다. 지역 랭킹의 마지막 키는 `location` 가나다순이다.
+
+### 14-2. 일반 회원용 랭킹 (`/stats`)
+
+> 2026-10-17 추가. 로그인한 회원(USER·ADMIN)이면 누구나 호출할 수 있다. 미인증은 401 `AUTHENTICATION_REQUIRED`. 같은 확정 스냅샷을 쓰지만 **순매출은 내려주지 않는다.**
+
+- `GET /stats/space-ranking?period=&date=&metric=&location=&limit=`, `GET /stats/location-ranking?period=&date=&metric=&limit=`: 파라미터·기간 상태(`CONFIRMED`/`PENDING`/`UNAVAILABLE`)·동점 규칙·`previousRank`는 §14의 관리자 랭킹과 같다. 차이는 다음과 같다.
+  - `metric`은 `RESERVATION_COUNT`(기본) 또는 `SLOT_COUNT`만 허용한다. `NET_REVENUE`는 정렬 순서로 매출 순위가 드러나므로 400 `VALIDATION_FAILED`다.
+  - `items[]`에서 `netRevenue`가 빠진다. 공간: `{ rank, previousRank, spaceId, spaceName, location, spaceStatus, reservationCount, slotCount }`, 지역: `{ rank, previousRank, location, spaceCount, reservationCount, slotCount }`.
+- 관리자 랭킹(`/admin/stats/*`)은 그대로 ADMIN 전용이며 순매출을 포함한다.
