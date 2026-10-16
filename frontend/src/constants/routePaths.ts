@@ -14,6 +14,8 @@ export const ROUTES = {
   spaces: '/spaces',
   spaceDetail: (spaceId: number | string) => `/spaces/${spaceId}`,
 
+  ranking: '/ranking',
+
   reservations: '/reservations',
   waitlist: '/waitlist',
   notifications: '/notifications',
@@ -46,6 +48,7 @@ export interface NavItem {
 /** 상단 메뉴 (일반 사용자) */
 export const USER_NAV: NavItem[] = [
   { href: ROUTES.spaces, label: '오피스 찾기' },
+  { href: ROUTES.ranking, label: '베스트 랭킹' },
   { href: ROUTES.reservations, label: '내 예약' },
   { href: ROUTES.waitlist, label: '내 대기' },
   { href: ROUTES.door, label: '모의 출입' },

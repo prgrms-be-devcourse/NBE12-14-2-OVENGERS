@@ -217,3 +217,21 @@ test('운영 대시보드 건수 타일은 서버가 센 값을 보여 주고 �
   const withoutCounts = render(null);
   assert.match(withoutCounts, /결제 대기<\/span><strong>–/);
 });
+
+// ---------- 회원용 랭킹(api-spec §14-2) ----------
+
+test('회원용 랭킹 API는 /stats 경로를 쓰고 순매출 정렬 옵션이 없다', async () => {
+  const calls = [];
+  const api = { get: async (url, options) => { calls.push([url, options]); return {}; } };
+  const mod = load('api/statsApi.ts', { './client': { __esModule: true, default: api } });
+
+  await mod.getPublicSpaceRanking({ period: 'DAILY', date: '2026-10-15', metric: 'SLOT_COUNT', location: '판교', limit: 5 });
+  await mod.getPublicLocationRanking({ period: 'WEEKLY', date: '2026-10-07', limit: 3 });
+
+  assert.deepEqual(calls, [
+    ['/stats/space-ranking', { query: { period: 'DAILY', date: '2026-10-15', metric: 'SLOT_COUNT', location: '판교', limit: 5 } }],
+    ['/stats/location-ranking', { query: { period: 'WEEKLY', date: '2026-10-07', limit: 3 } }],
+  ]);
+  assert.deepEqual(ranking.PUBLIC_RANKING_METRIC_OPTIONS.map(option => option.value), ['RESERVATION_COUNT', 'SLOT_COUNT']);
+  assert.ok(ranking.PUBLIC_RANKING_NOTES.every(note => !note.includes('매출')));
+});

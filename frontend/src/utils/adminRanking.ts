@@ -98,3 +98,14 @@ export function rankingStatusNotice(
 export function metricLabel(metric: RankingMetric): string {
   return RANKING_METRIC_OPTIONS.find(option => option.value === metric)?.label ?? metric;
 }
+
+/** 일반 회원용 정렬 기준. 순매출 정렬은 서버가 거절한다(api-spec §14-2). */
+export const PUBLIC_RANKING_METRIC_OPTIONS: SelectOption[] = RANKING_METRIC_OPTIONS.filter(option => option.value !== 'NET_REVENUE');
+
+/** 일반 회원용 화면 유의사항. 순매출 관련 문구는 없다. */
+export const PUBLIC_RANKING_NOTES = [
+  '순위는 해당 기간이 끝난 뒤 24:00(다음날 00:00) 기준으로 확정된 값이며, 이후 취소 등 변경은 해당 기간의 값에 반영되지 않습니다.',
+  '오늘·이번 주·이번 달은 집계 중입니다. 오늘 순위는 내일 00:00 기준으로 확정됩니다.',
+  '취소된 예약은 예약 건수에 포함되지 않습니다.',
+  '값이 같으면 예약 건수 순위는 공간 ID가 작은 순서로, 슬롯 수 순위는 예약 건수 다음 공간 ID 순서로 정해집니다.',
+] as const;

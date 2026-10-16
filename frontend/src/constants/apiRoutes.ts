@@ -64,6 +64,11 @@ export const API_ROUTES = {
     // Mock Door 검증. 로그인 필요 — 서버가 예약자 본인 여부도 확인한다(api-spec.md 7).
     verify: '/door-access/verify',
   },
+  // 일반 회원용 통계(api-spec §14-2). 관리자 랭킹과 같은 확정값이지만 순매출은 내려오지 않는다.
+  stats: {
+    spaceRanking: '/stats/space-ranking',
+    locationRanking: '/stats/location-ranking',
+  },
   admin: {
     inquiries: '/admin/inquiries',
     inquiry: (id: number | string) => `/admin/inquiries/${id}`,

@@ -11,7 +11,7 @@ import NotificationLink from '../notification/NotificationLink';
 import ActiveLink from './ActiveLink';
 
 /** 로그인한 일반 회원에게만 보이는 상단 메뉴 */
-const MEMBER_ONLY_NAV: Set<string> = new Set([ROUTES.reservations, ROUTES.waitlist]);
+const MEMBER_ONLY_NAV: Set<string> = new Set([ROUTES.ranking, ROUTES.reservations, ROUTES.waitlist]);
 
 export default function Header() {
   const { member, isAdmin, logout } = useAuth();
