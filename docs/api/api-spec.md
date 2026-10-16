@@ -94,6 +94,10 @@
 - 202 승인 응답을 받은 성공 페이지는 이 읽기 전용 API를 3초 간격으로 최대 2분 재조회한다. 그 뒤에도 `CONFIRMING`이면 오류로 바꾸지 않고 처리 중 안내와 수동 재조회 버튼을 유지한다.
 - 오류: `AUTHENTICATION_REQUIRED`(401), `FORBIDDEN_NOT_OWNER`(403), `CHARGE_ORDER_NOT_FOUND`(404).
 
+### 5-0-1-1. 내 충전 내역 조회 — `GET /credits/charge-orders?page=0&size=10`
+
+인증 회원 본인의 충전 내역을 최신순으로 반환한다. 결제가 시도되지 않은 `PENDING` 주문은 제외하고 `PAID`·`CONFIRMING`·`FAILED`만 노출한다. 응답: **200**, `ApiResponse<PageResponse<{ orderId, amount, status, paymentMethod, paymentProvider, createdAt, updatedAt }>>` (`updatedAt`은 승인·실패 등 마지막 상태 변경 시각). `paymentMethod`(예: 카드·간편결제·계좌이체)와 `paymentProvider`(간편결제 제공사, 예: 토스페이)는 토스 승인 응답에서 저장한 표시용 값이며, 이 기능(V21) 이전 주문과 PG 조회 복구로 승인된 주문은 `null`이다. 결제수단 저장은 충전 확정과 별도 단계라 실패해도 충전은 유지된다. 오류: `AUTHENTICATION_REQUIRED`(401). 크레딧 사용·환불 내역은 포함하지 않는다.
+
 ### 5-0-2. PG 크레딧 충전 승인 — `POST /credits/charge-orders/confirm`
 
 - 인증 및 `Idempotency-Key` 헤더가 필요하다.
@@ -256,6 +260,8 @@
 ### 5-4. 취소 — `POST /reservations/{reservationId}/cancel`
 
 > ⚠️ `DELETE /reservations/{id}`가 아니다(2026-09-17 정정). 바디 없음. 응답: **200**, `ApiResponse<ReservationResponse>` (`status: "CANCELLED"`, `refundAmount`, `penaltyAmount` 포함).
+
+**결제 대기(`HELD`) 예약도 취소할 수 있다.** 조건부 UPDATE `WHERE id=:id AND status='HELD'` → `CANCELLED`, 슬롯 삭제 + 상태 이력 + `SlotReleased` outbox 기록(`CANCELLED`). 크레딧이 차감되기 전이므로 환불·위약금은 0이다(`refundAmount`=0, `penaltyAmount`=0). 결제와 같은 행을 두고 경합하며 영향 행 0이면 409.
 
 예약자 본인만. 시작 1시간 전까지 100% 환불, 1시간 전~시작 전 50% 환불, 시작 이후는 취소 불가(체크아웃으로만 종료).
 
