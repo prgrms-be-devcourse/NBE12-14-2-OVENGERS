@@ -17,9 +17,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import com.ovengers.slotkey.notification.dto.response.ReadAllResponse;
 
-/**
- * 내 알림 조회 API(4단계). 인증은 SecurityConfig의 anyRequest().authenticated()가 강제하고,
- * 항상 토큰의 회원 id로만 조회·읽음 처리하므로 타인의 알림은 건드리지 않는다.
  *
  * 신규 코드이므로 Lombok을 쓰지 않는다(AGENTS.md).
  */
