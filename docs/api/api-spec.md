@@ -430,3 +430,24 @@
 ### 응답 필드 (`NotificationResponse`)
 
 `id`, `waitlistEntryId`, `message`, `read`(불리언, `read_at`이 있으면 `true`), `createdAt`. `message`는 생성 시점의 공간 이름·구간을 담은 문자열 스냅샷이며 선착순·예약 비보장 안내를 포함한다.
+
+## 14. [관리자] 통계 (Stats)
+
+> 계획 단계 명세다(구현 전). 이유와 trade-off는 [decisions/space-ranking.md](../decisions/space-ranking.md), 범위는 [plans/space-ranking](../plans/space-ranking/00-space-ranking-plan.md). 모든 API는 ADMIN 전용이며 응답은 `ApiResponse<T>`로 감싼다. 오류: `AUTHENTICATION_REQUIRED`(401), `ACCESS_DENIED`(403), `VALIDATION_FAILED`(400).
+
+- `GET /admin/stats/space-ranking?period=&date=&metric=&location=&limit=`: 공간별 베스트 랭킹.
+  - `period`: `DAILY` | `WEEKLY` | `MONTHLY` (필수). `date`: `yyyy-MM-dd`, 그 날짜를 포함하는 달력 기간(KST, 주는 월요일 시작)을 조회한다(필수). `metric`: `NET_REVENUE` | `RESERVATION_COUNT` | `SLOT_COUNT` (정렬 기준, 기본 `NET_REVENUE`). `location`: `판교` | `강남` | `하남` 필터(선택). `limit`: 기본 10, 최대 50.
+  - **끝난 기간**만 순위를 내려준다. 오늘·이번 주·이번 달을 포함하는 `date`는 `status = PENDING`과 `confirmAt`을 내려주고 `items`는 비어 있다. 현재 기간보다 미래인 `date`는 400 `VALIDATION_FAILED`다. 끝났지만 스냅샷이 없는 기간(서비스 시작 전)은 `status = UNAVAILABLE`이다.
+  - 응답: `{ period, periodStart, periodEnd, metric, status, confirmAt, computedAt, items[] }`. `periodStart`는 포함, `periodEnd`는 제외(다음 기간 시작)다. `computedAt`은 확정 계산 완료 시각, `confirmAt`은 `PENDING`일 때만 값을 갖는 확정 기준 시각(해당 기간 다음 날 00:00)이다.
+  - `items[]` 원소: `{ rank, previousRank, spaceId, spaceName, location, spaceStatus, netRevenue, reservationCount, slotCount }`. `previousRank`는 같은 `period`·`metric`·`location` 필터의 직전 기간 순위이며 없으면 `null`이다. 세 지표는 항상 모두 내려가고 `metric`은 정렬만 정한다.
+- `GET /admin/stats/location-ranking?period=&date=&metric=&limit=`: 지역별 베스트 랭킹. 공간 행을 스냅샷에 저장된 `location`으로 합산한다. 파라미터와 상태 규칙은 위와 같다. `items[]` 원소: `{ rank, previousRank, location, spaceCount, netRevenue, reservationCount, slotCount }`.
+- `GET /admin/stats/status-counts?date=`: 해당 날짜(KST, 기본 오늘)에 `start_time`이 속한 예약의 상태별 건수. **실시간 값**이다(랭킹 스냅샷이 아님). 응답 `{ date, counts: { HELD, EXPIRED, CONFIRMED, IN_USE, COMPLETED, CANCELLED, NO_SHOW } }` — 일곱 상태를 모두 0 포함으로 내려준다.
+
+### 집계 정의와 유의사항
+
+- **순매출(`netRevenue`)**: 크레딧 원장의 `RESERVATION_CHARGE`·`REFUND`·`PENALTY`를 합산한 금액이다(회원 잔액 기준 부호의 반대, `−SUM(amount)`). 결제는 결제 시각에, 환불과 위약금은 **발생 시각**에 반영하는 현금주의다. 위약금은 수익으로 포함한다. 확정 후 발생한 환불은 지난 확정값을 바꾸지 않고 환불이 일어난 날의 값에 반영되므로, 특정 날의 값이 음수가 될 수도 있다.
+- **예약 건수(`reservationCount`)**: `CONFIRMED`·`IN_USE`·`COMPLETED`·`NO_SHOW` 예약을 `start_time`이 속한 기간으로 센다. 취소된 예약은 건수에 포함되지 않지만 위약금은 순매출에 포함된다.
+- **예약 슬롯 수(`slotCount`)**: 위와 같은 예약의 `(end_time − start_time) / 30분` 합이다.
+- 매출·건수·슬롯 수가 모두 0인 공간은 저장하지 않으므로 순위에 나타나지 않는다. 비활성(`INACTIVE`) 공간도 과거 실적이 있으면 포함되며 `spaceStatus`로 구분한다.
+- **확정 시각**: 일간은 매일, 주간은 월요일, 월간은 매월 1일 00:01(KST)에 방금 끝난 기간을 계산한다. 데이터 범위는 `[기간 시작 00:00:00, 다음 기간 시작 00:00:00)`이다. 00:01 이후에 늦게 반영된 거래는 확정값에 들어가지 않는다.
+- **동점 처리**: `NET_REVENUE`는 순매출 → 예약 건수 → `spaceId` 오름차순, `RESERVATION_COUNT`는 예약 건수 → 순매출 → `spaceId`, `SLOT_COUNT`는 슬롯 수 → 예약 건수 → `spaceId`다. 값이 같아도 `rank`는 겹치지 않고 이 순서대로 1, 2, 3으로 매긴다. 지역 랭킹의 마지막 키는 `location` 가나다순이다.
