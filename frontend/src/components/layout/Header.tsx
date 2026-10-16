@@ -7,6 +7,7 @@ import { ROUTES, USER_NAV } from '../../constants/routePaths';
 import { useAuth } from '../../hooks/useAuth';
 import { formatCredit } from '../../utils/price';
 import BrandMark from '../brand/BrandMark';
+import NotificationLink from '../notification/NotificationLink';
 import ActiveLink from './ActiveLink';
 
 export default function Header() {
@@ -81,6 +82,7 @@ export default function Header() {
       </nav>
 
       <div className="header-actions">
+        <NotificationLink memberId={member?.memberId} pathname={pathname} />
         {member ? !isAdmin && (
           <span className="header-credit" title="크레딧은 1크레딧 = 1원, 예약 결제에만 사용됩니다.">
             {formatCredit(member.balance)}

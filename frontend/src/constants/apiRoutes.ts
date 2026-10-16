@@ -38,6 +38,11 @@ export const API_ROUTES = {
     mine: '/waitlist/me',
     entry: (waitlistEntryId: number | string) => `/waitlist/${waitlistEntryId}`,
   },
+  notifications: {
+    list: '/notifications',
+    unreadCount: '/notifications/unread-count',
+    readAll: '/notifications/read-all',
+  },
   inquiries: {
     list: '/inquiries',
     detail: (id: number | string) => `/inquiries/${id}`,

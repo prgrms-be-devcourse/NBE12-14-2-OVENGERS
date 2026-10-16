@@ -303,3 +303,14 @@ export interface ApplyWaitlistRequest {
   startTime: string;
   endTime: string;
 }
+
+/** 내 알림. createdAt은 서버 LocalDateTime 문자열이다. */
+export interface Notification {
+  id: number;
+  waitlistEntryId: number;
+  message: string;
+  read: boolean;
+  createdAt: string;
+}
+export interface UnreadCountResponse { unreadCount: number }
+export interface ReadAllResponse { updatedCount: number }
