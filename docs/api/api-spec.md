@@ -419,7 +419,7 @@
 
 - `GET /notifications` (인증 필요): 내 알림 목록, 최신순(id 내림차순). `page`, `size`(기본 20). 응답 200 `ApiResponse<PageResponse<NotificationResponse>>`. 오류: `AUTHENTICATION_REQUIRED`(401). 본인 알림만 조회된다.
 - `GET /notifications/unread-count` (인증 필요): 안 읽은 알림 개수. 응답 200 `ApiResponse<{ unreadCount }>`. 오류: `AUTHENTICATION_REQUIRED`(401)
-- `POST /notifications/read-all` (인증 필요): 토큰 회원의 `read_at IS NULL`인 모든 알림을 현재 시각으로 갱신한다. 요청 본문 없음. 응답 200 `ApiResponse<{ updatedCount }>`. 재요청 시 이미 읽은 시각을 유지하고 변경 건수 0을 반환한다. 오류: `AUTHENTICATION_REQUIRED`(401). 목록에 없는 페이지와 갱신 시점까지 도착한 알림도 포함한다.
+- `POST /notifications/read-all` (인증 필요): 필수 쿼리 `upToId`(Long, 렌더링된 목록의 최대 알림 id)를 받는다. 토큰 회원의 `read_at IS NULL`이며 `id <= upToId`인 알림만 한 번의 UPDATE로 현재 시각으로 갱신한다. 요청 본문 없음. 응답 200 `ApiResponse<{ updatedCount }>`. 재요청 시 이미 읽은 시각을 유지하고 변경 건수 0을 반환한다. 오류: `AUTHENTICATION_REQUIRED`(401). 상한보다 큰 id의 알림은 미변경이며 상한 이하의 이전 페이지 알림은 포함한다. 프런트는 빈 목록이면 호출하지 않는다. 예: `POST /api/v1/notifications/read-all?upToId=123`. 상한 누락·Long 변환 불가는 400이다.
 
 ### 응답 필드 (`NotificationResponse`)
 
