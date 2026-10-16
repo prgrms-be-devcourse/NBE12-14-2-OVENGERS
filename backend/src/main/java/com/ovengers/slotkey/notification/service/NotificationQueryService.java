@@ -35,7 +35,7 @@ public class NotificationQueryService {
     }
 
     @Transactional
-    public int readAll(Long memberId) {
-        return notificationRepository.markAllRead(memberId, LocalDateTime.now(clock));
+    public int readAll(Long memberId, Long upToId) {
+        return notificationRepository.markAllRead(memberId, upToId, LocalDateTime.now(clock));
     }
 }

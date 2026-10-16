@@ -30,16 +30,19 @@ class NotificationReadIntegrationTest extends ReservationIntegrationTestSupport 
         LocalDateTime original = LocalDateTime.of(2026, 10, 1, 12, 0);
         insert(me, "read", Timestamp.valueOf(original));
         insert(other, "other", null);
+        Long upToId = jdbcTemplate.queryForObject("SELECT MAX(id) FROM notification", Long.class);
+        insert(me, "newer", null);
         String token = JwtUtil.createToken(secretKey, 300_000L,
                 Map.of("id", me, "email", "read@slotkey.test", "role", "USER"));
 
-        mvc.perform(post("/api/v1/notifications/read-all").header("Authorization", "Bearer " + token))
+        mvc.perform(post("/api/v1/notifications/read-all").param("upToId", upToId.toString()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.updatedCount").value(2));
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM notification WHERE member_id=? AND read_at IS NULL", Integer.class, me)).isZero();
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM notification WHERE member_id=? AND read_at IS NULL", Integer.class, me)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("SELECT read_at FROM notification WHERE member_id=? AND event_id='newer'", Timestamp.class, me)).isNull();
         assertThat(jdbcTemplate.queryForObject("SELECT read_at FROM notification WHERE event_id='read' AND member_id=?", Timestamp.class, me))
                 .isEqualTo(Timestamp.valueOf(original));
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM notification WHERE member_id=? AND read_at IS NULL", Integer.class, other)).isEqualTo(1);
-        mvc.perform(post("/api/v1/notifications/read-all").header("Authorization", "Bearer " + token))
+        mvc.perform(post("/api/v1/notifications/read-all").param("upToId", upToId.toString()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.updatedCount").value(0));
     }
 
@@ -47,7 +50,7 @@ class NotificationReadIntegrationTest extends ReservationIntegrationTestSupport 
     void noTokenReturns401AndLeavesUnread() throws Exception {
         Long me = createMember(0);
         insert(me, "unauth", null);
-        mvc.perform(post("/api/v1/notifications/read-all")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/notifications/read-all").param("upToId", "1")).andExpect(status().isUnauthorized());
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM notification WHERE member_id=? AND read_at IS NULL", Integer.class, me)).isEqualTo(1);
     }
 

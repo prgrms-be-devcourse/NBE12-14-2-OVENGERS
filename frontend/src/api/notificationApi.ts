@@ -10,6 +10,6 @@ export function getUnreadCount() {
   return api.get<UnreadCountResponse>(API_ROUTES.notifications.unreadCount);
 }
 
-export function readAllNotifications() {
-  return api.post<ReadAllResponse>(API_ROUTES.notifications.readAll);
+export function readAllNotifications(upToId: number) {
+  return api.post<ReadAllResponse>(API_ROUTES.notifications.readAll, undefined, { query: { upToId } });
 }

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import com.ovengers.slotkey.notification.dto.response.ReadAllResponse;
 
 /**
@@ -48,8 +49,9 @@ public class NotificationController {
     }
 
     @PostMapping("/read-all")
-    public ResponseEntity<ApiResponse<ReadAllResponse>> readAll(@CurrentMember AuthPrincipal principal) {
+    public ResponseEntity<ApiResponse<ReadAllResponse>> readAll(@CurrentMember AuthPrincipal principal,
+            @RequestParam("upToId") Long upToId) {
         return ResponseEntity.ok(ApiResponse.success(new ReadAllResponse(
-                notificationQueryService.readAll(principal.memberId()))));
+                notificationQueryService.readAll(principal.memberId(), upToId))));
     }
 }

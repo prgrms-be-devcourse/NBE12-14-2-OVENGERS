@@ -19,6 +19,6 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     long countByMemberIdAndReadAtIsNull(Long memberId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("UPDATE Notification n SET n.readAt = :readAt WHERE n.memberId = :memberId AND n.readAt IS NULL")
-    int markAllRead(@Param("memberId") Long memberId, @Param("readAt") LocalDateTime readAt);
+    @Query("UPDATE Notification n SET n.readAt = :readAt WHERE n.memberId = :memberId AND n.readAt IS NULL AND n.id <= :upToId")
+    int markAllRead(@Param("memberId") Long memberId, @Param("upToId") Long upToId, @Param("readAt") LocalDateTime readAt);
 }

@@ -42,9 +42,9 @@ test('알림 API 경로·파라미터와 응답을 보존한다', async () => {
   const mod = load('api/notificationApi.ts', {'./client': {__esModule: true, default: api}});
   assert.deepEqual(await mod.getNotifications({page: 2, size: 10}), page);
   assert.deepEqual(await mod.getUnreadCount(), {unreadCount: 4});
-  assert.deepEqual(await mod.readAllNotifications(), {updatedCount: 4});
+  assert.deepEqual(await mod.readAllNotifications(7), {updatedCount: 4});
   await mod.getNotifications();
-  assert.deepEqual(calls, [['get', '/notifications', {query: {page: 2, size: 10}}], ['get', '/notifications/unread-count'], ['post', '/notifications/read-all'], ['get', '/notifications', {query: {page: 0, size: 20}}]]);
+  assert.deepEqual(calls, [['get', '/notifications', {query: {page: 2, size: 10}}], ['get', '/notifications/unread-count'], ['post', '/notifications/read-all', undefined, {query: {upToId: 7}}], ['get', '/notifications', {query: {page: 0, size: 20}}]]);
 });
 
 test('배지는 0이면 숨기고 비로그인은 요청하지 않는다', async () => {
@@ -64,4 +64,30 @@ test('배지는 0이면 숨기고 비로그인은 요청하지 않는다', async
   const badge = load('components/notification/UnreadBadge.tsx').default;
   assert.equal(renderToStaticMarkup(React.createElement(badge, {count: 0})), '');
   assert.match(renderToStaticMarkup(React.createElement(badge, {count: 3})), /3/);
+});
+
+
+test('목록 렌더 후 최대 id를 읽음 상한으로 보내고 빈 목록은 요청하지 않는다', async () => {
+  const React = require('react');
+  const {renderToStaticMarkup} = require('react-dom/server');
+  for (const ids of [[7, 9, 3], []]) {
+    const effects = [];
+    const calls = [];
+    const data = {content: ids.map(id => ({id, waitlistEntryId: 1, message: '빈자리', read: false, createdAt: '2026-10-16T12:00:00'})), page: 0, size: 20, totalPages: ids.length ? 1 : 0, totalElements: ids.length};
+    const mod = load('views/notifications/NotificationsPage.tsx', {
+      react: {...React, useState: () => [0, () => {}], useRef: () => ({current: null}), useEffect: fn => effects.push(fn)},
+      '../../api/notificationApi': {getNotifications: async () => data, readAllNotifications: async () => ({updatedCount: 0}), getUnreadCount: async () => ({unreadCount: 0})},
+      '../../hooks/useApi': {
+        useAsync: () => ({data, loading: false, error: null, run: async () => data}),
+        useAction: () => ({execute: async (...args) => {calls.push(args);}, error: null}),
+      },
+      'next/link': {__esModule: true, default: ({href, children, ...props}) => React.createElement('a', {href, ...props}, children)},
+    });
+    const html = renderToStaticMarkup(React.createElement(mod.default));
+    assert.deepEqual(calls, []);
+    effects.forEach(fn => fn());
+    await Promise.resolve();
+    assert.deepEqual(calls, ids.length ? [[9]] : []);
+    if (ids.length) assert.match(html, /안 읽음/);
+  }
 });
