@@ -393,9 +393,9 @@
 6. **HOLD 카운트다운 시간대 해석 차이 (프론트 별도 코드 과제)**
    - **현재 구현**: 백엔드는 오프셋 없는 ISO-8601 문자열(`yyyy-MM-dd'T'HH:mm:ss`)을 KST 기준으로 반환하고 클라이언트의 KST 해석을 기대하나, 프론트엔드 `HoldCountdown.tsx`는 `new Date(holdExpiresAt)`를 사용하여 **브라우저 로컬(현지) 시간대**로 파싱한다. KST가 아닌 브라우저 환경(예: UTC)에서는 만료 시점 계산에 9시간 등의 시간차가 발생할 수 있다.
    - **결정 과제**: 프론트엔드 `HoldCountdown.tsx`에서 타임존 오프셋(`+09:00`)을 명시적으로 결합하여 KST로 고정 파싱하도록 하는 수정은 문서 최신화 범위 밖의 **별도 프론트엔드 코드 과제**로 분리하여 추적한다.
-7. **알림 읽음 처리 API 미구현 (3차)**
-   - **현재 구현**: `notification.read_at`은 항상 `NULL`이고 안 읽은 개수는 줄지 않는다. 01 문서에 있던 `PATCH /notifications/{id}/read`는 구현하지 않았다(계획 문서가 읽음 API를 자르기 대상으로 정함).
-   - **결정 과제**: 3차에 읽음 처리와 SSE·메일 등 전달 수단을 함께 설계할지 결정 필요.
+7. **알림 일괄 읽음 처리 구현**
+   - **현재 구현**: `POST /notifications/read-all`로 본인의 안 읽은 알림을 일괄 읽음 처리한다. 개별 읽음은 제공하지 않는다.
+   - **재검토 조건**: 개별 읽음이나 SSE·메일 전달 요구가 생기면 별도 설계한다.
 
 ## 12. 예약 대기 (Waitlist)
 
@@ -419,7 +419,7 @@
 
 - `GET /notifications` (인증 필요): 내 알림 목록, 최신순(id 내림차순). `page`, `size`(기본 20). 응답 200 `ApiResponse<PageResponse<NotificationResponse>>`. 오류: `AUTHENTICATION_REQUIRED`(401). 본인 알림만 조회된다.
 - `GET /notifications/unread-count` (인증 필요): 안 읽은 알림 개수. 응답 200 `ApiResponse<{ unreadCount }>`. 오류: `AUTHENTICATION_REQUIRED`(401)
-- 읽음 처리 API는 없다(§11-7).
+- `POST /notifications/read-all` (인증 필요): 토큰 회원의 `read_at IS NULL`인 모든 알림을 현재 시각으로 갱신한다. 요청 본문 없음. 응답 200 `ApiResponse<{ updatedCount }>`. 재요청 시 이미 읽은 시각을 유지하고 변경 건수 0을 반환한다. 오류: `AUTHENTICATION_REQUIRED`(401). 목록에 없는 페이지와 갱신 시점까지 도착한 알림도 포함한다.
 
 ### 응답 필드 (`NotificationResponse`)
 
