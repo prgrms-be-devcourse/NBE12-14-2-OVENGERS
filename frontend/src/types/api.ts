@@ -102,6 +102,16 @@ export interface ChargeOrder {
   status: ChargeOrderStatus;
 }
 
+/** 내 충전(PG 결제) 내역 한 줄. updatedAt 은 승인·실패 등 마지막 상태 변경 시각이다. */
+export interface ChargeOrderHistoryItem extends ChargeOrder {
+  /** 토스가 알려 준 결제수단(예: 카드, 간편결제). 이전 주문·복구 승인 주문은 null. */
+  paymentMethod: string | null;
+  /** 간편결제 제공사(예: 토스페이). 간편결제가 아니면 null. */
+  paymentProvider: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ConfirmChargeOrderRequest {
   paymentKey: string;
   orderId: string;

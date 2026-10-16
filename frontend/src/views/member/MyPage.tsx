@@ -100,120 +100,136 @@ export default function MyPage() {
       />
 
       {!loading && !error && member && (
-        <section className="panel" aria-labelledby="member-info-title">
-          <h2 id="member-info-title">내 정보</h2>
-
-          <dl
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '100px minmax(0, 1fr)',
-              gap: '16px',
-              marginTop: '24px',
-              overflowWrap: 'anywhere',
-            }}
-          >
-            <dt>닉네임</dt>
-<dd style={{ margin: 0 }}>
-  {editing ? (
-    <form onSubmit={handleSave}>
-      <label htmlFor="mypage-nickname" className="muted">
-        새 닉네임
-      </label>
-
-      <input
-        id="mypage-nickname"
-        name="nickname"
-        autoComplete="nickname"
-        value={nickname}
-        onChange={(event) => setNickname(event.target.value)}
-        minLength={2}
-        maxLength={50}
-        required
-        disabled={saving}
-        aria-invalid={Boolean(validationError)}
-        aria-describedby={
-          validationError ? 'nickname-validation-error' : undefined
-        }
-      />
-
-      {validationError && (
-        <p
-          id="nickname-validation-error"
-          className="form-error"
-          role="alert"
-        >
-          {validationError}
-        </p>
-      )}
-
-      <ErrorMessage error={saveError} />
-
-      <div className="actions wrap" style={{ marginTop: 12 }}>
-        <Button type="submit" variant="primary" size="small" loading={saving}>
-          저장
-        </Button>
-
-        <Button
-          size="small"
-          disabled={saving}
-          onClick={() => setEditing(false)}
-        >
-          취소
-        </Button>
-      </div>
-    </form>
-  ) : (
-    <div className="row wrap">
-      <span>{member.nickname}</span>
-      <Button size="small" onClick={startEditing}>
-        수정
-      </Button>
-    </div>
-  )}
-</dd>
-
-            <dt>이메일</dt>
-            <dd style={{ margin: 0 }}>{member.email}</dd>
-
-            <dt>회원 구분</dt>
-            <dd style={{ margin: 0 }}>
+        <>
+          <section className="mypage-hero" aria-label="프로필 요약">
+            <div className="mypage-avatar" aria-hidden="true">
+              {member.nickname.slice(0, 1)}
+            </div>
+            <div className="mypage-hero-text">
+              <strong>{member.nickname}</strong>
+              <span>{member.email}</span>
+            </div>
+            <span className="badge cyan">
               {member.role === 'ADMIN' ? '관리자' : '일반 회원'}
-            </dd>
+            </span>
+          </section>
 
-            <dt>보유 크레딧</dt>
-            <dd style={{ margin: 0 }}>
-              <div className="row wrap">
-                <span>{formatCredit(member.balance)}</span>
-                {member.role === 'USER' && (
-                  <Link className="btn small primary" href={ROUTES.creditCharge}>
-                    충전하기
-                  </Link>
-                )}
-              </div>
-            </dd>
-
-            <dt>가입일</dt>
-            <dd style={{ margin: 0 }}>
-              {member.createdAt.slice(0, 10)}
-            </dd>
-          </dl>
-          {notice && (
-  <p className="note" role="status">
-    {notice}
-  </p>
-)}
           {member.role === 'USER' && (
-            <div className="section" style={{ marginTop: 24, paddingBottom: 0 }}>
-              <h3>회원탈퇴</h3>
+            <section className="mypage-credit" aria-label="보유 크레딧">
+              <div>
+                <span className="mypage-credit-label">보유 크레딧</span>
+                <strong>{formatCredit(member.balance)}</strong>
+              </div>
+              <div className="mypage-credit-actions">
+                <Link className="btn small primary" href={ROUTES.creditCharge}>
+                  충전하기
+                </Link>
+                <Link className="btn small" href={ROUTES.creditHistory}>
+                  충전 내역
+                </Link>
+              </div>
+            </section>
+          )}
+
+          {member.role === 'USER' && (
+            <nav className="mypage-shortcuts" aria-label="바로가기">
+              <Link href={ROUTES.reservations}><b>내 예약</b><span>다가오는 일정과 지난 이용</span></Link>
+              <Link href={ROUTES.waitlist}><b>내 대기</b><span>자리를 기다리는 시간</span></Link>
+              <Link href={ROUTES.creditHistory}><b>충전 내역</b><span>PG 결제 기록</span></Link>
+              <Link href={ROUTES.inquiries}><b>내 문의</b><span>문의 내역과 답변</span></Link>
+            </nav>
+          )}
+
+          <section className="panel" aria-labelledby="member-info-title">
+            <h2 id="member-info-title">계정 정보</h2>
+
+            <dl className="mypage-info">
+              <dt>닉네임</dt>
+              <dd>
+                {editing ? (
+                  <form onSubmit={handleSave}>
+                    <label htmlFor="mypage-nickname" className="muted">
+                      새 닉네임
+                    </label>
+
+                    <input
+                      id="mypage-nickname"
+                      name="nickname"
+                      autoComplete="nickname"
+                      value={nickname}
+                      onChange={(event) => setNickname(event.target.value)}
+                      minLength={2}
+                      maxLength={50}
+                      required
+                      disabled={saving}
+                      aria-invalid={Boolean(validationError)}
+                      aria-describedby={
+                        validationError ? 'nickname-validation-error' : undefined
+                      }
+                    />
+
+                    {validationError && (
+                      <p
+                        id="nickname-validation-error"
+                        className="form-error"
+                        role="alert"
+                      >
+                        {validationError}
+                      </p>
+                    )}
+
+                    <ErrorMessage error={saveError} />
+
+                    <div className="actions wrap" style={{ marginTop: 12 }}>
+                      <Button type="submit" variant="primary" size="small" loading={saving}>
+                        저장
+                      </Button>
+
+                      <Button
+                        size="small"
+                        disabled={saving}
+                        onClick={() => setEditing(false)}
+                      >
+                        취소
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="row wrap">
+                    <span>{member.nickname}</span>
+                    <Button size="small" onClick={startEditing}>
+                      수정
+                    </Button>
+                  </div>
+                )}
+              </dd>
+
+              <dt>이메일</dt>
+              <dd>{member.email}</dd>
+
+              <dt>가입일</dt>
+              <dd>{member.createdAt.slice(0, 10)}</dd>
+            </dl>
+
+            {notice && (
+              <p className="note" role="status">
+                {notice}
+              </p>
+            )}
+          </section>
+
+          {member.role === 'USER' && (
+            <section className="panel mypage-danger" aria-labelledby="withdraw-title">
+              <h3 id="withdraw-title">회원탈퇴</h3>
               <p>탈퇴 시 계정을 복구할 수 없고 잔여 크레딧이 소멸합니다. 정지 회원은 운영자에게 문의해주세요.</p>
               <Button variant="danger" size="small" disabled={saving || editing}
                 onClick={() => setWithdrawalOpen(true)}>회원탈퇴</Button>
-            </div>
+            </section>
           )}
           {withdrawalOpen && member.role === 'USER' && (
             <WithdrawalDialog balance={member.balance} onClose={() => setWithdrawalOpen(false)} />
           )}
-        </section>
+        </>
       )}
     </div>
   );

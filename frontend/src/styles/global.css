@@ -553,23 +553,109 @@ dialog .modal-actions{flex-wrap:wrap}
 
 .mypage {
   width: 100%;
-  max-width: 560px;
+  max-width: 680px;
   min-width: 0;
+  display: grid;
+  gap: 16px;
 }
 
 .mypage .pagehead {
   display: block;
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 16px;
 }
 
-.mypage .panel {
-  width: 100%;
+.mypage .panel,
+.mypage .panel+.panel { width: 100%; margin-top: 0; }
+.mypage .panel h2 { margin-bottom: 8px; }
+
+.mypage-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 28px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #14305c, #2864dc);
+  color: #fff;
+}
+.mypage-avatar {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, .18);
+  border: 1px solid rgba(255, 255, 255, .35);
+}
+.mypage-hero-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.mypage-hero-text strong { font-size: 1.2rem; overflow-wrap: anywhere; }
+.mypage-hero-text span { font-size: .9rem; opacity: .85; overflow-wrap: anywhere; }
+
+.mypage-credit {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 22px 28px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.mypage-credit-label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 4px; }
+.mypage-credit strong { font-size: 1.7rem; letter-spacing: -.01em; }
+.mypage-credit-actions { display: flex; gap: 8px; }
+
+.mypage-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.mypage-shortcuts a {
+  display: grid;
+  gap: 4px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color .15s, transform .15s;
+}
+.mypage-shortcuts a:hover { border-color: var(--blue); transform: translateY(-1px); }
+.mypage-shortcuts b { font-weight: 600; }
+.mypage-shortcuts span { font-size: .85rem; color: var(--muted); }
+
+.mypage-info {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 14px 16px;
+  margin: 20px 0 0;
+  overflow-wrap: anywhere;
+}
+.mypage-info dt { color: var(--muted); font-size: .9rem; padding-top: 6px; }
+.mypage-info dd { margin: 0; min-height: 32px; display: flex; align-items: center; }
+.mypage-info dd form { width: 100%; }
+
+.mypage-danger { border-color: #f3d4d4; background: #fffafa; }
+.mypage-danger h3 { color: #b42318; margin-bottom: 8px; }
+.mypage-danger p { font-size: .9rem; margin-bottom: 14px; }
+
+@media (max-width: 560px) {
+  .mypage-shortcuts { grid-template-columns: 1fr; }
+  .mypage-hero, .mypage-credit { padding: 20px; }
 }
 
-.mypage .panel h2 {
-  margin-bottom: 24px;
-}
+/* 충전 내역 */
+.charge-history .panel+.panel { margin-top: 0; }
+.charge-history-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+.charge-history-row strong { font-size: 1.1rem; }
+.charge-history-row p { margin: 4px 0 0; }
+.charge-history-method { font-size: .9rem; color: var(--text, inherit); font-weight: 500; }
+.charge-history-order { font-size: .78rem; overflow-wrap: anywhere; }
 /* 예약 대기: 예약된 칸(주황)과 지난 칸(취소선)을 구분하고, 내 대기 목록 행을 둔다 */
 .slotgrid button.reserved{background:#fff4e0;border-color:#f0c987;color:#8a5a00}
 .slotgrid button.reserved:disabled{background:#fff4e0;color:#8a5a00;text-decoration:none;opacity:1}
@@ -577,6 +663,10 @@ dialog .modal-actions{flex-wrap:wrap}
 .slot-legend .reserved{background:#fff4e0;border-color:#f0c987}
 .waitlist-row{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}
 .waitlist-row p{margin:4px 0 0}
+.waitlist-row-link{flex:1;display:flex;align-items:center;gap:16px;color:inherit;text-decoration:none}
+.waitlist-row-photo{width:96px;height:72px;object-fit:cover;border-radius:10px;flex:none}
+.photo-placeholder.waitlist-row-photo{min-height:0}.photo-placeholder.waitlist-row-photo small{display:none}.photo-placeholder.waitlist-row-photo span{font-size:.8rem}
+.waitlist-row-link:hover strong{text-decoration:underline}
 
 /* 보조(취소) 버튼: 회색 */
 button.btn-muted,.btn-muted{background:#e5e7eb;border-color:#d1d5db;color:#374151}

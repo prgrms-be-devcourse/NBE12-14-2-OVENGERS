@@ -10,6 +10,9 @@ import BrandMark from '../brand/BrandMark';
 import NotificationLink from '../notification/NotificationLink';
 import ActiveLink from './ActiveLink';
 
+/** 로그인한 일반 회원에게만 보이는 상단 메뉴 */
+const MEMBER_ONLY_NAV: Set<string> = new Set([ROUTES.reservations, ROUTES.waitlist]);
+
 export default function Header() {
   const { member, isAdmin, logout } = useAuth();
   const pathname = usePathname();
@@ -76,7 +79,7 @@ export default function Header() {
       </Link>
 
       <nav className="nav" aria-label="주요 메뉴">
-        {USER_NAV.map((item) => (
+        {USER_NAV.filter((item) => !MEMBER_ONLY_NAV.has(item.href) || (member && !hideMyReservations)).map((item) => (
           <ActiveLink key={item.href} href={item.href}>{item.label}</ActiveLink>
         ))}
       </nav>
@@ -111,11 +114,10 @@ export default function Header() {
               <strong>{member.nickname}님</strong>
               {!isAdmin && <span className="account-mobile-credit">{formatCredit(member.balance)}</span>}
             </div>
-            {!hideMyReservations && <ActiveLink href={ROUTES.reservations}>내 예약</ActiveLink>}
-            {!hideMyReservations && <ActiveLink href={ROUTES.waitlist}>내 대기</ActiveLink>}
-            {!isAdmin && <ActiveLink href={ROUTES.creditCharge}>크레딧 충전하기</ActiveLink>}
-            {!isAdmin && <ActiveLink href={ROUTES.inquiries}>내 문의</ActiveLink>}
             <ActiveLink href={ROUTES.myPage}>마이페이지</ActiveLink>
+            {!isAdmin && <ActiveLink href={ROUTES.creditCharge}>크레딧 충전하기</ActiveLink>}
+            {!isAdmin && <ActiveLink href={ROUTES.creditHistory}>충전 내역</ActiveLink>}
+            {!isAdmin && <ActiveLink href={ROUTES.inquiries}>내 문의</ActiveLink>}
             {isAdmin && <ActiveLink href={ROUTES.adminDashboard}>관리자</ActiveLink>}
             <div className="account-signout"><button onClick={logout}>로그아웃</button></div>
           </> : <>

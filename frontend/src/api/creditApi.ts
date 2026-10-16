@@ -1,4 +1,4 @@
-import type { ChargeOrder, ConfirmChargeOrderRequest } from '../types/api';
+import type { ChargeOrder, ChargeOrderHistoryItem, ConfirmChargeOrderRequest, Page } from '../types/api';
 import { API_ROUTES } from '../constants/apiRoutes';
 import api from './client';
 
@@ -14,6 +14,11 @@ export function confirmChargeOrder(
     request,
     { headers: { 'Idempotency-Key': idempotencyKey } },
   );
+}
+
+/** 내 충전 내역(최신순). 결제가 시도되지 않은 PENDING 주문은 서버가 제외한다. */
+export function getChargeHistory({ page = 0, size = 10 }: { page?: number; size?: number } = {}): Promise<Page<ChargeOrderHistoryItem>> {
+  return api.get<Page<ChargeOrderHistoryItem>>(API_ROUTES.credits.chargeOrders, { query: { page, size } });
 }
 
 export function getChargeOrder(orderId: string): Promise<ChargeOrder> {
