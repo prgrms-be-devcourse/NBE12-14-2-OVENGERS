@@ -10,8 +10,9 @@ export function seoulDate(now = new Date()): string {
 export function selectDashboardReservations(rows: DashboardReservation[], date: string, spaceId = '') {
   return rows.filter(row => (!date || row.startTime.slice(0, 10) <= date && row.endTime.slice(0, 10) >= date) && (!spaceId || String(row.spaceId) === spaceId));
 }
-export function countDashboardStatuses(rows: DashboardReservation[]) {
-  return Object.fromEntries(DASHBOARD_STATES.map(status => [status, rows.filter(row => row.status === status).length])) as Record<typeof DASHBOARD_STATES[number], number>;
+/** 서버(status-counts)가 센 일곱 상태 중 대시보드가 보여 주는 네 상태만 꺼낸다. 브라우저에서 예약을 세지 않는다. */
+export function pickDashboardCounts(counts: Partial<Record<ReservationStatus, number>> | null | undefined) {
+  return Object.fromEntries(DASHBOARD_STATES.map(status => [status, counts?.[status] ?? 0])) as Record<typeof DASHBOARD_STATES[number], number>;
 }
 const priority: Partial<Record<ReservationStatus, number>> = { IN_USE: 0, HELD: 1, CONFIRMED: 2 };
 export function sortDashboardReservations(rows: DashboardReservation[]) {

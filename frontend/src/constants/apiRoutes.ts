@@ -79,6 +79,10 @@ export const API_ROUTES = {
     // 크레딧 지급(ADMIN_GRANT). 회수 없음, 자기 자신 지급 불가(core-domain-decisions.md 1-3).
     memberCredit: (memberId: number | string) => `/admin/members/${memberId}/credits`,
     spaceImage: (spaceId: number | string) => `/admin/spaces/${spaceId}/image`,
+    // 관리자 통계(api-spec §14). 랭킹은 끝난 기간의 확정값, 상태별 건수는 실시간 값이다.
+    statusCounts: '/admin/stats/status-counts',
+    spaceRanking: '/admin/stats/space-ranking',
+    locationRanking: '/admin/stats/location-ranking',
   },
 };
 

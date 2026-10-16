@@ -146,7 +146,7 @@ class AdminSpaceControllerTest {
                 // given
                 SpaceCreateRequest request = new SpaceCreateRequest(
                                 "회의실 1",
-                                "서울시 강남구",
+                                "강남",
                                 "깔끔한 회의실",
                                 6,
                                 5000L,
@@ -214,7 +214,7 @@ class AdminSpaceControllerTest {
                 // imagePath가 비어있지 않은 요청
                 SpaceCreateRequest invalidRequest = new SpaceCreateRequest(
                                 "회의실 1",
-                                "서울시 강남구",
+                                "강남",
                                 "설명",
                                 6,
                                 5000L,
@@ -240,7 +240,7 @@ class AdminSpaceControllerTest {
                 SpaceUpdateRequest request = new SpaceUpdateRequest(
                                 null,
                                 "수정된 회의실",
-                                "서울시 서초구",
+                                "하남",
                                 "업그레이드된 회의실",
                                 8,
                                 6000L,
@@ -291,7 +291,7 @@ class AdminSpaceControllerTest {
                 SpaceUpdateRequest invalidRequest = new SpaceUpdateRequest(
                                 null,
                                 "수정 회의실",
-                                "서울시 강남구",
+                                "강남",
                                 "설명",
                                 6,
                                 5000L,
@@ -311,6 +311,58 @@ class AdminSpaceControllerTest {
         }
 
         @Test
+        @DisplayName("공간 등록 요청의 location이 판교·강남·하남이 아니면 400 VALIDATION_FAILED를 반환한다")
+        void createSpace_withUnsupportedLocation_returnsBadRequest() throws Exception {
+                SpaceCreateRequest invalidRequest = new SpaceCreateRequest(
+                                "회의실 1",
+                                "서울시 강남구",
+                                "설명",
+                                6,
+                                5000L,
+                                null,
+                                LocalTime.of(9, 0),
+                                LocalTime.of(18, 0));
+
+                mockMvc.perform(post("/api/v1/admin/spaces")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(invalidRequest)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+                verifyNoInteractions(adminSpaceService);
+        }
+
+        @Test
+        @DisplayName("공간 수정 요청의 location이 판교·강남·하남이 아니면 400 VALIDATION_FAILED를 반환한다")
+        void updateSpace_withUnsupportedLocation_returnsBadRequest() throws Exception {
+                SpaceUpdateRequest invalidRequest = new SpaceUpdateRequest(
+                                null, null, "서울", null, null, null, null, null, null, null);
+
+                mockMvc.perform(patch("/api/v1/admin/spaces/{spaceId}", 1L)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(invalidRequest)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+                verifyNoInteractions(adminSpaceService);
+        }
+
+        @Test
+        @DisplayName("공간 수정 요청에서 location을 생략(null)하면 지역 검증을 통과한다")
+        void updateSpace_withoutLocation_passesValidation() throws Exception {
+                SpaceUpdateRequest request = new SpaceUpdateRequest(
+                                null, "이름만 수정", null, null, null, null, null, null, null, null);
+                given(adminSpaceService.updateSpace(eq(1L), any(SpaceUpdateRequest.class),
+                                eq(ADMIN_PRINCIPAL.memberId())))
+                                .willReturn(SpaceDetailResponse.builder().id(1L).name("이름만 수정").build());
+
+                mockMvc.perform(patch("/api/v1/admin/spaces/{spaceId}", 1L)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
         @DisplayName("존재하지 않는 공간 수정 시 404 Not Found와 SPACE_NOT_FOUND 에러 코드를 반환한다")
         void updateSpace_notFound() throws Exception {
                 // given
@@ -318,7 +370,7 @@ class AdminSpaceControllerTest {
                 SpaceUpdateRequest request = new SpaceUpdateRequest(
                                 null,
                                 "수정 회의실",
-                                "서울",
+                                "판교",
                                 null,
                                 4,
                                 5000L,
@@ -353,7 +405,7 @@ class AdminSpaceControllerTest {
 
                 SpaceCreateRequest request = new SpaceCreateRequest(
                                 "회의실 1",
-                                "서울시 강남구",
+                                "강남",
                                 "깔끔한 회의실",
                                 6,
                                 5000L,
@@ -383,7 +435,7 @@ class AdminSpaceControllerTest {
 
                 SpaceCreateRequest request = new SpaceCreateRequest(
                                 "회의실 1",
-                                "서울시 강남구",
+                                "강남",
                                 "깔끔한 회의실",
                                 6,
                                 5000L,

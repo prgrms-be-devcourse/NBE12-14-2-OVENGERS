@@ -29,3 +29,5 @@ slotkey:
   scheduler:
     charge-recovery:
       enabled: false
+    space-ranking:
+      enabled: false
