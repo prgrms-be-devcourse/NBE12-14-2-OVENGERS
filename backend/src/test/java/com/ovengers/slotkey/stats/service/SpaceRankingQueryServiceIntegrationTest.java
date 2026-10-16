@@ -280,6 +280,73 @@ class SpaceRankingQueryServiceIntegrationTest extends ReservationIntegrationTest
     }
 
     @Test
+    @DisplayName("기간이 막 끝난 날(end == today)에 확정 행이 있으면 CONFIRMED로 순위를 내려준다")
+    void confirmedWhenPeriodEndsToday() {
+        Long a = space("A", "판교");
+        // 어제 일간, 월요일 당일의 지난주, 1일 당일의 지난달
+        snap(RankingPeriodType.DAILY, LocalDate.of(2026, 10, 16), a, "판교", 100, 1, 1);
+        snap(RankingPeriodType.WEEKLY, LocalDate.of(2026, 10, 12), a, "판교", 100, 1, 1);
+        snap(RankingPeriodType.MONTHLY, LocalDate.of(2026, 10, 1), a, "판교", 100, 1, 1);
+
+        settableClock.set(ZonedDateTime.of(2026, 10, 17, 10, 0, 0, 0, SettableClockConfig.KST));
+        SpaceRankingResponse daily = queryService.getSpaceRanking(RankingPeriodType.DAILY,
+                LocalDate.of(2026, 10, 16), RankingMetric.NET_REVENUE, null, 10);
+        settableClock.set(ZonedDateTime.of(2026, 10, 19, 10, 0, 0, 0, SettableClockConfig.KST));   // 월요일
+        SpaceRankingResponse weekly = queryService.getSpaceRanking(RankingPeriodType.WEEKLY,
+                LocalDate.of(2026, 10, 18), RankingMetric.NET_REVENUE, null, 10);
+        settableClock.set(ZonedDateTime.of(2026, 11, 1, 10, 0, 0, 0, SettableClockConfig.KST));    // 1일
+        SpaceRankingResponse monthly = queryService.getSpaceRanking(RankingPeriodType.MONTHLY,
+                LocalDate.of(2026, 10, 31), RankingMetric.NET_REVENUE, null, 10);
+
+        assertThat(daily.status()).isEqualTo(RankingStatus.CONFIRMED);
+        assertThat(daily.items()).extracting(SpaceRankingItem::spaceId).containsExactly(a);
+        assertThat(weekly.status()).isEqualTo(RankingStatus.CONFIRMED);
+        assertThat(weekly.items()).hasSize(1);
+        assertThat(monthly.status()).isEqualTo(RankingStatus.CONFIRMED);
+        assertThat(monthly.items()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("확정 전(기간 끝 날짜 00:00~00:01)에 행이 없으면 빈 CONFIRMED가 아니라 PENDING이고 00:01부터는 CONFIRMED다")
+    void pendingUntilOneMinuteAfterPeriodEnd() {
+        Long a = space("A", "판교");
+        snap(RankingPeriodType.DAILY, LocalDate.of(2026, 10, 14), a, "판교", 100, 1, 1);   // 기록 범위 안으로 만든다
+
+        settableClock.set(ZonedDateTime.of(2026, 10, 17, 0, 0, 30, 0, SettableClockConfig.KST));
+        SpaceRankingResponse before = queryService.getSpaceRanking(RankingPeriodType.DAILY,
+                LocalDate.of(2026, 10, 16), RankingMetric.NET_REVENUE, null, 10);
+        settableClock.set(ZonedDateTime.of(2026, 10, 17, 0, 1, 0, 0, SettableClockConfig.KST));
+        SpaceRankingResponse after = queryService.getSpaceRanking(RankingPeriodType.DAILY,
+                LocalDate.of(2026, 10, 16), RankingMetric.NET_REVENUE, null, 10);
+
+        assertThat(before.status()).isEqualTo(RankingStatus.PENDING);
+        assertThat(before.items()).isEmpty();
+        assertThat(before.confirmAt()).isEqualTo(LocalDateTime.of(2026, 10, 17, 0, 0));
+        assertThat(after.status()).isEqualTo(RankingStatus.CONFIRMED);   // 행이 없으면 거래가 없던 기간
+        assertThat(after.items()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("지난주·지난달도 월요일·1일 00:00~00:01에는 행이 없으면 PENDING이고 지역 랭킹도 같다")
+    void pendingRightAfterWeekAndMonthEnd() {
+        Long a = space("A", "판교");
+        snap(RankingPeriodType.WEEKLY, LocalDate.of(2026, 10, 5), a, "판교", 100, 1, 1);
+        snap(RankingPeriodType.MONTHLY, LocalDate.of(2026, 9, 1), a, "판교", 100, 1, 1);
+
+        settableClock.set(ZonedDateTime.of(2026, 10, 19, 0, 0, 30, 0, SettableClockConfig.KST));
+        SpaceRankingResponse weekly = queryService.getSpaceRanking(RankingPeriodType.WEEKLY,
+                LocalDate.of(2026, 10, 18), RankingMetric.NET_REVENUE, null, 10);
+        settableClock.set(ZonedDateTime.of(2026, 11, 1, 0, 0, 30, 0, SettableClockConfig.KST));
+        LocationRankingResponse monthly = queryService.getLocationRanking(RankingPeriodType.MONTHLY,
+                LocalDate.of(2026, 10, 31), RankingMetric.NET_REVENUE, 10);
+
+        assertThat(weekly.status()).isEqualTo(RankingStatus.PENDING);
+        assertThat(weekly.confirmAt()).isEqualTo(LocalDateTime.of(2026, 10, 19, 0, 0));
+        assertThat(monthly.status()).isEqualTo(RankingStatus.PENDING);
+        assertThat(monthly.confirmAt()).isEqualTo(LocalDateTime.of(2026, 11, 1, 0, 0));
+    }
+
+    @Test
     @DisplayName("현재 기간보다 미래인 date는 400 VALIDATION_FAILED이다")
     void futurePeriodIsRejected() {
         assertValidationFailed(() -> queryService.getSpaceRanking(RankingPeriodType.DAILY,

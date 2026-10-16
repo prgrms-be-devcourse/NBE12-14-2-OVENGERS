@@ -80,6 +80,19 @@ class SpaceRankingBackfillServiceIntegrationTest extends ReservationIntegrationT
     }
 
     @Test
+    @DisplayName("00:01 전(00:00:30)에는 방금 끝난 어제를 계산하지 않아 00:01 완충이 우회되지 않는다")
+    void doesNotConfirmJustEndedPeriodBeforeOneMinute() {
+        reservationOn(LocalDateTime.of(2026, 10, 15, 10, 0));   // 어제
+        reservationOn(LocalDateTime.of(2026, 10, 14, 10, 0));   // 그제
+        settableClock.set(ZonedDateTime.of(2026, 10, 16, 0, 0, 30, 0, SettableClockConfig.KST));
+
+        backfillService.backfillMissing();
+
+        assertThat(rows(RankingPeriodType.DAILY, LocalDate.of(2026, 10, 15))).isEmpty();
+        assertThat(rows(RankingPeriodType.DAILY, LocalDate.of(2026, 10, 14))).hasSize(1);
+    }
+
+    @Test
     @DisplayName("보충 범위(31일) 밖의 일간 기간은 채우지 않는다")
     void doesNotFillDailyPeriodsOlderThanWindow() {
         reservationOn(LocalDateTime.of(2026, 8, 1, 10, 0));

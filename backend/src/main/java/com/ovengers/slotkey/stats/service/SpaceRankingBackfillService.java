@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * 서버가 꺼져 있었거나 계산이 실패해 확정 행이 없는 "끝난 기간"을 찾아 채운다.
@@ -39,14 +40,15 @@ public class SpaceRankingBackfillService {
 
     /** @return 이번 호출에서 계산한 기간 수(행이 0개로 끝난 기간 포함) */
     public int backfillMissing() {
-        LocalDate today = LocalDate.now(clock);
+        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDate today = now.toLocalDate();
         LocalDate windowStart = today.minusDays(backfillDays);
         int computed = 0;
 
         for (RankingPeriodType type : RankingPeriodType.values()) {
-            // windowStart를 포함하는 기간부터, 오늘까지 끝난 기간만
+            // windowStart를 포함하는 기간부터, 끝 날짜 00:01이 지난 기간만
             for (LocalDate periodStart = type.startOf(windowStart);
-                 !type.endOf(periodStart).isAfter(today);
+                 SpaceRankingConfirmService.isConfirmable(type.endOf(periodStart), now);
                  periodStart = type.endOf(periodStart)) {
                 if (snapshotRepository.existsByPeriodTypeAndPeriodStart(type, periodStart)) {
                     continue;

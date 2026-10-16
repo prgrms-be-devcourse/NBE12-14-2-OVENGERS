@@ -135,6 +135,10 @@ public class SpaceRankingQueryService {
                     .max(Comparator.naturalOrder()).orElse(null);
             return new PeriodView(start, end, RankingStatus.CONFIRMED, null, computedAt);
         }
+        // 기간 끝 날짜 00:00~00:01은 아직 확정 전이다. 빈 CONFIRMED("거래 없음")로 보이지 않게 PENDING으로 둔다.
+        if (LocalDateTime.now(clock).isBefore(end.atTime(SpaceRankingConfirmService.CONFIRM_TIME))) {
+            return new PeriodView(start, end, RankingStatus.PENDING, end.atStartOfDay(), null);
+        }
         // 행이 없으면 "거래가 없던 기간"과 "확정 기록이 시작되기 전"을 구분해야 한다.
         // 해당 종류의 가장 이른 확정 기간보다 앞이거나 기록이 전혀 없으면 UNAVAILABLE이다.
         boolean beforeRecords = snapshotRepository.findEarliestPeriodStart(period)

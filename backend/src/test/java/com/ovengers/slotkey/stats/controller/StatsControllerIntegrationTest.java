@@ -138,6 +138,30 @@ class StatsControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.items.length()").value(0));
     }
 
+    @Test
+    @DisplayName("어제 일간(end == today)은 확정 행이 있으면 CONFIRMED로 순위를, 00:00~00:01에 행이 없으면 PENDING을 내려준다")
+    void yesterdayDaily() throws Exception {
+        Long a = saveSpace("판교 A룸", "판교");
+        LocalDate yesterday = LocalDate.of(2026, 10, 16);
+        snapshotRepository.saveAndFlush(new SpaceRankingSnapshot(RankingPeriodType.DAILY, yesterday, a, "판교",
+                100, 2, 4, yesterday.plusDays(1).atTime(0, 1)));
+
+        settableClock.set(ZonedDateTime.of(2026, 10, 17, 10, 0, 0, 0, SettableClockConfig.KST));
+        mockMvc.perform(get(SPACE_RANKING).header(HttpHeaders.AUTHORIZATION, userToken)
+                        .param("period", "DAILY").param("date", "2026-10-16"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.data.items.length()").value(1));
+
+        snapshotRepository.deleteByPeriod(RankingPeriodType.DAILY, yesterday);
+        settableClock.set(ZonedDateTime.of(2026, 10, 17, 0, 0, 30, 0, SettableClockConfig.KST));
+        mockMvc.perform(get(SPACE_RANKING).header(HttpHeaders.AUTHORIZATION, userToken)
+                        .param("period", "DAILY").param("date", "2026-10-16"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PENDING"))
+                .andExpect(jsonPath("$.data.confirmAt").value("2026-10-17T00:00:00"));
+    }
+
     // ---------- helpers ----------
 
     private Member saveMember(MemberRole role) {

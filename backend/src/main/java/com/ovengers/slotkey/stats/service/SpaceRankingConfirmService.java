@@ -21,6 +21,9 @@ import java.util.List;
 @Service
 public class SpaceRankingConfirmService {
 
+    /** 계산 시작 시각. 기간 끝 날짜의 이 시각부터 확정 대상이다(커밋 지연 완충). */
+    static final java.time.LocalTime CONFIRM_TIME = java.time.LocalTime.of(0, 1);
+
     private final SpaceRankingAggregationRepository aggregationRepository;
     private final SpaceRankingSnapshotRepository snapshotRepository;
     private final Clock clock;
@@ -33,10 +36,15 @@ public class SpaceRankingConfirmService {
         this.clock = clock;
     }
 
+    /** 기간 끝 날짜 00:01 이후면 확정 대상이다. 보충도 같은 기준을 쓴다. */
+    static boolean isConfirmable(LocalDate periodEnd, LocalDateTime now) {
+        return !now.isBefore(periodEnd.atTime(CONFIRM_TIME));
+    }
+
     /**
      * @param dateInPeriod 확정할 기간에 속한 아무 날짜(KST)
      * @return 저장한 행 수
-     * @throws IllegalArgumentException 기간이 아직 끝나지 않은 경우(오늘 00:00 이전에 끝나는 기간만 확정 가능)
+     * @throws IllegalArgumentException 기간이 아직 끝나지 않은 경우(기간 끝 날짜 00:01 이후에만 확정 가능)
      */
     @Transactional
     public int confirm(RankingPeriodType periodType, LocalDate dateInPeriod) {
@@ -44,7 +52,7 @@ public class SpaceRankingConfirmService {
         LocalDate periodEnd = periodType.endOf(dateInPeriod);
         LocalDateTime now = LocalDateTime.now(clock);
 
-        if (periodEnd.isAfter(now.toLocalDate())) {
+        if (!isConfirmable(periodEnd, now)) {
             throw new IllegalArgumentException(
                     "아직 끝나지 않은 기간은 확정할 수 없습니다: %s %s ~ %s".formatted(periodType, periodStart, periodEnd));
         }

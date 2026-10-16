@@ -157,6 +157,28 @@ class AdminStatsControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("어제 일간(end == today)은 확정 행이 있으면 CONFIRMED, 00:00~00:01에 행이 없으면 PENDING이다")
+    void yesterdayDaily() throws Exception {
+        Long a = saveSpace("판교 A룸", "판교");
+        snap(RankingPeriodType.DAILY, LocalDate.of(2026, 10, 15), a, "판교", 100, 1, 1);
+        snap(RankingPeriodType.DAILY, LocalDate.of(2026, 10, 16), a, "판교", 5000, 3, 6);
+
+        settableClock.set(ZonedDateTime.of(2026, 10, 17, 10, 0, 0, 0, SettableClockConfig.KST));
+        spaceRanking("period", "DAILY", "date", "2026-10-16")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].netRevenue").value(5000));
+
+        snapshotRepository.deleteByPeriod(RankingPeriodType.DAILY, LocalDate.of(2026, 10, 16));
+        settableClock.set(ZonedDateTime.of(2026, 10, 17, 0, 0, 30, 0, SettableClockConfig.KST));
+        spaceRanking("period", "DAILY", "date", "2026-10-16")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PENDING"))
+                .andExpect(jsonPath("$.data.confirmAt").value("2026-10-17T00:00:00"));
+    }
+
+    @Test
     @DisplayName("확정 기록이 시작되기 전의 기간은 200 UNAVAILABLE이다")
     void unavailableResponse() throws Exception {
         spaceRanking("period", "MONTHLY", "date", "2026-08-15")

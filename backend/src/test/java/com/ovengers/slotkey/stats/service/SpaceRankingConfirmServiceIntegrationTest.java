@@ -357,6 +357,17 @@ class SpaceRankingConfirmServiceIntegrationTest extends ReservationIntegrationTe
         assertThat(service.confirm(RankingPeriodType.DAILY, LocalDate.of(2026, 10, 15))).isZero();
     }
 
+    @Test
+    @DisplayName("기간 끝 날짜 00:01 전에는 끝난 기간도 확정할 수 없고 00:01부터 가능하다(커밋 지연 완충)")
+    void cannotConfirmBeforeOneMinuteAfterPeriodEnd() {
+        settableClock.set(ZonedDateTime.of(2026, 10, 16, 0, 0, 59, 0, KST));
+        assertThatThrownBy(() -> service.confirm(RankingPeriodType.DAILY, LocalDate.of(2026, 10, 15)))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        settableClock.set(ZonedDateTime.of(2026, 10, 16, 0, 1, 0, 0, KST));
+        assertThat(service.confirm(RankingPeriodType.DAILY, LocalDate.of(2026, 10, 15))).isZero();
+    }
+
     // ---------- helpers ----------
 
     private Optional<SpaceRankingSnapshot> confirmDaily(LocalDate date) {
