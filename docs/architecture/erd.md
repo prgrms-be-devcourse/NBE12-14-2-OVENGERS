@@ -1,6 +1,7 @@
 # ERD 및 데이터 모델
 
 > 출처: 기획서 6-1, `데이터모델-아키텍처-결정.md`. 30분 슬롯 통일(항목 1), door_access_token 유니크 제약(항목 2), audit_logs 복합 인덱스(항목 4) 반영본.
+> **2026-10-16 갱신 (5단계)**: V17~V20의 `waitlist_entry`, `processed_event`, `notification`을 반영했다. 세 테이블과 `outbox_event`는 모두 FK 없이 id만 참조하는 독립 테이블이다.
 > **2026-09-24 갱신**: Flyway V1~V10 전수 대조를 바탕으로 V7 `idempotency_key`, V10 `inquiries`의 테이블·관계·인덱스를 ERD에 추가하고, V4 `payment`의 미생성(빈 마이그레이션 유지) 상태와 담당자 배정 사실(작성 시점 기록과 현재 구현 사실 분리)을 정비했다.
 
 ## 엔터티 및 담당자
@@ -16,6 +17,9 @@
 | `credit_transaction` | 초기 분담: 미정 (구 `payment` 백한비 영역, V6 파일상 '담당: 미정' 기록; 실제 작성·현재 유지보수 담당 미확인) | id, member_id, amount, type, reservation_id, charge_order_id, balance_after, reason, created_at | **크레딧 원장(단일 진실)** — `payment` 테이블을 대체. `amount`는 부호 있음(지급/환급 +, 차감/위약금 -)이며 `SUM(amount) = member.balance`. `type`: SIGNUP_GRANT / ADMIN_GRANT / RESERVATION_CHARGE / REFUND / PENALTY / TOP_UP. PG 충전은 `charge_order_id` UNIQUE로 주문당 원장 1건을 강제한다. `INDEX(member_id, created_at)` |
 | `charge_order` | lab 확장 | id, order_id, member_id, amount, status, payment_key, client_idempotency_key, pg_idempotency_key, failure_code, recovery_next_attempt_at, recovery_exhausted_at, created_at, updated_at | ACTIVE 회원의 PG 크레딧 충전 시도. `id`는 숫자 PK이며 `order_id`, `payment_key`, `pg_idempotency_key`는 각각 UNIQUE. `(member_id, client_idempotency_key)` UNIQUE로 같은 회원이 승인 멱등키를 다른 주문에 재사용하지 못하게 한다. 생성 시 `PENDING`, 승인 시 `CONFIRMING → PAID` 또는 명확한 거절이면 `FAILED`. `recovery_next_attempt_at`은 공정한 조회 재시도 시각, `recovery_exhausted_at`은 24시간 초과·무결성 위반으로 자동 복구를 중단한 시각이다. 복구 후보용 인덱스는 `(status, recovery_exhausted_at, recovery_next_attempt_at, id)`와 `(status, recovery_exhausted_at, updated_at, id)`이다. |
 | `outbox_event` | lab 확장 | id, event_id, event_type, topic, partition_key, payload(JSON), status, attempts, created_at, published_at | `SlotReleased` 이벤트 Outbox. 취소·강제 취소·홀드 만료(`updated==1`)의 성공 전이와 **같은 트랜잭션**에서 `PENDING`으로 INSERT한다(롤백되면 함께 사라짐). `event_type='SlotReleased'`, `topic='slot-released'`, `partition_key`는 `space_id` 문자열, payload는 `eventId`/`reservationId`/`reason`/`occurredAt`. **FK 없음**(Member/Space 잠금 순서 데드락 방지). `UNIQUE(event_id)`, `INDEX(status, id)`. V18 |
+| `waitlist_entry` | lab 확장 | id, member_id, space_id, start_time, end_time, status, active, last_notified_at, created_at | 예약 대기 1건(점유 중인 구간에 "자리가 비면 알려 달라"). status: `WAITING`/`CANCELLED`/`EXPIRED`(`EXPIRED` 전이는 미구현). **FK 없음**(Member/Space 잠금 순서 데드락 방지). `active`는 `WAITING`일 때만 1, 그 밖에는 NULL이며 `UNIQUE(member_id, space_id, start_time, end_time, active)` — MySQL이 UNIQUE에서 NULL을 서로 다른 값으로 보는 성질로 "활성 신청은 구간당 1건 + 취소 이력 여러 건"을 만든다(`door_access_token.active_reservation_id`와 같은 방식). CHECK `chk_waitlist_entry_active`(`status`와 `active`가 어긋난 행 차단), `chk_waitlist_entry_time_range`. 인덱스 `(space_id, status, start_time)`, `(member_id, status)`. `last_notified_at`은 컨슈머가 알림을 저장할 때 조건부 UPDATE(`WHERE id AND status='WAITING'`)로만 기록하며, 엔터티는 `@DynamicUpdate`라 취소 flush가 이 값을 되돌리지 않는다. V17은 `reservation`에 `idx_reservation_member_space_status_start (member_id, space_id, status, start_time)`도 추가했다 |
+| `processed_event` | lab 확장 | id, consumer, event_id, processed_at | 컨슈머가 처리한 이벤트 기록(멱등). 알림 저장과 **같은 트랜잭션**에서 `INSERT IGNORE`로 먼저 넣고 영향 행이 0이면 이미 처리한 이벤트로 보고 건너뛴다. `UNIQUE(consumer, event_id)` — 같은 토픽을 다른 컨슈머가 읽어도 서로 막지 않는다. `consumer`는 현재 `waitlist-notifier`. **FK 없음**. V19 |
+| `notification` | lab 확장 | id, member_id, waitlist_entry_id, event_id, message, read_at, created_at | 대기자에게 보내는 "자리가 비었다" 알림. `message`는 생성 시점 문자열 스냅샷(선착순·예약 비보장 안내 포함). `read_at IS NULL`이면 안 읽음(읽음 처리 API는 미구현이라 항상 NULL). `UNIQUE(event_id, waitlist_entry_id)`로 같은 이벤트·같은 대기 항목의 중복 알림을 막는 두 번째 방어선(첫 번째는 `processed_event`). 인덱스 `(member_id, id)`(목록, 최신순), `(member_id, read_at)`(안 읽은 개수). **FK 없음**. V20 |
 | `reservation_status_history` | 초기 분담: 백한비 / 실제 작성: 이태호 (V3 파일 비고에 '백한비님 대신 이태호가 작성' 명시) | id, reservation_id, changed_by_member_id, from_status, to_status, reason, changed_at | 상태 변경 이력. 최초 생성의 from_status는 NULL, 시스템 작업은 changed_by_member_id NULL 허용. 성공한 전이만 기록 |
 | `door_access_token` | 박창현 | id, reservation_id, token_hash, issued_at, revoked_at, revoke_reason, active_reservation_id | `active_reservation_id`는 `revoked_at IS NULL`일 때만 값을 갖는 생성 컬럼 + `UNIQUE` → 예약당 활성 토큰 최대 1개를 DB 레벨로 강제 (변경 없음, §11 "유지") |
 | `door_access_log` | 박창현 | id, actor_member_id, reservation_id, requested_space_id, result, reason_code, attempted_at | 출입 검증 결과. result: ALLOW / DENY. 식별 불가 대상은 NULL 허용. 세 컬럼 모두 DB 레벨 FK (`fk_door_access_log_actor_member`, `fk_door_access_log_requested_space`, `fk_door_access_log_reservation`) |
@@ -48,6 +52,12 @@ Reservation 1 --- N ReservationStatusHistory (DB FK: reservation_id)
 Reservation 1 --- N DoorAccessToken (DB FK: reservation_id)
 Reservation 0..1 --- N DoorAccessLog : 확인된 예약 (DB FK: reservation_id, V5 fk_door_access_log_reservation, NULL 허용)
 Reservation 0..1 --- N CreditTransaction : 지급 건은 예약과 무관(NULL) (DB FK: reservation_id)
+
+Member 1 --- N WaitlistEntry : 대기 신청자 (논리적 참조: FK 없음)
+Space 1 --- N WaitlistEntry : 대기 대상 공간 (논리적 참조: FK 없음)
+Member 1 --- N Notification : 알림 수신자 (논리적 참조: FK 없음)
+WaitlistEntry 1 --- N Notification : 알림 대상 대기 항목 (논리적 참조: FK 없음, UNIQUE(event_id, waitlist_entry_id))
+OutboxEvent.event_id 1 --- N ProcessedEvent.event_id : 컨슈머 처리 기록 (논리적 참조: FK 없음)
 ```
 
 ```mermaid
@@ -140,6 +150,9 @@ CHECK (status <> 'ANSWERED' OR (answer_content IS NOT NULL AND answered_at IS NO
 | 추가 | `inquiries` 테이블 | ERD 반영 + `V10__create_inquiry_table.sql`로 회원 Q&A 및 관리자 답변 테이블 추가 |
 | 추가 | `charge_order` 테이블 및 `credit_transaction.charge_order_id` | ERD 반영 + `V13__create_charge_order_table.sql`로 PG 충전 주문, UNIQUE `order_id`·`payment_key`·`pg_idempotency_key`, 회원별 UNIQUE `client_idempotency_key`, 상태·복구 추적 컬럼과 후보 조회 인덱스, 주문당 TOP_UP 원장 1건을 보장하는 UNIQUE FK 추가 |
 | 추가 | `outbox_event` 테이블 | ERD 반영 + `V18__create_outbox_event_table.sql`로 슬롯 해제 이벤트 기록 테이블 추가. FK 없음, UNIQUE `event_id`, INDEX `(status, id)` |
+| 추가 | `waitlist_entry` 테이블, `reservation` 인덱스 | ERD 반영 + `V17__create_waitlist_entry_table.sql`로 예약 대기 테이블(활성 UNIQUE, CHECK 2개, 인덱스 2개)과 `idx_reservation_member_space_status_start` 추가. FK 없음 |
+| 추가 | `processed_event` 테이블 | ERD 반영 + `V19__create_processed_event_table.sql`로 컨슈머 멱등 기록 추가. `UNIQUE(consumer, event_id)`, FK 없음 |
+| 추가 | `notification` 테이블 | ERD 반영 + `V20__create_notification_table.sql`로 대기자 알림 추가. `UNIQUE(event_id, waitlist_entry_id)`, 인덱스 `(member_id, id)`·`(member_id, read_at)`, FK 없음 |
 
 ### 이번 반영에서 함께 발견/수정한 모순
 

@@ -37,6 +37,6 @@
 | 테이블 | 컬럼 | 제약·인덱스 |
 | --- | --- | --- |
 | `waitlist_entry` | id, member_id, space_id, start_time, end_time, status(WAITING/CANCELLED/EXPIRED), active(TINYINT NULL — WAITING이면 1, 아니면 NULL), last_notified_at, created_at | UNIQUE(member_id, space_id, start_time, end_time, active), CHECK(status='WAITING' <=> active=1 — 둘이 어긋난 행을 DB에서 막는다), INDEX(space_id, status, start_time), INDEX(member_id, status) |
-| `notification` | id, member_id, type(SLOT_AVAILABLE), ref_entry_id, message, read_at, created_at | INDEX(member_id, read_at, id) |
+| `notification` | id, member_id, waitlist_entry_id, event_id, message, read_at, created_at *(2026-10-16 구현 기준 정정 — 초안의 `type`·`ref_entry_id`는 두지 않았다. 종류가 하나뿐이고 대기 항목을 `waitlist_entry_id`로 직접 가리킨다. 결정: [waitlist 결정 문서](../../decisions/waitlist.md))* | UNIQUE(event_id, waitlist_entry_id), INDEX(member_id, id), INDEX(member_id, read_at) |
 
-API: `POST /waitlist`, `DELETE /waitlist/{id}`, `GET /waitlist/me`, `GET /notifications`, `PATCH /notifications/{id}/read`. Flyway 번호는 브랜치 분기 시점의 다음 번호를 쓰고, 천종원(계정 V1~V3)이 먼저 머지하면 재번호한다.
+API: `POST /waitlist`, `DELETE /waitlist/{id}`, `GET /waitlist/me`, `GET /notifications`, `GET /notifications/unread-count`. *(2026-10-16: `PATCH /notifications/{id}/read`는 구현하지 않았다 — 계획이 읽음 API를 자르기 대상으로 정했다. 3차.)* Flyway 번호는 브랜치 분기 시점의 다음 번호를 쓰고, 천종원(계정 V1~V3)이 먼저 머지하면 재번호한다.

@@ -100,7 +100,7 @@
 - 팀 리더의 대리 예약과 대리 취소, 관리자의 타인 예약 일반 대리 취소/출입 키 발급
 - 회원 등급, 멤버십, 쿠폰, 할인 등 동적 요금 정책
 - 예약 시간대 이동(변경) — 기존 예약 취소 후 신규 예약 흐름으로 처리 (연장은 뒷 슬롯 확장이므로 지원)
-- 예약 대기(대기번호) 및 자동 승격, 점검 시간 블록, 크레딧 회수
+- 예약 대기의 자동 승격(순번 선점권), 점검 시간 블록, 크레딧 회수 *(자리가 나면 대기자 전원에게 알리는 선착순 대기·알림은 구현함 — 아래 "예약 대기와 빈자리 알림")*
 - 패스키/QR 물리 출입 단말 연동, 소셜 로그인, 모바일 네이티브 앱
 
 ## 🛠️ 기술 스택
@@ -293,6 +293,20 @@ stateDiagram-v2
 - **새로고침 대비**: 이미 `PAID`인 주문을 같은 paymentKey로 재요청하면 200 `PAID`를 반환합니다.
 - 상세: [docs/decisions/pg-charge.md](docs/decisions/pg-charge.md)
 
+### 예약 대기와 빈자리 알림
+
+```
+[1] POST /waitlist                      점유 중인 구간에 대기 신청 (활성 3건 제한, 본인 점유 차단)
+[2] 취소 · 강제 취소 · 홀드 만료          슬롯이 풀리는 3곳에서 같은 트랜잭션에 outbox_event(PENDING) INSERT
+[3] relay (@Scheduled 폴링)             PENDING을 Kafka(slot-released, 키 spaceId)로 발행 → PUBLISHED
+[4] 컨슈머 (processed_event 멱등)        그 시점의 DB로 대상을 다시 골라 notification 저장
+[5] GET /notifications                  대기자가 알림 확인 → 예약은 기존 POST /reservations (선착순, 슬롯 UNIQUE가 판정)
+```
+
+- 알림은 힌트이고 자리를 보장하지 않는다. 순번을 약속하려면 직접 예약 경로를 막아야 해 예약 동시성 경로를 건드리므로 자동 선점권은 3차로 미뤘다.
+- 같은 이벤트가 중복 전달되어도 알림은 한 번만 생긴다(`UNIQUE(consumer, event_id)` + `UNIQUE(event_id, waitlist_entry_id)`). Kafka는 로컬 compose 프로필(`kafka`)과 `SLOTKEY_KAFKA_ENABLED=true`에서만 켜지고, 기본값(꺼짐)에서는 알림이 생성되지 않는다.
+- 상세: [예약 대기](docs/decisions/waitlist.md), [Outbox·Kafka](docs/decisions/outbox-kafka.md)
+
 ### 예약 상태 전이
 
 ```mermaid
@@ -419,6 +433,11 @@ Authorization: Bearer {accessToken}
 | 관리자 | `GET` | `/admin/inquiries` | 관리자 전체 문의 목록 조회 |
 | 관리자 | `GET` | `/admin/inquiries/{inquiryId}` | 관리자 문의 상세 조회 |
 | 관리자 | `POST` | `/admin/inquiries/{inquiryId}/answer` | 관리자 문의 답변 등록 |
+| 대기 | `POST` | `/waitlist` | 점유 중인 구간에 대기 신청 (활성 3건 제한) |
+| 대기 | `DELETE` | `/waitlist/{waitlistEntryId}` | 본인 대기 취소 |
+| 대기 | `GET` | `/waitlist/me` | 내 활성 대기 목록 |
+| 알림 | `GET` | `/notifications` | 내 알림 목록 (최신순, 페이징) |
+| 알림 | `GET` | `/notifications/unread-count` | 안 읽은 알림 개수 |
 
 - 공간 및 슬롯 조회는 비로그인 상태에서도 가능합니다.
 - 결제 확정(`/pay`) 요청에는 중복 처리를 방지하는 `Idempotency-Key` 헤더가 필수입니다.
@@ -686,4 +705,6 @@ DDL은 Flyway로 버전 관리하며, `backend/src/main/resources/db/migration/`
 - [관리자 공간 대표 사진 안내](docs/api/admin-space-image-upload.md): 5MB 제한, Content-Type 검증, 로컬 정적 서빙 및 MVC 흐름
 - [1:1 문의 기능 요구사항](docs/product/requirements.md#후속-추가-기능-mvp-이후-확장): 회원 질문-관리자 단일 답변 구조 및 스키마 정책
 - [PG 크레딧 충전](docs/decisions/pg-charge.md): 승인 3단계와 트랜잭션 경계, 결과 미확정 복구, 응답 정책
-- 설계 중(미구현): [예약 대기](docs/decisions/waitlist.md), [Outbox·Kafka](docs/decisions/outbox-kafka.md), [고위험 행위 재인증](docs/decisions/step-up-auth.md)
+- [예약 대기와 빈자리 알림](docs/decisions/waitlist.md): 전원 알림 + 선착순(순번 선점은 3차), 알림 대상을 지금의 DB로 재선정
+- [Outbox·Kafka](docs/decisions/outbox-kafka.md): 같은 트랜잭션 Outbox, 폴링 relay, 컨슈머 멱등(`processed_event`)
+- 설계 중(미구현): [고위험 행위 재인증](docs/decisions/step-up-auth.md)

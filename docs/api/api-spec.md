@@ -5,7 +5,7 @@
 > **2026-09-17 갱신 (docs/api)**: 실제 컨트롤러 코드 기준으로 동기화 — Base URL `/api/v1`, 취소 API `POST .../cancel`, 요청/응답 필드, 관리자 예약 목록 필터 미지원, 미구현 API 표시. **프론트는 이 문서를 기준으로 한다.** (claude.ai 프로젝트 문서 `claude/api-명세서.md`는 구버전 — 참고 금지)
 > **2026-09-24 갱신 (대단위 1)**: 컨트롤러·DTO·`SecurityConfig`·`ErrorCode` 전수 조사 기반 정합성 동기화 — 실제 응답 DTO 필드, 엔드포인트별 페이지네이션 반환 형태(`PageResponse` vs Spring `Page`), 오프셋 없는 ISO-8601 LocalDateTime(KST), 멱등성 캐시 동작, 실존 `ErrorCode` 반영 및 미구현/결정 필요 항목(`termsVersion`, 동일 멱등키 충돌 검사, 정지 계정 즉시 차단) 분리 명시.
 
-> **2026-10-15 안내**: 예약 대기 API(`POST /waitlist`, `DELETE /waitlist/{id}`, `GET /waitlist/me`)와 `WAITLIST_*` 에러 코드 5개, `waitlist_entry` 테이블은 **이 문서에 아직 미반영**이다(10/21 5단계에 반영 예정). 구현 상태는 [plans/waitlist-outbox/01-waitlist-rules.md](../plans/waitlist-outbox/01-waitlist-rules.md)와 [lab/notes/waitlist-outbox/](../lab/notes/waitlist-outbox/)를 본다.
+> **2026-10-16 갱신 (5단계)**: 예약 대기 API(§12), 내 알림 조회 API(§13), `WAITLIST_*` 에러 코드 5개, 새 테이블(`waitlist_entry`, `processed_event`, `notification`)을 반영했다. 슬롯이 풀리면 Outbox → Kafka → 컨슈머가 대기자에게 알림을 저장한다(알림은 힌트이며 예약은 선착순, 자리를 보장하지 않는다). 결정 기록은 [decisions/waitlist.md](../decisions/waitlist.md), [decisions/outbox-kafka.md](../decisions/outbox-kafka.md)를 본다.
 
 ## 공통 사항
 
@@ -15,7 +15,7 @@
 - JWT 페이로드는 `id`, `email`, `role`, 만료 시각(`exp`)을 포함한다. 보호 API 요청 시 서명과 만료 시각을 검증하여 인증하며, **매 요청마다 회원 DB를 재조회하지 않는다**. 비즈니스 서비스(`ReservationHoldService`, `DoorAccessVerificationService` 등)에서도 회원 `ACTIVE` 여부를 별도 재조회하지 않으므로, 회원이 정지되어도 기존 Access Token은 만료 전까지 기술적으로 요청이 통과될 수 있다. 토큰 재발급(`POST /auth/refresh`) 시에만 DB 조회를 거쳐 `ACCOUNT_INACTIVE`(403)로 차단된다. (정지 즉시 기존 토큰 및 서비스 차단은 **결정 필요** 항목으로 관리)
 - 인증 불필요 API: 회원가입, 로그인, 토큰 재발급, 로그아웃, 공간 목록/상세 조회, 슬롯 가용성 조회, 공간 이미지 공개 조회(`GET /space-images/{fileName}`).
 - 공통 응답: `{ status, code, message, data }` (`status`: SUCCESS | FAIL, 성공 시 `code`: "OK"). 단, `ApiResponse` 클래스에 `@JsonInclude(JsonInclude.Include.NON_NULL)`가 적용되어 있어 Java 상에서 `data == null`인 경우(실패 응답 또는 `ApiResponse<Void>`) 실제 HTTP JSON 직렬화 시 `"data"` 필드 자체가 생략된다.
-- 페이지네이션 형식: 공통 래퍼 `PageResponse<T>` (`content`, `page`, `size`, `totalElements`, `totalPages`)를 사용한다. 대상: 공간 목록(`GET /spaces`), 관리자 공간 목록(`GET /admin/spaces`), 내 예약 목록(`GET /reservations`), 관리자 예약 목록(`GET /admin/reservations`), 관리자 회원 목록(`GET /admin/members`), 관리자 감사 로그(`GET /admin/audit-logs`), 문의 목록(`GET /inquiries`), 관리자 문의 목록(`GET /admin/inquiries`).
+- 페이지네이션 형식: 공통 래퍼 `PageResponse<T>` (`content`, `page`, `size`, `totalElements`, `totalPages`)를 사용한다. 대상: 공간 목록(`GET /spaces`), 관리자 공간 목록(`GET /admin/spaces`), 내 예약 목록(`GET /reservations`), 관리자 예약 목록(`GET /admin/reservations`), 관리자 회원 목록(`GET /admin/members`), 관리자 감사 로그(`GET /admin/audit-logs`), 문의 목록(`GET /inquiries`), 관리자 문의 목록(`GET /admin/inquiries`), 내 알림 목록(`GET /notifications`).
 - 시간: ISO-8601 문자열. 서버 직렬화는 타임존 오프셋 표기가 없는 `LocalDateTime` 형식(`"yyyy-MM-dd'T'HH:mm:ss"`)이며, 서버 내부 기준시계는 KST(`Asia/Seoul`, `Clock`)이다. 클라이언트는 이 문자열을 한국 표준시(KST)로 해석하는 것이 설계 목표이다. *(주의: 현재 프론트 `HoldCountdown.tsx`는 `new Date(holdExpiresAt)`로 브라우저 로컬 시간대로 직접 파싱하고 있어 비-KST 환경에서 오차 가능성이 있으며, 시간 파싱 코드 정정은 별도 프론트 코드 과제로 추적한다)*. 날짜는 `"yyyy-MM-dd"`, 시각은 `"HH:mm:ss"`. 예약 시간은 **30분의 배수**만 허용.
 - `Idempotency-Key`(UUID) 헤더:
   - **실제로 돈이 움직이는 `POST /reservations/{id}/pay`에만 필수** (누락 시 400 `IDEMPOTENCY_KEY_REQUIRED`). `POST /reservations`(HOLD 생성)는 결제가 없으므로 대상 아님.
@@ -33,14 +33,14 @@
 | --- | --- | --- |
 | 200 | 조회/처리 성공 | 목록·상세, 결제 확정, 취소 성공 |
 | 201 | 생성 성공 | 예약(HOLD) 생성, 회원가입, 공간 등록, 도어 토큰 발급, 문의 등록 |
-| 204 | 본문 없음 성공 | 로그아웃 |
+| 204 | 본문 없음 성공 | 로그아웃, 대기 취소 |
 | 400 | 요청 형식 오류 | 필수 필드 누락, 형식 위반, 30분 단위 위반, 가격 단위 위반, 멱등키 누락, 이미지 형식/해상도 위반, 문의 입력값 오류 |
 | 401 | 인증 실패 | 토큰 없음(`AUTHENTICATION_REQUIRED`), 토큰 만료/위조(`INVALID_ACCESS_TOKEN`, `INVALID_REFRESH_TOKEN`), 로그인 자격증명 불일치(`INVALID_CREDENTIALS`) |
 | 403 | 인가 실패 | 역할 불충분(`ACCESS_DENIED`, `FORBIDDEN_ROLE`), 소유권 불일치(`FORBIDDEN_NOT_OWNER`), 정지 계정 로그인/재발급 거절(`ACCOUNT_INACTIVE`) |
-| 404 | 자원 없음 | 존재하지 않는 spaceId(`SPACE_NOT_FOUND`), reservationId(`RESERVATION_NOT_FOUND`), memberId(`MEMBER_NOT_FOUND`), inquiryId(`INQUIRY_NOT_FOUND`), fileName(`IMAGE_NOT_FOUND`) |
-| 409 | 상태 충돌 | 슬롯 중복(`RESERVATION_SLOT_CONFLICT`), 이미 취소/만료/확정된 예약에 대한 요청(`RESERVATION_STATE_CONFLICT`), `space.version` 불일치(`SPACE_VERSION_MISMATCH`), 공간 운영시간 축소 충돌(`SPACE_OPERATING_HOURS_CONFLICT`), 이메일 중복(`EMAIL_ALREADY_EXISTS`), 다른 충전 주문의 멱등키 재사용(`IDEMPOTENCY_KEY_REUSED`) |
+| 404 | 자원 없음 | 존재하지 않는 spaceId(`SPACE_NOT_FOUND`), reservationId(`RESERVATION_NOT_FOUND`), memberId(`MEMBER_NOT_FOUND`), inquiryId(`INQUIRY_NOT_FOUND`), waitlistEntryId(`WAITLIST_NOT_FOUND`), fileName(`IMAGE_NOT_FOUND`) |
+| 409 | 상태 충돌 | 슬롯 중복(`RESERVATION_SLOT_CONFLICT`), 이미 취소/만료/확정된 예약에 대한 요청(`RESERVATION_STATE_CONFLICT`), `space.version` 불일치(`SPACE_VERSION_MISMATCH`), 공간 운영시간 축소 충돌(`SPACE_OPERATING_HOURS_CONFLICT`), 이메일 중복(`EMAIL_ALREADY_EXISTS`), 다른 충전 주문의 멱등키 재사용(`IDEMPOTENCY_KEY_REUSED`), 이미 신청한 대기(`WAITLIST_DUPLICATE`) |
 | 413 | 페이로드 초과 | 공간 대표 사진 파일 크기 5MB 초과(`IMAGE_SIZE_EXCEEDED`) |
-| 422 | 비즈니스 규칙 위반 | 크레딧 잔액 부족(`INSUFFICIENT_BALANCE`), 연장 불가(`RESERVATION_EXTEND_NOT_ALLOWED`), 비활성 공간(`SPACE_INACTIVE`), 관리자 정지/복구 불가(`TARGET_IS_ADMIN`), 자기 자신 크레딧 지급 불가(`SELF_GRANT_NOT_ALLOWED`), 답변 완료 문의 수정 불가(`INQUIRY_ALREADY_ANSWERED`) |
+| 422 | 비즈니스 규칙 위반 | 크레딧 잔액 부족(`INSUFFICIENT_BALANCE`), 연장 불가(`RESERVATION_EXTEND_NOT_ALLOWED`), 비활성 공간(`SPACE_INACTIVE`), 관리자 정지/복구 불가(`TARGET_IS_ADMIN`), 자기 자신 크레딧 지급 불가(`SELF_GRANT_NOT_ALLOWED`), 답변 완료 문의 수정 불가(`INQUIRY_ALREADY_ANSWERED`), 대기 불필요(`WAITLIST_NOT_NEEDED`), 본인 점유와 겹침(`WAITLIST_ALREADY_HOLDING`), 대기 3건 초과(`WAITLIST_LIMIT_EXCEEDED`) |
 | 500 | 서버 오류 | 이미지 디스크 저장 실패(`IMAGE_STORAGE_ERROR`) |
 
 ## 2. 인증 (Auth)
@@ -368,6 +368,9 @@
 | `audit_log.action` | `REGISTER_SPACE`, `MODIFY_SPACE`, `SUSPEND_MEMBER`, `REACTIVATE_MEMBER`, `FORCE_CANCEL_RESERVATION`, `GRANT_CREDIT` |
 | `audit_log.target_type` | `SPACE`, `MEMBER`, `RESERVATION` |
 | `inquiry.status` | `WAITING`, `ANSWERED` |
+| `waitlist_entry.status` | `WAITING`, `CANCELLED`, `EXPIRED` (`EXPIRED` 전이는 미구현 — 구간이 지난 `WAITING` 행은 "활성" 기준(시작 시각이 미래)에서 빠질 뿐 상태는 그대로다) |
+| `outbox_event.status` | `PENDING`, `PUBLISHED` |
+| `SlotReleased.reason` (Kafka payload) | `CANCELLED`, `FORCE_CANCELLED`, `HOLD_EXPIRED` |
 
 > ~~`payment.status`~~ 는 `payment` 테이블 삭제와 함께 제거됨. 결제 결과는 `credit_transaction`으로 표현한다.
 
@@ -390,3 +393,34 @@
 6. **HOLD 카운트다운 시간대 해석 차이 (프론트 별도 코드 과제)**
    - **현재 구현**: 백엔드는 오프셋 없는 ISO-8601 문자열(`yyyy-MM-dd'T'HH:mm:ss`)을 KST 기준으로 반환하고 클라이언트의 KST 해석을 기대하나, 프론트엔드 `HoldCountdown.tsx`는 `new Date(holdExpiresAt)`를 사용하여 **브라우저 로컬(현지) 시간대**로 파싱한다. KST가 아닌 브라우저 환경(예: UTC)에서는 만료 시점 계산에 9시간 등의 시간차가 발생할 수 있다.
    - **결정 과제**: 프론트엔드 `HoldCountdown.tsx`에서 타임존 오프셋(`+09:00`)을 명시적으로 결합하여 KST로 고정 파싱하도록 하는 수정은 문서 최신화 범위 밖의 **별도 프론트엔드 코드 과제**로 분리하여 추적한다.
+7. **알림 읽음 처리 API 미구현 (3차)**
+   - **현재 구현**: `notification.read_at`은 항상 `NULL`이고 안 읽은 개수는 줄지 않는다. 01 문서에 있던 `PATCH /notifications/{id}/read`는 구현하지 않았다(계획 문서가 읽음 API를 자르기 대상으로 정함).
+   - **결정 과제**: 3차에 읽음 처리와 SSE·메일 등 전달 수단을 함께 설계할지 결정 필요.
+
+## 12. 예약 대기 (Waitlist)
+
+> 점유 중인 구간에 "자리가 비면 알려 달라"고 거는 기록이다. **예약 성사를 보장하지 않는다** — 슬롯이 풀리면 조건에 맞는 대기자 전원에게 알림을 보내고, 예약은 기존 `POST /reservations`의 슬롯 UNIQUE로 선착순 처리된다. 규칙 상세는 [plans/waitlist-outbox/01-waitlist-rules.md](../plans/waitlist-outbox/01-waitlist-rules.md). 모든 API는 인증이 필요하다.
+
+- `POST /waitlist`: 대기 신청. 요청 `{ spaceId, startTime, endTime }`(`startTime`/`endTime`은 오프셋 없는 `yyyy-MM-dd'T'HH:mm:ss`, 기존 예약과 같은 시간 규칙). 응답 201 `ApiResponse<WaitlistEntryResponse>`.
+  - 검사 순서: 공간 → 구간 → 회원 상태 → 점유 여부 → 본인 점유 → 활성 건수 → 중복. 구간의 슬롯이 **하나라도 점유 중일 때만** 신청할 수 있다.
+  - 오류: `VALIDATION_FAILED`(400), `INVALID_RESERVATION_TIME`(400), `AUTHENTICATION_REQUIRED`(401), `ACCOUNT_WITHDRAWN`(401), `ACCOUNT_INACTIVE`(403), `SPACE_NOT_FOUND`(404), `WAITLIST_DUPLICATE`(409), `SPACE_INACTIVE`(422), `WAITLIST_NOT_NEEDED`(422, 구간이 전부 비어 있음), `WAITLIST_ALREADY_HOLDING`(422, 같은 공간·겹치는 시간에 본인의 만료 전 `HELD`·`CONFIRMED`·`IN_USE` 예약이 있음), `WAITLIST_LIMIT_EXCEEDED`(422, 활성 대기 3건 초과)
+- `DELETE /waitlist/{waitlistEntryId}`: 본인 대기 취소. 응답 204(본문 없음). 이미 취소된 건에 다시 요청해도 204(멱등). 관리자도 타인의 대기는 취소할 수 없다. 오류: `AUTHENTICATION_REQUIRED`(401), `FORBIDDEN_NOT_OWNER`(403), `WAITLIST_NOT_FOUND`(404)
+- `GET /waitlist/me`: 내 활성 대기 목록(신청 순서대로). 응답 200 `ApiResponse<List<WaitlistEntryResponse>>`(페이지네이션 없음). 오류: `AUTHENTICATION_REQUIRED`(401)
+
+"활성 대기"의 기준은 신청 제한(3건)·신청 순서·내 목록 모두 `status = WAITING AND startTime > now`로 같다. 취소하면 같은 구간을 다시 신청할 수 있다(새 행이므로 순서는 맨 뒤).
+
+### 응답 필드 (`WaitlistEntryResponse`)
+
+`id`, `spaceId`, `startTime`, `endTime`, `status`, `position`, `createdAt`. `position`은 "같은 공간에서 구간이 겹치는 활성 대기 중 나보다 먼저 신청한 건수 + 1"이며 안내용이다. 구간이 부분만 겹치면 사람마다 기준 집합이 달라 전체 순서가 아니고, 자리를 보장하지도 않는다.
+
+## 13. 알림 (Notification)
+
+> 슬롯 해제 이벤트(`SlotReleased`)를 컨슈머가 처리해 만든 "자리가 비었다" 알림이다. 알림 대상은 이벤트 payload가 아니라 **그 시점의 DB**로 다시 고른다: 같은 공간의 활성 대기 중 해제 구간과 겹치고, 신청 구간 **전체**가 지금 비어 있으며, 회원이 `ACTIVE`이고, 본인이 겹치는 만료 전 `HELD`·`CONFIRMED`·`IN_USE` 예약을 갖고 있지 않은 항목이다. 알림 후에도 대기는 `WAITING`을 유지한다. Kafka를 끈 환경(`slotkey.kafka.enabled=false`, 기본값)에서는 알림이 생성되지 않는다.
+
+- `GET /notifications` (인증 필요): 내 알림 목록, 최신순(id 내림차순). `page`, `size`(기본 20). 응답 200 `ApiResponse<PageResponse<NotificationResponse>>`. 오류: `AUTHENTICATION_REQUIRED`(401). 본인 알림만 조회된다.
+- `GET /notifications/unread-count` (인증 필요): 안 읽은 알림 개수. 응답 200 `ApiResponse<{ unreadCount }>`. 오류: `AUTHENTICATION_REQUIRED`(401)
+- 읽음 처리 API는 없다(§11-7).
+
+### 응답 필드 (`NotificationResponse`)
+
+`id`, `waitlistEntryId`, `message`, `read`(불리언, `read_at`이 있으면 `true`), `createdAt`. `message`는 생성 시점의 공간 이름·구간을 담은 문자열 스냅샷이며 선착순·예약 비보장 안내를 포함한다.
