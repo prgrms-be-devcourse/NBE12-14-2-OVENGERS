@@ -68,6 +68,23 @@ class OutboxRecordIntegrationTest extends ReservationIntegrationTestSupport {
         assertEvent(reservation, space, "CANCELLED");
     }
 
+    @Test
+    void heldCancellationReleasesSlotsWithoutRefundAndRecordsOneEvent() throws Exception {
+        Long member = createMember(0);
+        Long space = createSpace();
+        Long reservation = createReservation(member, space, ReservationStatus.HELD,
+                tomorrowAt(14, 0), tomorrowAt(15, 0));
+
+        cancelService.cancel(member, reservation);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM reservation WHERE id = ?", String.class, reservation)).isEqualTo("CANCELLED");
+        assertThat(countSlots(reservation)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM credit_transaction WHERE member_id = ?", Integer.class, member)).isZero();
+        assertEvent(reservation, space, "CANCELLED");
+    }
+
     @ParameterizedTest
     @EnumSource(value = ReservationStatus.class, names = {"CONFIRMED", "HELD"})
     void forceCancellationRecordsOneEvent(ReservationStatus status) throws Exception {

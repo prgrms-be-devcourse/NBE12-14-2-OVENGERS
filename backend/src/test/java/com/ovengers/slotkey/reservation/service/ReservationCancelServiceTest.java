@@ -245,4 +245,59 @@ class ReservationCancelServiceTest {
         verify(reservationSlotRepository, never()).deleteByReservationId(any());
         verify(creditService, never()).refund(any(), any(), anyInt());
     }
+
+    private Reservation heldReservation(ReservationStatus status) {
+        return Reservation.builder()
+                .id(RESERVATION_ID)
+                .memberId(MEMBER_ID)
+                .spaceId(5L)
+                .startTime(startTime)
+                .endTime(startTime.plusHours(1))
+                .status(status)
+                .pricePerSlotSnapshot(5000)
+                .totalAmount(TOTAL_AMOUNT)
+                .holdExpiresAt(now.plusMinutes(5))
+                .createdAt(now.minusMinutes(5))
+                .build();
+    }
+
+    @Test
+    @DisplayName("결제 대기(HELD) 예약을 취소하면 슬롯을 반환하고 환불·위약금 없이 CANCELLED가 되며 빈자리 이벤트를 기록한다")
+    void cancel_held_releasesSlotWithoutRefund() {
+        given(reservationRepository.findById(RESERVATION_ID)).willReturn(
+                Optional.of(heldReservation(ReservationStatus.HELD)),
+                Optional.of(heldReservation(ReservationStatus.CANCELLED)));
+        given(reservationRepository.cancelIfHeld(
+                RESERVATION_ID, now, ReservationStatus.HELD, ReservationStatus.CANCELLED))
+                .willReturn(1);
+
+        ReservationResponse response = cancelService.cancel(MEMBER_ID, RESERVATION_ID);
+
+        assertThat(response.status()).isEqualTo("CANCELLED");
+        assertThat(response.refundAmount()).isZero();
+        assertThat(response.penaltyAmount()).isZero();
+        verify(reservationSlotRepository).deleteByReservationId(RESERVATION_ID);
+        verify(reservationStatusHistoryRepository).save(any());
+        verify(slotReleasedRecorder).record(RESERVATION_ID, 5L, SlotReleasedRecorder.Reason.CANCELLED);
+        verify(reservationRepository, never()).cancelIfConfirmedAndBeforeStart(any(), any(), any(), any());
+        verify(creditService, never()).refund(any(), any(), anyInt());
+        verify(creditService, never()).penalize(any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("결제 대기 취소 중 이미 결제·만료로 상태가 바뀌었으면 RESERVATION_STATE_CONFLICT이고 슬롯·이벤트를 건드리지 않는다")
+    void cancel_held_conflictWhenStateChanged() {
+        given(reservationRepository.findById(RESERVATION_ID))
+                .willReturn(Optional.of(heldReservation(ReservationStatus.HELD)));
+        given(reservationRepository.cancelIfHeld(
+                RESERVATION_ID, now, ReservationStatus.HELD, ReservationStatus.CANCELLED))
+                .willReturn(0);
+
+        assertThatThrownBy(() -> cancelService.cancel(MEMBER_ID, RESERVATION_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESERVATION_STATE_CONFLICT);
+
+        verify(reservationSlotRepository, never()).deleteByReservationId(any());
+        verify(slotReleasedRecorder, never()).record(any(), any(), any());
+    }
 }

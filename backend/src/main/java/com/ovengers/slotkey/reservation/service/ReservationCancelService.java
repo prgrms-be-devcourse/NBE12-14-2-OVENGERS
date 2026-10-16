@@ -59,6 +59,11 @@ public class ReservationCancelService {
 
         LocalDateTime now = LocalDateTime.now(clock);
 
+        // 결제 전(HELD)은 차감된 크레딧이 없으므로 환불·위약금·출입 토큰 없이 슬롯만 돌려준다.
+        if (reservation.getStatus() == ReservationStatus.HELD) {
+            return cancelHeld(reservation, now);
+        }
+
         // 취소 가능 여부의 최종 판정(§9). 영향 행이 0이면 이미 취소/완료된 예약이거나
         // 이미 시작된 예약이다 — 조회 시점과 UPDATE 시점 사이의 경합(체크아웃/노쇼 배치와의
         // 동시 처리 포함)도 이 조건부 UPDATE 하나로 막는다.
@@ -106,5 +111,27 @@ public class ReservationCancelService {
 
         int refundAmount = totalAmount - penaltyAmount;
         return ReservationResponse.ofCancelled(cancelled, refundAmount, penaltyAmount);
+    }
+
+    /** 결제 대기 취소. 잠금 순서는 Reservation(UPDATE) -> Slot(DELETE)로 결제 확정 경로와 교차하지 않는다. */
+    private ReservationResponse cancelHeld(Reservation reservation, LocalDateTime now) {
+        Long reservationId = reservation.getId();
+        int updated = reservationRepository.cancelIfHeld(
+                reservationId, now, ReservationStatus.HELD, ReservationStatus.CANCELLED);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.RESERVATION_STATE_CONFLICT, "취소할 수 없는 상태입니다.");
+        }
+
+        reservationSlotRepository.deleteByReservationId(reservationId);
+
+        reservationStatusHistoryRepository.save(
+                ReservationStatusHistory.of(reservationId, reservation.getMemberId(),
+                        ReservationStatus.HELD, ReservationStatus.CANCELLED, null, now));
+
+        slotReleasedRecorder.record(reservationId, reservation.getSpaceId(), SlotReleasedRecorder.Reason.CANCELLED);
+
+        Reservation cancelled = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
+        return ReservationResponse.ofCancelled(cancelled, 0, 0);
     }
 }

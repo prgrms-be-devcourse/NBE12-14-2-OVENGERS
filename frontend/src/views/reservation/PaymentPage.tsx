@@ -8,7 +8,7 @@ import SpacePhoto from '../../components/space/SpacePhoto';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiError } from '../../api/client';
-import { getMyReservation, payReservation } from '../../api/reservationApi';
+import { cancelReservation, getMyReservation, payReservation } from '../../api/reservationApi';
 import { getSpace } from '../../api/spaceApi';
 import { useAction, useAsync } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
@@ -24,6 +24,7 @@ import {
 import { formatCredit, formatWon } from '../../utils/price';
 import HoldCountdown from '../../components/reservation/HoldCountdown';
 import Button from '../../components/common/Button';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import Modal from '../../components/common/Modal';
@@ -47,6 +48,7 @@ export default function PaymentPage() {
   const agreed = hasAllBookingAgreements(acceptedIds);
   const [locallyExpired, setLocallyExpired] = useState(false);
   const [insufficientOpen, setInsufficientOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   const handleExpire = useCallback(
       () => setLocallyExpired(true),
@@ -94,6 +96,14 @@ export default function PaymentPage() {
     router.replace(
         ROUTES.reservationDetail(reservationId),
     );
+  });
+
+  // 결제 전(HELD) 예약 취소: 크레딧이 빠지지 않았으므로 환불 없이 슬롯만 풀린다.
+  const cancelHold = useAction(async () => {
+    if (!reservation) return;
+    await cancelReservation(reservation.reservationId);
+    setCancelOpen(false);
+    router.replace(ROUTES.reservations);
   });
 
   // 이미 결제됐거나 만료된 예약이면 상세 화면으로 이동
@@ -482,8 +492,31 @@ export default function PaymentPage() {
               )}{' '}
               크레딧 결제하기
             </Button>
+
+            <Button
+                variant="ghost"
+                wide
+                disabled={pay.loading || locallyExpired}
+                onClick={() => setCancelOpen(true)}
+            >
+              결제 대기 취소
+            </Button>
           </aside>
         </div>
+
+        <ConfirmDialog
+          open={cancelOpen}
+          title="결제 대기를 취소할까요?"
+          description="결제 전이라 크레딧은 차감되지 않으며, 임시 확보한 시간이 바로 풀립니다."
+          confirmLabel="결제 대기 취소"
+          cancelLabel="계속 결제하기"
+          confirmVariant="danger"
+          loading={cancelHold.loading}
+          onConfirm={() => { cancelHold.execute().catch(() => {}); }}
+          onClose={() => setCancelOpen(false)}
+        >
+          <ErrorMessage error={cancelHold.error} />
+        </ConfirmDialog>
 
         <InsufficientCreditDialog
           open={insufficientOpen && !locallyExpired}

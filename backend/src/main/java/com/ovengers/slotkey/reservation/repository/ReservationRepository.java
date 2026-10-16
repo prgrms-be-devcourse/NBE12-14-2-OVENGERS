@@ -60,6 +60,20 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     );
 
     /**
+     * 결제 대기 취소의 문지기. HELD일 때만 CANCELLED로 전이한다. 결제(confirmIfHeldAndNotExpired)와 같은 행을 두고
+     * 경합하므로 둘 중 하나만 영향 행 1을 얻는다. 0이면 이미 결제·만료·취소된 예약이다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Reservation r SET r.status = :cancelled, r.cancelledAt = :now " +
+            "WHERE r.id = :id AND r.status = :held")
+    int cancelIfHeld(
+            @Param("id") Long id,
+            @Param("now") LocalDateTime now,
+            @Param("held") ReservationStatus held,
+            @Param("cancelled") ReservationStatus cancelled
+    );
+
+    /**
      * 관리자 강제 취소의 문지기(core-domain-decisions 6-4). 조회 시점의 상태(expected)가 그대로일 때만 CANCELLED로 전이한다.
      * 영향 행이 0이면 그 사이 다른 요청(본인 취소·체크인·배치 등)이 먼저 상태를 바꾼 것이다.
      */
