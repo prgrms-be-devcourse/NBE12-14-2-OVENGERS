@@ -13,7 +13,7 @@
   - 출입(§7) API도 `/api/v1`로 통일됨(2026-09-17, 기존 `/api`).
 - 인증: Access Token(JWT, `Authorization: Bearer <token>`), Refresh Token(DB 저장, `POST /auth/refresh`, `POST /auth/logout`에서 HttpOnly 쿠키로 전달, Path=`/api/v1/auth`, maxAge=1일).
 - JWT 페이로드는 `id`, `email`, `role`, 만료 시각(`exp`)을 포함한다. 보호 API 요청 시 서명과 만료 시각을 검증하여 인증하며, **매 요청마다 회원 DB를 재조회하지 않는다**. 비즈니스 서비스(`ReservationHoldService`, `DoorAccessVerificationService` 등)에서도 회원 `ACTIVE` 여부를 별도 재조회하지 않으므로, 회원이 정지되어도 기존 Access Token은 만료 전까지 기술적으로 요청이 통과될 수 있다. 토큰 재발급(`POST /auth/refresh`) 시에만 DB 조회를 거쳐 `ACCOUNT_INACTIVE`(403)로 차단된다. (정지 즉시 기존 토큰 및 서비스 차단은 **결정 필요** 항목으로 관리)
-- 인증 불필요 API: 회원가입, 로그인, 토큰 재발급, 로그아웃, 공간 목록/상세 조회, 슬롯 가용성 조회, 공간 이미지 공개 조회(`GET /space-images/{fileName}`).
+- 인증 불필요 API: 회원가입, 로그인, 토큰 재발급, 로그아웃, 공간 목록/상세 조회, 슬롯 가용성 조회, 공간 이미지 공개 조회(`GET /space-images/{fileName}`), 토스페이먼츠 웹훅 수신(`POST /webhooks/tosspayments`, §5-0-3 — 이 경로의 `POST`만 연다).
 - 공통 응답: `{ status, code, message, data }` (`status`: SUCCESS | FAIL, 성공 시 `code`: "OK"). 단, `ApiResponse` 클래스에 `@JsonInclude(JsonInclude.Include.NON_NULL)`가 적용되어 있어 Java 상에서 `data == null`인 경우(실패 응답 또는 `ApiResponse<Void>`) 실제 HTTP JSON 직렬화 시 `"data"` 필드 자체가 생략된다.
 - 페이지네이션 형식: 공통 래퍼 `PageResponse<T>` (`content`, `page`, `size`, `totalElements`, `totalPages`)를 사용한다. 대상: 공간 목록(`GET /spaces`), 관리자 공간 목록(`GET /admin/spaces`), 내 예약 목록(`GET /reservations`), 관리자 예약 목록(`GET /admin/reservations`), 관리자 회원 목록(`GET /admin/members`), 관리자 감사 로그(`GET /admin/audit-logs`), 문의 목록(`GET /inquiries`), 관리자 문의 목록(`GET /admin/inquiries`), 내 알림 목록(`GET /notifications`).
 - 시간: ISO-8601 문자열. 서버 직렬화는 타임존 오프셋 표기가 없는 `LocalDateTime` 형식(`"yyyy-MM-dd'T'HH:mm:ss"`)이며, 서버 내부 기준시계는 KST(`Asia/Seoul`, `Clock`)이다. 클라이언트는 이 문자열을 한국 표준시(KST)로 해석하는 것이 설계 목표이다. *(주의: 현재 프론트 `HoldCountdown.tsx`는 `new Date(holdExpiresAt)`로 브라우저 로컬 시간대로 직접 파싱하고 있어 비-KST 환경에서 오차 가능성이 있으며, 시간 파싱 코드 정정은 별도 프론트 코드 과제로 추적한다)*. 날짜는 `"yyyy-MM-dd"`, 시각은 `"HH:mm:ss"`. 예약 시간은 **30분의 배수**만 허용.
@@ -111,6 +111,27 @@
 - PG 승인은 확인됐지만 DB 2가 실패하면 원인을 로그로 남긴다. 최종 주문이 `CONFIRMING`이면 202로 후속 복구를 기다리고, 다른 처리와 경합해 이미 `PAID`면 200을 반환하며, `FAILED` 등 그 밖의 상태면 `CHARGE_ORDER_STATE_CONFLICT`(409)를 반환한다. `200 + FAILED` 응답은 허용하지 않는다.
 - 복구 스케줄러는 `CONFIRMING` 전이 후 1분 이상 24시간 미만인 주문을 저장된 `paymentKey`로 조회한다. 전송 실패·타임아웃·5xx·404로 Payment 객체를 받지 못하면 사실 없는 `UNKNOWN`으로 1분 뒤 재시도한다. Payment 객체를 받았으면 `paymentKey`·`orderId`·금액·상태·`currency=KRW`가 모두 맞을 때만 `PAID`/`FAILED`를 반영하고, 필수 필드 누락이나 불일치는 즉시 수동 처리 대상으로 표시한다. 정확히 24시간부터는 자동 조회를 중단한다. 수동 처리 표시와 PG 승인/로컬 `FAILED` 경합은 시스템 작업(`actorMemberId=null`)으로 `CHARGE_RECOVERY_MANUAL_REVIEW` 감사 로그를 남기며 기존 관리자 감사 로그 API에서 조회할 수 있다.
 - 오류: `IDEMPOTENCY_KEY_REQUIRED`(400), `CHARGE_ORDER_AMOUNT_MISMATCH`(400), `AUTHENTICATION_REQUIRED`(401), `FORBIDDEN_NOT_OWNER`(403), `ACCOUNT_INACTIVE`(403), `CHARGE_ORDER_NOT_FOUND`(404), `CHARGE_ORDER_STATE_CONFLICT`(409), `IDEMPOTENCY_KEY_REUSED`(409), `PAYMENT_DECLINED`(422), `PG_CONFIRMATION_ERROR`(500).
+
+### 5-0-3. 토스페이먼츠 웹훅 수신 — `POST /webhooks/tosspayments`
+
+- **인증 없음.** 토스페이먼츠 서버가 호출하는 주소라 JWT를 붙일 수 없어, `SecurityConfig`에서 이 경로의 `POST` 하나만 연다. 같은 경로의 다른 메서드와 하위 경로는 인증이 필요하다(401). 근거와 기각한 대안은 [`pg-charge.md` 5단계 설계 결정](../decisions/pg-charge.md) 결정 1.
+- 대상 이벤트: `PAYMENT_STATUS_CHANGED`. 사용하는 헤더는 `tosspayments-webhook-transmission-id`(필수, 웹훅 고유 식별자)와 `tosspayments-webhook-transmission-retried-count`(선택, 숫자가 아니면 무시). 본문은 `{ eventType, createdAt, data }`이며 `data`는 Payment 객체다(출처: 토스페이먼츠 [웹훅 이벤트](https://docs.tosspayments.com/reference/using-api/webhook-events)). 이 이벤트에는 서명이 없으므로 발신자를 검증하지 않는다.
+- **본문을 믿지 않는다.** 수신 경로는 PG를 호출하지 않고 `charge_order` 상태·원장·잔액을 바꾸지 않는다. `data.orderId`·`paymentKey`·`status`는 `pg_webhook_event`에 힌트로 기록만 한다. 본문의 `status=DONE`으로 충전이 확정되지 않는다.
+- 응답(본문 없음):
+  - **200** — `PAYMENT_STATUS_CHANGED`이고 `data.orderId`에 해당하는 `charge_order`가 있으면 `pg_webhook_event`에 `RECEIVED`로 한 행 기록한다. 같은 `transmission-id`가 다시 오면(순차·동시 모두) 기록하지 않고 200만 준다. 이미 `PAID`인 주문도 기록만 한다.
+  - **200(기록 없음)** — 다른 이벤트 타입, `data.orderId` 누락·64자 초과, 없는 주문. 처리할 수 없는 알림이라 재전송을 유도하지 않는다.
+  - **400** `VALIDATION_FAILED` — `tosspayments-webhook-transmission-id` 헤더 누락, 본문 없음, JSON 객체가 아닌 본문. 이 경우에만 토스가 재전송한다(10초 안에 200이 아니면 최대 7회 재전송, 출처: [웹훅 연결하기](https://docs.tosspayments.com/guides/v2/webhook)).
+- **처리 분리(응답과 무관):** 별도 스케줄러가 10초 간격으로 `RECEIVED` 행을 id 순서로 최대 50건 읽어 한 건씩 처리한다. 처리 결과는 HTTP 응답에 영향을 주지 않으며, 행을 `status=DONE`, `result`, `processed_at`으로 한 번만 갱신한다(재시도 없음). 근거는 [`pg-charge.md` 5단계 설계 결정](../decisions/pg-charge.md) 결정 4-1~4-4.
+  | 주문 상태(처리 시점) | PG 조회 | 결과(`result`) | 주문·원장·잔액 |
+  | --- | --- | --- | --- |
+  | `PAID` | 호출 안 함 | `ALREADY_PAID` | 변경 없음 |
+  | `FAILED` | 호출 안 함 | `ORDER_FAILED` | 변경 없음(재개방 안 함) |
+  | `PENDING` | 호출 안 함 | `ORDER_PENDING` | 변경 없음(토스는 `EXPIRED`에도 이 이벤트를 보낸다) |
+  | `CONFIRMING`, 저장된 `paymentKey`·클라이언트 멱등키 없음 | 호출 안 함 | `ORDER_INVARIANT_VIOLATION` | 변경 없음(복구 스케줄러가 수동 처리 표시) |
+  | `CONFIRMING` | **저장된** `paymentKey`로 조회(트랜잭션 밖) | 승인 + `paymentKey`·`orderId`·금액·`currency=KRW`·상태 일치 → 주문 잠금 아래에서 아직 `PAID`가 아니면 `CONFIRMED`(§5-0-2의 기존 DB 2로 이 처리가 전이), 잠금을 얻었을 때 이미 같은 `paymentKey`로 `PAID`면 `ALREADY_PAID` | `CONFIRMED`일 때만 `PAID`·`TOP_UP` 1행·잔액 증가. `ALREADY_PAID`는 변경 없음 |
+  | `CONFIRMING` | 〃 | 승인 아님(실패·모름) → `PG_NOT_APPROVED`, 불일치 → `PG_MISMATCH`, 조회 예외 → `PG_LOOKUP_ERROR` | 변경 없음. `FAILED` 전이·수동 처리 표시는 복구 스케줄러가 한다 |
+  | DB 2가 상태 충돌 | — | 다시 읽어 `PAID`면 `ALREADY_PAID`, 아니면 `STATE_CONFLICT`(기존 `CHARGE_RECOVERY_MANUAL_REVIEW` 감사 로그) | 변경 없음 |
+- 충전 1회: 같은 주문의 웹훅이 여러 번 오거나, 같은 행이 겹쳐 처리되거나, 승인 API와 동시에 DB 2에 들어와도 기존 DB 2의 주문 잠금·상태 검사·`credit_transaction.charge_order_id` UNIQUE로 `TOP_UP`은 한 번이다. 웹훅이 먼저 확정한 뒤 늦게 온 승인 요청은 200 `PAID`를 받는다.
 
 > **프론트 예약 흐름 요약**: ① `POST /reservations`로 HOLD 생성(201) → 응답의 `reservationId`, `spaceVersion`, `holdExpiresAt` 보관 → ② 10분 안에 `POST /reservations/{id}/pay`(헤더 `Idempotency-Key`, 바디 `spaceVersion`)로 확정. 한 번의 호출로 결제까지 끝나지 않는다. 응답에 `payment` 객체는 없다.
 
