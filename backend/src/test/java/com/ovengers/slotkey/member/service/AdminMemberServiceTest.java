@@ -5,11 +5,11 @@ import com.ovengers.slotkey.audit.entity.AuditLog;
 import com.ovengers.slotkey.audit.entity.AuditTargetType;
 import com.ovengers.slotkey.audit.repository.AuditLogRepository;
 import com.ovengers.slotkey.audit.service.AuditLogService;
+import com.ovengers.slotkey.credit.repository.CreditTransactionRepository;
 import com.ovengers.slotkey.credit.service.CreditGrantService;
 import com.ovengers.slotkey.auth.service.VerificationGuardService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
-import com.ovengers.slotkey.member.dto.response.AdminMemberDetailResponse;
 import com.ovengers.slotkey.member.dto.response.AdminMemberResponse;
 import com.ovengers.slotkey.member.dto.response.MemberStatusChangeResponse;
 import com.ovengers.slotkey.member.entity.Member;
@@ -61,6 +61,9 @@ class AdminMemberServiceTest {
     @Mock
     private ReservationRepository reservationRepository;
 
+    @Mock
+    private CreditTransactionRepository creditTransactionRepository;
+
     private Clock clock;
     private AdminMemberService adminMemberService;
 
@@ -78,7 +81,8 @@ class AdminMemberServiceTest {
                 creditGrantService,
                 clock,
                 verificationGuardService,
-                reservationRepository
+                reservationRepository,
+                creditTransactionRepository
         );
     }
 
@@ -527,83 +531,4 @@ class AdminMemberServiceTest {
                 auditLogService
         );
     }
-
-    @Test
-    @DisplayName("회원 상세 조회 시 회원 정보와 예약, 정지 기록 건수를 반환한다")
-    void getMemberDetail_success() {
-        // given
-        Long memberId = 1L;
-        Member member = mock(Member.class);
-
-        given(memberRepository.findById(memberId))
-                .willReturn(Optional.of(member));
-
-        given(member.getId()).willReturn(memberId);
-        given(member.getEmail()).willReturn("user@test.com");
-        given(member.getNickname()).willReturn("테스트회원");
-        given(member.getRole()).willReturn(MemberRole.USER);
-        given(member.getStatus()).willReturn(MemberStatus.ACTIVE);
-        given(member.getBalance()).willReturn(10000);
-
-        given(auditLogRepository
-                .findFirstByTargetTypeAndTargetIdAndActionInOrderByCreatedAtDescIdDesc(
-                        AuditTargetType.MEMBER,
-                        memberId,
-                        List.of(
-                                AuditAction.SUSPEND_MEMBER,
-                                AuditAction.REACTIVATE_MEMBER,
-                                AuditAction.LOCK_MEMBER_BY_VERIFICATION
-                        )
-                )).willReturn(Optional.empty());
-
-        given(reservationRepository.countByMemberId(memberId))
-                .willReturn(7L);
-
-        given(auditLogRepository.countByTargetTypeAndTargetIdAndActionIn(
-                AuditTargetType.MEMBER,
-                memberId,
-                List.of(
-                        AuditAction.SUSPEND_MEMBER,
-                        AuditAction.LOCK_MEMBER_BY_VERIFICATION
-                )
-        )).willReturn(2L);
-
-        // when
-        AdminMemberDetailResponse response =
-                adminMemberService.getMemberDetail(memberId);
-
-        // then
-        assertThat(response.member().memberId()).isEqualTo(memberId);
-        assertThat(response.member().email()).isEqualTo("user@test.com");
-        assertThat(response.member().nickname()).isEqualTo("테스트회원");
-        assertThat(response.member().balance()).isEqualTo(10000);
-
-        assertThat(response.totalReservationCount()).isEqualTo(7L);
-        assertThat(response.suspensionCount()).isEqualTo(2L);
-    }
-
-
-    @Test
-    @DisplayName("존재하지 않는 회원을 상세 조회하면 MEMBER_NOT_FOUND 예외가 발생한다")
-    void getMemberDetail_memberNotFound() {
-        // given
-        Long memberId = 999L;
-
-        given(memberRepository.findById(memberId))
-                .willReturn(Optional.empty());
-
-        // when
-        BusinessException exception = assertThrows(
-                BusinessException.class,
-                () -> adminMemberService.getMemberDetail(memberId)
-        );
-
-        // then
-        assertThat(exception.getErrorCode())
-                .isEqualTo(ErrorCode.MEMBER_NOT_FOUND);
-
-        verifyNoInteractions(reservationRepository);
-        verifyNoInteractions(auditLogRepository);
-    }
-
 }

@@ -6,9 +6,11 @@ import com.ovengers.slotkey.audit.entity.AuditTargetType;
 import com.ovengers.slotkey.audit.repository.AuditLogRepository;
 import com.ovengers.slotkey.audit.service.AuditLogService;
 import com.ovengers.slotkey.auth.service.VerificationGuardService;
+import com.ovengers.slotkey.credit.repository.CreditTransactionRepository;
 import com.ovengers.slotkey.credit.service.CreditGrantService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
+import com.ovengers.slotkey.member.dto.response.AdminMemberCreditTransactionResponse;
 import com.ovengers.slotkey.member.dto.response.AdminMemberDetailResponse;
 import com.ovengers.slotkey.member.dto.response.AdminMemberResponse;
 import com.ovengers.slotkey.member.dto.response.MemberStatusChangeResponse;
@@ -19,7 +21,9 @@ import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +42,7 @@ public class AdminMemberService {
     private final Clock clock;
     private final VerificationGuardService verificationGuardService;
     private final ReservationRepository reservationRepository;
+    private final CreditTransactionRepository creditTransactionRepository;
 
     @Transactional(readOnly = true)
     public Page<AdminMemberResponse> getMembers(MemberStatus status, String keyword, Pageable pageable) {
@@ -75,6 +80,26 @@ public class AdminMemberService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public Page<AdminMemberCreditTransactionResponse> getMemberCreditTransactions(
+            Long memberId,
+            Pageable pageable
+    ) {
+        findMember(memberId);
+
+        Pageable sortedPageable = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(
+                        Sort.Order.desc("createdAt"),
+                        Sort.Order.desc("id")
+                )
+        );
+
+        return creditTransactionRepository
+                .findByMember_Id(memberId, sortedPageable)
+                .map(AdminMemberCreditTransactionResponse::from);
+    }
 
     // 계정 정지
     @Transactional

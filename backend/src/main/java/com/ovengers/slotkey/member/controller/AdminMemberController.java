@@ -6,6 +6,7 @@ import com.ovengers.slotkey.global.security.AuthPrincipal;
 import com.ovengers.slotkey.member.authorization.MemberAuthorizationService;
 import com.ovengers.slotkey.member.dto.request.MemberCreditGrantRequest;
 import com.ovengers.slotkey.member.dto.request.MemberStatusChangeRequest;
+import com.ovengers.slotkey.member.dto.response.AdminMemberCreditTransactionResponse;
 import com.ovengers.slotkey.member.dto.response.AdminMemberDetailResponse;
 import com.ovengers.slotkey.member.dto.response.AdminMemberResponse;
 import com.ovengers.slotkey.member.dto.response.MemberStatusChangeResponse;
@@ -105,6 +106,39 @@ public class AdminMemberController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @Operation(
+            summary = "회원 크레딧 거래 내역 조회",
+            description = "관리자가 특정 회원의 크레딧 충전, 사용, 환급 등 거래 내역을 최신순으로 조회합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "크레딧 거래 내역 조회 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "MEMBER_NOT_FOUND: 회원이 존재하지 않음",
+                    content = @Content
+            )
+    })
+    @GetMapping("/{memberId}/credit-transactions")
+    public ResponseEntity<ApiResponse<PageResponse<AdminMemberCreditTransactionResponse>>>
+    getMemberCreditTransactions(
+            @PathVariable("memberId") Long memberId,
+            @ParameterObject
+            @PageableDefault(size = 20) Pageable pageable,
+            @AuthenticationPrincipal AuthPrincipal authPrincipal
+    ) {
+        memberAuthorizationService.validateCanManageMember(authPrincipal);
+
+        PageResponse<AdminMemberCreditTransactionResponse> response =
+                PageResponse.from(
+                        adminMemberService.getMemberCreditTransactions(memberId, pageable)
+                );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 
     @Operation(
             summary = "회원 정지",

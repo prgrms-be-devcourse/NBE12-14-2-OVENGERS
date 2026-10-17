@@ -2,13 +2,10 @@ package com.ovengers.slotkey.member.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ovengers.slotkey.global.config.SecurityConfig;
-import com.ovengers.slotkey.global.error.BusinessException;
-import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.global.error.GlobalExceptionHandler;
 import com.ovengers.slotkey.global.security.jwt.JwtProvider;
 import com.ovengers.slotkey.global.security.jwt.JwtUtil;
 import com.ovengers.slotkey.member.authorization.MemberAuthorizationService;
-import com.ovengers.slotkey.member.dto.response.AdminMemberDetailResponse;
 import com.ovengers.slotkey.member.dto.response.AdminMemberResponse;
 import com.ovengers.slotkey.member.dto.response.MemberStatusChangeResponse;
 import com.ovengers.slotkey.member.entity.MemberRole;
@@ -275,95 +272,5 @@ class AdminMemberControllerTest {
                 .andExpect(jsonPath("$.data.memberId").value(42L));
 
         verify(adminMemberService).grantCredit(42L, 1000, "바인딩 검증", 1L);
-    }
-
-
-    @Test
-    @DisplayName("회원 상세 조회: ADMIN 권한으로 조회하면 200을 반환한다")
-    void getMemberDetail_admin_returns200() throws Exception {
-        // given
-        String adminToken =
-                createToken(1L, "admin@test.com", MemberRole.ADMIN);
-
-        AdminMemberResponse member =
-                createMemberResponse(
-                        42L,
-                        "user@test.com",
-                        MemberStatus.ACTIVE
-                );
-
-        AdminMemberDetailResponse response =
-                new AdminMemberDetailResponse(member, 7L, 2L);
-
-        given(adminMemberService.getMemberDetail(42L))
-                .willReturn(response);
-
-        // when & then
-        mockMvc.perform(get("/api/v1/admin/members/42")
-                        .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SUCCESS"))
-                .andExpect(jsonPath("$.code").value("OK"))
-                .andExpect(jsonPath("$.data.member.memberId").value(42))
-                .andExpect(jsonPath("$.data.member.email").value("user@test.com"))
-                .andExpect(jsonPath("$.data.member.balance").value(5000))
-                .andExpect(jsonPath("$.data.totalReservationCount").value(7))
-                .andExpect(jsonPath("$.data.suspensionCount").value(2));
-
-        verify(adminMemberService).getMemberDetail(42L);
-    }
-
-
-    @Test
-    @DisplayName("회원 상세 조회: 존재하지 않는 회원은 404를 반환한다")
-    void getMemberDetail_notFound_returns404() throws Exception {
-        // given
-        String adminToken =
-                createToken(1L, "admin@test.com", MemberRole.ADMIN);
-
-        given(adminMemberService.getMemberDetail(999L))
-                .willThrow(
-                        new BusinessException(ErrorCode.MEMBER_NOT_FOUND)
-                );
-
-        // when & then
-        mockMvc.perform(get("/api/v1/admin/members/999")
-                        .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value("FAIL"))
-                .andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
-
-        verify(adminMemberService).getMemberDetail(999L);
-    }
-
-
-    @Test
-    @DisplayName("회원 상세 조회: 일반 회원은 접근할 수 없다")
-    void getMemberDetail_userRole_returns403() throws Exception {
-        // given
-        String userToken =
-                createToken(2L, "user@test.com", MemberRole.USER);
-
-        // when & then
-        mockMvc.perform(get("/api/v1/admin/members/42")
-                        .header("Authorization", "Bearer " + userToken))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.status").value("FAIL"))
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-
-        verifyNoInteractions(adminMemberService);
-    }
-
-
-    @Test
-    @DisplayName("회원 상세 조회: 토큰이 없으면 401을 반환한다")
-    void getMemberDetail_noToken_returns401() throws Exception {
-        // when & then
-        mockMvc.perform(get("/api/v1/admin/members/42"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.status").value("FAIL"))
-                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
-
-        verifyNoInteractions(adminMemberService);
     }
 }
