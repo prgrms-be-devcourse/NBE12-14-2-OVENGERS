@@ -23,6 +23,7 @@ public class FakePgClient implements PgClient {
             PgPaymentLookupResult.unknown();
     private volatile Duration delay = Duration.ZERO;
     private volatile PgConfirmRequest lastConfirmRequest;
+    private volatile String lastLookupPaymentKey;
     private volatile RuntimeException lookupException;
     private volatile Runnable afterLookupDelay = () -> {
     };
@@ -43,6 +44,7 @@ public class FakePgClient implements PgClient {
         transactionActiveDuringCalls.add(
                 TransactionSynchronizationManager.isActualTransactionActive()
         );
+        lastLookupPaymentKey = paymentKey;
         lookupCalls.incrementAndGet();
         sleep();
         afterLookupDelay.run();
@@ -168,6 +170,10 @@ public class FakePgClient implements PgClient {
         return lastConfirmRequest;
     }
 
+    public String lastLookupPaymentKey() {
+        return lastLookupPaymentKey;
+    }
+
     public List<Boolean> transactionActiveDuringCalls() {
         return List.copyOf(transactionActiveDuringCalls);
     }
@@ -180,6 +186,7 @@ public class FakePgClient implements PgClient {
         lookupResult = PgPaymentLookupResult.unknown();
         delay = Duration.ZERO;
         lastConfirmRequest = null;
+        lastLookupPaymentKey = null;
         lookupException = null;
         afterLookupDelay = () -> {
         };

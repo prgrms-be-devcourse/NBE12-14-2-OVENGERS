@@ -97,3 +97,8 @@ slotkey:
       initial-delay-ms: 60000
       fixed-delay-ms: 60000
       batch-size: 50
+    pg-webhook:
+      enabled: true
+      initial-delay-ms: 10000
+      fixed-delay-ms: 10000
+      batch-size: 50

@@ -29,3 +29,5 @@ slotkey:
   scheduler:
     charge-recovery:
       enabled: false
+    pg-webhook:
+      enabled: false
