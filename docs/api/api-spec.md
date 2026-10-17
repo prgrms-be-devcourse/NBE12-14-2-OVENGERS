@@ -444,6 +444,7 @@
 - `GET /admin/stats/location-ranking?period=&date=&metric=&limit=`: 지역별 베스트 랭킹. 공간 행을 스냅샷에 저장된 `location`으로 합산한다. 파라미터와 상태 규칙은 위와 같다. `items[]` 원소: `{ rank, previousRank, location, spaceCount, netRevenue, reservationCount, slotCount }`.
 - `GET /admin/stats/status-counts?date=&spaceId=`: 해당 날짜(KST, 기본 오늘)에 `start_time`이 속한 예약의 상태별 건수. `spaceId`(선택, 양수)를 주면 그 공간만 센다(운영 대시보드의 오피스 필터용). 날짜 형식 오류·`spaceId` 오류는 400 `VALIDATION_FAILED`. **실시간 값**이다(랭킹 스냅샷이 아님). 응답 `{ date, counts: { HELD, EXPIRED, CONFIRMED, IN_USE, COMPLETED, CANCELLED, NO_SHOW } }` — 일곱 상태를 모두 0 포함으로 내려준다.
 
+
 ### 집계 정의와 유의사항
 
 - **순매출(`netRevenue`)**: 크레딧 원장의 `RESERVATION_CHARGE`·`REFUND`·`PENALTY`를 합산한 금액이다(회원 잔액 기준 부호의 반대, `−SUM(amount)`). 결제는 결제 시각에, 환불과 위약금은 **발생 시각**에 반영하는 현금주의다. 위약금은 수익으로 포함한다. 확정 후 발생한 환불은 지난 확정값을 바꾸지 않고 환불이 일어난 날의 값에 반영되므로, 특정 날의 값이 음수가 될 수도 있다.
@@ -461,3 +462,4 @@
   - `metric`은 `RESERVATION_COUNT`(기본) 또는 `SLOT_COUNT`만 허용한다. `NET_REVENUE`는 정렬 순서로 매출 순위가 드러나므로 400 `VALIDATION_FAILED`다.
   - `items[]`에서 `netRevenue`가 빠진다. 공간: `{ rank, previousRank, spaceId, spaceName, location, spaceStatus, reservationCount, slotCount }`, 지역: `{ rank, previousRank, location, spaceCount, reservationCount, slotCount }`.
 - 관리자 랭킹(`/admin/stats/*`)은 그대로 ADMIN 전용이며 순매출을 포함한다.
+
