@@ -318,7 +318,7 @@ class AdminSpaceSecurityIntegrationTest extends IntegrationTestSupport {
         return """
                 {
                   "name": "보안 테스트 공간",
-                  "location": "서울시 강남구",
+                  "location": "강남",
                   "description": "관리자 보안 통합 테스트",
                   "capacity": 8,
                   "pricePerSlot": 5000,

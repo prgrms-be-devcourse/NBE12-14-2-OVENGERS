@@ -1,3 +1,9 @@
 import AdminDashboard from '@/components/admin/AdminDashboard';
+import SpaceRankingSection from '@/components/admin/SpaceRankingSection';
 export const metadata = { title: '운영 대시보드' };
-export default function Page() { return <AdminDashboard />; }
+export default function Page() {
+  return <>
+    <AdminDashboard />
+    <SpaceRankingSection />
+  </>;
+}

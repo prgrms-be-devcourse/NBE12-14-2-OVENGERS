@@ -90,10 +90,9 @@ const reservation = (reservationId, status, startTime='2026-09-23T09:00:00',spac
 test('dashboard calendar uses Seoul date near UTC midnight',()=>{
   assert.equal(dashboard.seoulDate(new Date('2026-09-22T16:00:00Z')),'2026-09-23');
 });
-test('dashboard counts selected date and space; cancelled bookings do not inflate active totals',()=>{
+test('dashboard list still filters by selected date and space (counts come from the server)',()=>{
   const rows=[reservation(1,'HELD'),reservation(2,'CONFIRMED'),reservation(3,'IN_USE','2026-09-23T09:00:00',2),reservation(4,'CANCELLED')];
-  const selected=dashboard.selectDashboardReservations(rows,'2026-09-23','1');
-  assert.deepEqual(dashboard.countDashboardStatuses(selected),{HELD:1,CONFIRMED:1,IN_USE:0,COMPLETED:0});
+  assert.deepEqual(dashboard.selectDashboardReservations(rows,'2026-09-23','1').map(r=>r.reservationId),[1,2,4]);
   assert.equal(dashboard.selectDashboardReservations(rows,'2026-09-24').length,0);
 });
 test('dashboard prioritizes in-use then held then confirmed without mutating input',()=>{

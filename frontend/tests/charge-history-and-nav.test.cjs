@@ -34,10 +34,10 @@ function load(relative, mocks = {}) {
   return loadedModule.exports;
 }
 
-test('USER_NAV 는 오피스 찾기 → 내 예약 → 내 대기 → 모의 출입 순서이다', () => {
+test('USER_NAV 는 오피스 찾기 → 베스트 랭킹 → 내 예약 → 내 대기 → 모의 출입 순서이다', () => {
   const { USER_NAV, ROUTES } = load('constants/routePaths.ts');
   assert.deepEqual(USER_NAV.map((item) => item.href), [
-    ROUTES.spaces, ROUTES.reservations, ROUTES.waitlist, ROUTES.door,
+    ROUTES.spaces, ROUTES.ranking, ROUTES.reservations, ROUTES.waitlist, ROUTES.door,
   ]);
   assert.equal(ROUTES.creditHistory, '/credits/history');
 });

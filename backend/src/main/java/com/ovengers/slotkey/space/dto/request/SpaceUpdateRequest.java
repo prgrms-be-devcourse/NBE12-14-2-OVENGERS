@@ -1,6 +1,7 @@
 package com.ovengers.slotkey.space.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.ovengers.slotkey.space.entity.SpaceRegion;
 import com.ovengers.slotkey.space.entity.SpaceStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
@@ -19,7 +20,7 @@ public record SpaceUpdateRequest(
         @Size(min = 1, max = 100, message = "오피스 이름은 1~100자여야 합니다.")
         String name,
 
-        @Schema(description = "공간 위치 또는 주소", example = "경기도 성남시 분당구 판교역로 166")
+        @Schema(description = "공간 지역. 판교, 강남, 하남 중 하나. null이면 유지", example = "판교")
         String location,
 
         @Schema(description = "공간 소개", example = "최대 6명이 이용할 수 있는 회의실입니다.")
@@ -54,5 +55,10 @@ public record SpaceUpdateRequest(
     @AssertTrue(message = "오피스 사진은 별도 사진 업로드 API(PUT /api/v1/admin/spaces/{id}/image)로만 수정할 수 있습니다. imagePath를 비워두세요.")
     public boolean isImagePathEmpty() {
         return imagePath == null || imagePath.isBlank();
+    }
+
+    @AssertTrue(message = "오피스 지역은 판교, 강남, 하남 중 하나여야 합니다.")
+    public boolean isLocationSupported() {
+        return location == null || SpaceRegion.isSupported(location);
     }
 }

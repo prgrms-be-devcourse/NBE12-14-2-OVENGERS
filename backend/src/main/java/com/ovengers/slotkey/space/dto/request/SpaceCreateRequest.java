@@ -2,6 +2,7 @@ package com.ovengers.slotkey.space.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.ovengers.slotkey.space.entity.Space;
+import com.ovengers.slotkey.space.entity.SpaceRegion;
 import com.ovengers.slotkey.space.entity.SpaceStatus;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
@@ -20,7 +21,7 @@ public record SpaceCreateRequest(
         @Size(min = 1, max = 100, message = "오피스 이름은 1~100자여야 합니다.")
         String name,
 
-        @Schema(description = "공간 위치 또는 주소", example = "경기도 성남시 분당구 판교역로 166")
+        @Schema(description = "공간 지역. 판교, 강남, 하남 중 하나", example = "판교")
         @NotBlank(message = "오피스 주소를 입력해주세요.")
         String location,
 
@@ -58,6 +59,11 @@ public record SpaceCreateRequest(
     public boolean isImagePathEmpty() {
         return imagePath == null || imagePath.isBlank();
     }
+    @AssertTrue(message = "오피스 지역은 판교, 강남, 하남 중 하나여야 합니다.")
+    public boolean isLocationSupported() {
+        return location == null || location.isBlank() || SpaceRegion.isSupported(location);
+    }
+
     public Space toEntity() {
         Space.validateOperatingHours(openingTime, closingTime);
         Space.validatePricePerSlot(pricePerSlot);

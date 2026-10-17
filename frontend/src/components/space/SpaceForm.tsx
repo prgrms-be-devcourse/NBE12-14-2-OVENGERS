@@ -11,6 +11,7 @@ import OperatingHoursField from './OperatingHoursField';
 import SpacePhoto from './SpacePhoto';
 import { validateImageFile } from '../../utils/imageValidation';
 import { SPACE_STATUS, SPACE_STATUS_OPTIONS } from '../../constants/enums';
+import { isSpaceRegion, regionOptions } from '../../utils/spaceRegion';
 
 const EMPTY: SpaceFormValues = {
   name: '',
@@ -104,7 +105,7 @@ export default function SpaceForm({
   const validate = () => {
     const next: Partial<Record<ValidationKey, string>> = {};
     if (!form.name.trim()) next.name = '오피스 이름을 입력해 주세요.';
-    if (!form.location.trim()) next.location = '위치를 입력해 주세요.';
+    if (!isSpaceRegion(form.location)) next.location = '지역을 판교, 강남, 하남 중에서 선택해 주세요.';
     if (Number(form.capacity) <= 0) next.capacity = '수용 인원은 1명 이상이어야 합니다.';
     if (Number(form.pricePerSlot) <= 0 || Number(form.pricePerSlot) % 100 !== 0) {
       next.pricePerSlot = '요금은 100원 단위의 양수여야 합니다.';
@@ -122,7 +123,7 @@ export default function SpaceForm({
     if (!validate()) return;
     const payload: SpacePayload = {
       name: form.name.trim(),
-      location: form.location.trim(),
+      location: form.location,
       description: form.description ? form.description.trim() : null,
       capacity: Number(form.capacity),
       pricePerSlot: Number(form.pricePerSlot),
@@ -147,11 +148,12 @@ export default function SpaceForm({
           />
         </div>
         <div className="full">
-          <Input
-            label="위치"
+          <Select
+            label="지역"
             required
             value={form.location}
             error={validation.location}
+            options={regionOptions(form.location)}
             onChange={(event) => update({ location: event.target.value })}
           />
         </div>
