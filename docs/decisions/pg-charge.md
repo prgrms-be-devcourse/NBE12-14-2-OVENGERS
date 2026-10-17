@@ -1,6 +1,6 @@
 # PG 결제 — 크레딧 충전
 
-> 상태: 구현 중 (6단계 완료, 5단계 진행 전). 작성: 2026-10-06. 결정 반영: 2026-10-14.
+> 상태: 구현 중 (6단계 완료, 5단계 묶음 A·B 구현 완료 — 별도 세션 검증 대기). 작성: 2026-10-06. 결정 반영: 2026-10-17.
 
 ## 문제
 
@@ -162,7 +162,7 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 
 ## 열린 질문
 
-- 웹훅 `PAYMENT_STATUS_CHANGED`의 본문 구조와, 서명 등 검증용 값이 이벤트에 들어 있는지 (웹훅 가이드에는 검증 방법이 없었다).
+- ~~웹훅 `PAYMENT_STATUS_CHANGED`의 본문 구조와, 서명 등 검증용 값이 이벤트에 들어 있는지 (웹훅 가이드에는 검증 방법이 없었다).~~ **답(2026-10-17, 공식 문서 [웹훅 이벤트](https://docs.tosspayments.com/reference/using-api/webhook-events)·[웹훅 연결하기](https://docs.tosspayments.com/guides/v2/webhook)):** 본문은 `eventType`·`createdAt`·`data`(Payment 객체: `paymentKey`, `orderId`, `status` 등)이다. `tosspayments-webhook-signature` 서명 헤더는 `payout.changed`·`seller.changed`에만 들어 있고 `PAYMENT_STATUS_CHANGED`에는 서명이 없다. 따라서 발신자 검증은 할 수 없고, 본문은 "어느 주문을 다시 확인할지"를 알려 주는 힌트로만 쓴다. 모든 웹훅에는 `tosspayments-webhook-transmission-id`(웹훅 고유 식별자)·`tosspayments-webhook-transmission-time`·`tosspayments-webhook-transmission-retried-count` 헤더가 있다. 처리 설계는 아래 "5단계 — 웹훅"의 설계 결정을 따른다.
 - 인증 후 승인까지의 제한 시간(문서에서 숫자를 찾지 못함. `NOT_FOUND_PAYMENT_SESSION` 에러와 `EXPIRED` 30분이 관련됨).
 - 복구 한도를 넘긴 `CONFIRMING` 건을 관리자에게 어떻게 보여 줄지.
 
@@ -197,6 +197,28 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 - PG 조회는 트랜잭션 밖에서 실행하며 주문별 짧은 트랜잭션과 상태 검사, 주문당 `TOP_UP` UNIQUE로 로컬 부작용을 한 번만 반영한다. `recovery_exhausted_at`을 기록할 때 시스템 작업 감사 로그를 같은 트랜잭션에 한 번만 남긴다. 승인과 로컬 `FAILED` 전이가 경합하면 재개방하거나 예외를 전파하지 않고 실제 `PG_STATUS`·`LOCAL_STATUS`를 감사 로그에 남긴다.
 - 로컬 MySQL 8.4의 10,000행 임시 테이블에서 실제 후보 조건으로 `EXPLAIN`했다. 도래 후보는 `idx_charge_order_recovery_due`, 24시간 초과 후보는 `idx_charge_order_recovery_exhausted`를 각각 `range`로 사용했다. 이 검사는 자동 테스트에 넣지 않았다.
 - 검증 리뷰 P1 반영 뒤 최종 전체 테스트는 `./gradlew test --rerun-tasks`로 80개 테스트 스위트, 582개 테스트가 통과했고 실패·오류·건너뜀은 0개였다.
+
+### 5단계 묶음 A — 웹훅 수신·즉시 기록·중복 무시 (2026-10-17)
+
+- `POST /api/v1/webhooks/tosspayments`를 추가하고 `SecurityConfig`에서 이 경로의 `POST`만 인증 없이 열었다. 같은 경로의 `GET`, 하위 경로, 충전 승인 API는 여전히 401임을 테스트로 고정했다.
+- V23 `pg_webhook_event`에 `INSERT IGNORE` 한 번으로 기록하고 200을 준다. 같은 `transmission_id`는 순차·동시(고정 스레드 2개, 래치 동시 시작) 모두 한 행만 남고 두 요청 모두 200이다.
+- 수신 경로는 PG를 호출하지 않고(`FakePgClient` 조회·승인 호출 0회), 본문이 `DONE`이어도 `charge_order`는 `PENDING`, 원장 0행, 잔액 불변이다. 이미 `PAID`인 주문의 웹훅도 기록만 하고 상태·원장을 바꾸지 않는다.
+- 다른 이벤트 타입, `orderId` 누락·64자 초과, 없는 주문은 기록 없이 200이다. `transmission-id` 헤더 누락과 JSON이 아닌 본문은 400이다.
+- PG 조회로 확정하는 처리 분리, 승인 요청과 웹훅의 동시 도착 시 충전 1회 검증은 묶음 B에서 한다.
+- 공식 문서 출처: 토스페이먼츠 [웹훅 이벤트](https://docs.tosspayments.com/reference/using-api/webhook-events), [웹훅 연결하기](https://docs.tosspayments.com/guides/v2/webhook).
+- 전체 테스트: `./gradlew test --rerun-tasks` 113개 스위트, 840개 테스트, 실패·오류 0개, 건너뜀 11개(기존 `V2SecurityRedTest`).
+- 검증 지적(FIX) 반영: 마이그레이션 번호를 V22에서 V23으로 바꿨다(`origin/feat/space-ranking`의 V22와 충돌, 사용자 결정). 바꾼 뒤 `./gradlew test --rerun-tasks`를 다시 돌려 113개 스위트, 840개 테스트, 실패·오류 0개, 건너뜀 11개를 확인했다. `docs/api/api-spec.md` §5-0-3과 `docs/architecture/erd.md`의 `pg_webhook_event`를 묶음 A 동작 기준으로 추가했다. 머지 순서 제약은 5단계 설계 결정의 "한계"에 적었다.
+
+### 5단계 묶음 B — PG 조회 후 기존 DB 2 확정·동시성 (2026-10-17)
+
+- `PgWebhookEventScheduler`(10초 `fixedDelay`, 최대 50건)가 `RECEIVED` 행을 읽고 `PgWebhookEventProcessor`가 한 건씩 처리한다. 처리기는 트랜잭션을 두지 않고, `CONFIRMING` 주문만 **저장된** `paymentKey`로 PG를 조회해(본문의 `paymentKey`가 달라도 저장 값 사용을 테스트로 고정) 승인 + 대조 일치일 때 기존 `ChargeOrderConfirmTransactionService.completeApproved`를 호출한다. 새 확정 경로나 복제한 DB 2는 없다.
+- 본문이 `DONE`이어도 PG 조회가 모름·실패면 `CONFIRMING` 유지(`FAILED`로도 바꾸지 않음), 금액 불일치면 확정하지 않음, 조회 예외면 `CONFIRMING` 유지를 확인했다. `PENDING`·`FAILED`·이미 `PAID` 주문과 복구 필수값이 없는 `CONFIRMING` 주문은 PG를 호출하지 않는다. PG 승인 조회 뒤 로컬이 `FAILED`가 되면 덮어쓰지 않고 기존 `CHARGE_RECOVERY_MANUAL_REVIEW` 감사 로그를 1건 남긴다.
+- 충전 1회: (1) 같은 주문의 웹훅 2건(다른 `transmission_id`)을 래치로 동시 처리, (2) 같은 행을 두 처리기가 동시 처리, (3) 승인 API의 PG 호출 중(Fake 300ms 지연)에 웹훅 처리를 시작해 두 경로가 DB 2에 함께 들어오는 경우, (4) 웹훅이 먼저 확정한 뒤 승인 요청이 도착하는 경우 모두 `TOP_UP` 1행, 잔액 +1,000원, `SUM(credit_transaction.amount) == member.balance`, 승인 응답 `PAID`였다. 지연 웹훅(이미 `PAID`)은 PG 조회 0회로 `ALREADY_PAID`.
+- PG 조회가 트랜잭션 밖임을 Fake의 `isActualTransactionActive()=false`로 확인했다. 처리 결과는 `pg_webhook_event.result`·`status=DONE`·`processed_at`으로 한 번만 기록되고, 다시 처리해도 PG를 부르지 않는다. 수신(HTTP 200) → 처리 → `PAID` 전체 흐름과 중복 수신 2건(`CONFIRMED`, `ALREADY_PAID`)을 MockMvc 통합 테스트로 확인했다.
+- 공식 문서 재확인: 토스페이먼츠 [웹훅 이벤트](https://docs.tosspayments.com/reference/using-api/webhook-events)(MCP 문서 ID 127). 헤더·본문·서명 범위가 묶음 A 기록과 같고, `PAYMENT_STATUS_CHANGED`가 `EXPIRED`·`DONE`·`ABORTED`·`CANCELED`·`PARTIAL_CANCELED`에 전송됨을 확인해 `PENDING` 주문 처리 근거로 적었다.
+- 테스트: 신규 20개, 검증 지적 반영 후 21개(`PgWebhookEventProcessorIntegrationTest` 16→17, `PgWebhookEventSchedulerTest` 3, `TossWebhookIntegrationTest` 전체 흐름 1). 구현 전 19개 실패 확인 후 구현. 전체 `./gradlew test --rerun-tasks` 115개 스위트, 860개 테스트, 실패·오류 0개, 건너뜀 11개(기존 `V2SecurityRedTest`).
+- 하지 않은 것: 실제 토스 샌드박스 웹훅 수신, 응답 시간 측정 테스트, 면접·발표용 정리(이 문서에 해당 절이 없어 제목 구조를 바꾸지 않았다).
+- 검증 지적(FIX) 반영: 이미 `PAID`인 주문에도 `CONFIRMED`가 기록되던 문제를 고쳤다. 주문 잠금 아래에서 전이 여부를 판정하는 래퍼를 두어, 같은 주문 웹훅 2건 동시 처리는 `CONFIRMED` 1건·`ALREADY_PAID` 1건으로, PG 조회 중 다른 경로가 먼저 확정한 경우는 `ALREADY_PAID`로 기록됨을 테스트로 고정했다. 같은 행을 두 처리기가 동시에 처리하면 조건부 UPDATE로 먼저 끝난 쪽 결과만 남으므로 `CONFIRMED`·`ALREADY_PAID` 중 하나다. 재실행 `./gradlew test --rerun-tasks` 115개 스위트, 861개 테스트, 실패·오류 0개, 건너뜀 11개(기존 `V2SecurityRedTest`).
 
 ### 6단계 — 프론트 충전 화면과 예약 복귀 흐름 (2026-10-14)
 
@@ -282,11 +304,75 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 
 ### 5단계 — 웹훅
 
-**상태: 진행 전**
+**상태: 구현 완료, 검증 대기 (묶음 A 수신·즉시 기록·중복 무시 2026-10-17, 묶음 B 처리 분리·PG 조회 후 기존 DB 2 확정·동시성 2026-10-17)**
 
 - `PAYMENT_STATUS_CHANGED`를 수신해 즉시 기록하고 200으로 응답하며, 실제 처리는 분리한다.
 - 웹훅 본문의 성공 여부를 신뢰하지 않고 PG 조회 결과로만 DB 2 경로를 호출한다.
 - 중복 수신과 이미 `PAID`인 주문을 무시하는 테스트를 추가한다.
+
+#### 5단계 설계 결정 (2026-10-17)
+
+확인한 공식 문서: 토스페이먼츠 [웹훅 이벤트](https://docs.tosspayments.com/reference/using-api/webhook-events)(헤더, `PAYMENT_STATUS_CHANGED` 본문, 서명 적용 범위), [웹훅 연결하기](https://docs.tosspayments.com/guides/v2/webhook)(10초 안에 200 응답, 최대 7회 재전송, HTTP POST JSON). `tosspayments-integration-guide` MCP로 조회했다.
+
+**결정 1 — 인증 없이 여는 경로는 `POST /api/v1/webhooks/tosspayments` 하나다.** *(사용자 사전 승인 2026-10-17)*
+- 이유: 토스가 호출하는 주소라 JWT를 붙일 수 없다. 본문을 믿지 않고 PG 조회로만 충전을 확정하므로, 누구나 호출할 수 있어도 돈의 의미는 바뀌지 않는다.
+- `SecurityConfig`에는 이 경로의 `POST`만 `permitAll`로 추가한다. 같은 경로의 다른 메서드와 그 밖의 모든 경로의 인증 규칙은 그대로다.
+- 기각한 대안: 충전 API 하위 경로(`/api/v1/credits/charge-orders/webhook`)에 두기 — 회원 인증이 필요한 경로 묶음 안에 예외를 만들게 되어 규칙을 읽기 어렵다. 공유 비밀을 쿼리 문자열에 넣기 — 문서에 없는 방식이고 비밀이 접근 로그에 남는다.
+
+**결정 2 — 수신 기록 전용 새 테이블 `pg_webhook_event`(V23)에 저장한다. `charge_order`에 섞지 않는다.** *(사용자 사전 승인 2026-10-17)*
+- 저장하는 값: `transmission_id`(헤더, UNIQUE), `event_type`, `order_id`·`payment_key`·`reported_status`(본문 `data`에서 꺼낸 값, 확정에 쓰지 않는 힌트), `retried_count`, 처리 상태 `status`(`RECEIVED`로 시작), `received_at`, `processed_at`.
+- 원본 본문 전체는 저장하지 않는다. Payment 객체에는 카드 정보 일부와 구매자 정보가 들어갈 수 있고, 확정에 필요한 것은 주문번호뿐이기 때문이다.
+- 이유: 웹훅 수신은 주문 상태와 생명주기가 다르다(한 주문에 여러 번 올 수 있고, 주문이 없을 수도 있다). `charge_order`에 컬럼을 더하면 4단계 상태 전이와 복구 인덱스를 건드리게 된다.
+- 기각한 대안: 기록 없이 메모리 큐(`@Async`)로 바로 넘기기 — 200을 준 뒤 서버가 죽으면 알림이 사라지고 토스는 재전송하지 않는다. Kafka에 바로 발행 — Outbox+Kafka는 기능 플래그 뒤에 있어 꺼진 환경에서 웹훅이 사라지고, 수신 경로가 브로커 장애에 묶인다.
+
+**결정 3 — 기록 방식: 짧은 트랜잭션 하나에서 `INSERT IGNORE`로 한 행만 넣고 바로 200을 준다.** 수신 경로에서는 PG를 호출하지 않고 `charge_order`·원장·잔액을 바꾸지 않는다.
+- 중복 무시: 같은 `transmission_id`는 UNIQUE와 `INSERT IGNORE`로 한 행만 남기고, 두 번째 요청도 200을 준다(재전송을 멈추게 하기 위해). 기존 `ProcessedEventStore`와 같은 방식으로 예외 대신 영향 행 수로 판정한다.
+- 공식 문서는 `transmission_id`를 "웹훅의 고유 식별자"라고만 하고 재전송 때 같은 값인지는 적지 않았다. 그래서 이 값을 충전 1회의 근거로 쓰지 않는다. 다른 `transmission_id`로 같은 주문 알림이 와도 기록은 늘 수 있지만, 충전 1회는 묶음 B의 처리 단계가 기존 DB 2의 주문 잠금·상태 검사·`credit_transaction.charge_order_id` UNIQUE로 보장한다.
+- 기록하지 않고 200만 주는 경우: `eventType`이 `PAYMENT_STATUS_CHANGED`가 아님, `data.orderId`가 없음·형식 길이 초과, 해당 `order_id`의 `charge_order`가 없음. 우리가 처리할 수 없는 알림이므로 재전송을 유도하지 않는다. 마지막 조건은 인증 없는 경로에 아무 주문번호로나 행을 쌓는 것을 줄인다.
+- 400을 주는 경우: 본문이 JSON이 아니거나 `tosspayments-webhook-transmission-id` 헤더가 없음. 공식 문서상 토스가 보내는 요청에는 항상 있으므로 토스 요청이 아니라고 본다.
+- 로그에는 주문번호, 이벤트 타입, 수신 결과만 남기고 `paymentKey`와 본문은 남기지 않는다.
+
+**결정 4 — 처리 분리 방식(묶음 B에서 구현):** 수신 행(`RECEIVED`)을 별도 처리기가 읽어, 저장된 `charge_order`를 기준으로 PG 조회(`PgClient.findByPaymentKey`) 결과가 승인일 때만 기존 `ChargeOrderConfirmTransactionService.completeApproved`(DB 2)를 호출한다. 새 확정 경로를 만들지 않는다. 이미 `PAID`·`FAILED`인 주문은 PG를 호출하지 않고 처리 완료로 표시한다.
+
+묶음 B 세부 결정 (2026-10-17):
+
+- **4-1 실행 방식:** 별도 스케줄러(`PgWebhookEventScheduler`)가 `fixedDelay` 10초(최초 10초 뒤)로 `status='RECEIVED'` 행을 id 순서로 최대 50건 읽어 한 건씩 처리한다. 한 건의 예외가 다음 건을 막지 않는다(4단계 `processEach` 패턴). 테스트 프로필에서는 자동 실행을 끄고 메서드를 직접 호출한다. 4단계 복구 스케줄러(1분)보다 짧게 둔 이유는 웹훅이 "지금 확인해 볼 주문"을 알려 주는 신호이기 때문이다.
+- **4-2 건별 처리:** 웹훅 본문의 `paymentKey`·`status`는 쓰지 않는다. 행의 `order_id`로 `charge_order`를 읽어 상태로 나눈다.
+  - `PAID` → PG 호출 없이 `ALREADY_PAID`.
+  - `FAILED` → PG 호출 없이 `ORDER_FAILED`. 자동 재개방하지 않는다(4단계 규칙과 같다).
+  - `PENDING` → PG 호출 없이 `ORDER_PENDING`, 경고 로그. 기존 DB 2는 `CONFIRMING → PAID`만 정의하고, 정상 흐름에서는 DB 1이 `CONFIRMING`을 커밋한 뒤에만 PG 승인이 일어나므로 `PENDING` 주문에 PG `DONE`이 생기지 않아야 한다. `PENDING → PAID`·`PENDING → FAILED` 전이는 설계에 없으므로 만들지 않는다.
+  - `CONFIRMING`인데 `payment_key`나 `client_idempotency_key`가 없음 → PG 호출 없이 `ORDER_INVARIANT_VIOLATION`. 수동 처리 표시는 4단계 복구 스케줄러가 한다.
+  - `CONFIRMING` → 트랜잭션 밖에서 **저장된** `payment_key`로 PG 조회 → 4단계와 같은 필드(`paymentKey`, `orderId`, `totalAmount`, `currency=KRW`, 원시 상태)로 대조 → 승인이면 저장된 `client_idempotency_key`로 `completeApproved` 호출. 호출은 얇은 트랜잭션 래퍼(`PgWebhookConfirmTransactionService`)가 주문 행을 비관적으로 잠근 뒤 이미 같은 `paymentKey`로 `PAID`면 DB 2를 부르지 않고 `ALREADY_PAID`, 아니면 같은 트랜잭션에서 DB 2를 호출해 `CONFIRMED`로 구분한다. 기존 DB 2는 이미 `PAID`일 때도 예외 없이 반환하므로 반환만으로는 이 처리가 전이시켰는지 알 수 없기 때문이다(검증 지적 반영 2026-10-17). 잠금 순서는 DB 2와 같은 주문 → 회원이다. 대조 불일치는 `PG_MISMATCH`, 승인 아님(실패·모름)은 `PG_NOT_APPROVED`, 조회 예외는 `PG_LOOKUP_ERROR`. 웹훅 처리기는 `FAILED` 전이·수동 처리 표시를 하지 않고 4단계 복구 스케줄러에 맡긴다(결정 4 본문 "승인일 때만").
+  - `completeApproved`가 상태 충돌을 내면 주문을 다시 읽어 `PAID`면 `ALREADY_PAID`, 아니면 4단계의 기존 `recordApprovedStateConflict`로 PG 상태·로컬 상태를 감사 로그에 남기고 `STATE_CONFLICT`.
+- **4-3 처리 결과 기록:** 어느 경우든 행을 `status='DONE'`, `result`(위 결과 이름), `processed_at`으로 조건부 UPDATE(`WHERE status='RECEIVED'`)한다. 실패한 처리도 재시도하지 않는다. 웹훅은 보조 수단이고 `CONFIRMING` 주문은 4단계 복구 스케줄러가 계속 확인하기 때문이다. `result` 컬럼은 V23이 아직 push 전이라 같은 파일에 추가한다.
+- **4-4 충전 1회 보장:** 처리기는 행을 선점하지 않는다. 같은 주문의 행이 여러 개이거나 같은 행이 겹쳐 처리되거나 승인 API의 DB 2와 동시에 들어와도, 기존 DB 2의 주문 비관적 잠금·상태 검사(`CONFIRMING`만 전이, 이미 `PAID`이고 `paymentKey`가 같으면 그대로 반환)·`credit_transaction.charge_order_id` UNIQUE가 `TOP_UP`을 한 번으로 막는다. 겹친 처리의 중복 PG 조회(GET)는 허용한다(4단계와 같은 판단).
+- 기각한 대안:
+  - 수신 직후 커밋 후 비동기 처리(`@TransactionalEventListener` + `@Async`) — 즉시 반영되지만 서버가 죽으면 그 처리가 사라져 결국 폴링이 또 필요하다. 처리 경로가 둘이 된다.
+  - 행 선점(`RECEIVED → PROCESSING` 조건부 UPDATE) — 처리 중 서버가 죽으면 `PROCESSING`에 갇혀 별도 정리가 필요하다. 충전 1회는 DB 2가 이미 보장하므로 얻는 것이 중복 GET 감소뿐이다.
+  - 웹훅 처리기가 `FAILED` 조회 결과로 주문을 `FAILED`로 바꾸기 — 4단계 복구 스케줄러와 같은 일을 두 곳에서 하게 되고, 결정 4가 승인만 다루기로 했다.
+  - 조회 실패 시 `RECEIVED`로 남겨 재시도 — 실패가 계속되는 행이 매 주기 PG를 호출한다. 복구 스케줄러가 이미 1분 간격 재시도를 한다.
+- Trade-off: 웹훅 처리기의 대조 로직(`paymentKey`·`orderId`·금액·통화·원시 상태)이 4단계 `ChargeOrderRecoveryProcessor.matches`와 같은 내용으로 한 번 더 있다. 4단계 코드를 고치지 않기 위한 선택이며, 대조 규칙이 바뀌면 두 곳을 함께 고쳐야 한다. `PENDING` 주문의 웹훅은 아무것도 바꾸지 않으므로, 만약 설계와 달리 `PENDING` 상태에서 PG 승인이 일어나면 자동으로 크레딧이 들어가지 않고 로그와 `ORDER_PENDING` 기록으로만 남는다.
+
+**결정 5 — 검증 방식:** 서명이 없는 이벤트이므로 발신자를 검증하지 않는다. 대신 본문의 `status`·금액을 확정 근거로 쓰지 않고, 처리 시점에 우리 시크릿 키로 PG를 직접 조회한 결과와 로컬 주문(`paymentKey`, `orderId`, 금액, 통화)을 4단계와 같은 방식으로 대조한다.
+- 기각한 대안: 본문 `status=DONE`이면 바로 `PAID` — 위조 요청 하나로 크레딧이 생긴다. 토스 서버 IP 허용 목록 — 공식 문서 확인을 이번 단계에서 하지 않았고, 인프라 설정이 바뀌면 조용히 웹훅이 끊긴다.
+
+**Trade-off**
+- 웹훅 한 건마다 DB 쓰기 1회가 생기고, 인증 없는 경로라 실재하는 주문번호를 아는 사람은 행을 늘릴 수 있다. 요청 속도 제한은 이번 범위에 넣지 않는다.
+- 원본 본문을 저장하지 않으므로, 나중에 다른 필드가 필요해지면 과거 알림에서는 꺼낼 수 없다.
+- 처리 분리 때문에 웹훅으로 인한 확정이 즉시가 아니라 처리기 주기만큼 늦다. 웹훅은 보조 수단이고 사용자 응답은 승인 API가 담당하므로 받아들인다.
+
+**한계**
+- 마이그레이션 번호: 이 브랜치의 수신 기록 테이블은 `V23__create_pg_webhook_event_table.sql`이다. `origin/feat/space-ranking`의 `V22__create_space_ranking_snapshot.sql`이 먼저 origin에 push되어 있어 V23을 쓴다(사용자 결정 2026-10-17). **이 브랜치는 `feat/space-ranking`이 `dev`에 먼저 머지된 뒤에 머지해야 한다.** 순서가 바뀌면 V22가 비어 있는 상태로 V23이 먼저 적용되고, 이후 V22가 들어올 때 Flyway의 순서 검사(`outOfOrder` 기본 false)에 걸려 앱 시작이 실패할 수 있다. `dev` 머지는 곧 EC2 배포이므로 머지 순서를 PR 본문에 적는다.
+- `PENDING` 주문의 웹훅: 공식 문서상 `PAYMENT_STATUS_CHANGED`는 `DONE`·`ABORTED`·`CANCELED`·`PARTIAL_CANCELED`뿐 아니라 `EXPIRED`(결제창 30분 또는 인증 후 승인 API 미호출 10분 경과)에도 전송된다. 따라서 인증 후 승인 요청 없이 이탈한 `PENDING` 주문에도 웹훅이 오며, 이번 단계에서는 `ORDER_PENDING`으로 기록만 하고 주문을 정리하지 않는다(오래된 `PENDING` 정리는 4단계부터 후속 백로그).
+- 웹훅 처리로 확정되는 시점은 수신 뒤 최대 약 10초(처리 주기)다. 처리 실패 행은 다시 처리하지 않으므로, 이 경우 `CONFIRMING` 주문의 확정은 4단계 복구 스케줄러(1분 주기)에 의존한다.
+- 실제 토스 샌드박스에서 웹훅을 받아 처리하는 수동 검증(ngrok 등)은 하지 않았다. 자동 테스트는 공식 문서 예시 형태의 본문과 `FakePgClient`로만 검증했다.
+
+**재검토 조건**
+- 토스가 `PAYMENT_STATUS_CHANGED`에 서명을 추가하거나 `transmission_id`의 재전송 시 동일성을 문서화하면 검증·중복 판정을 다시 본다.
+- 인증 없는 경로로 비정상 요청이 늘면 요청 속도 제한이나 IP 허용 목록을 검토한다.
+- `ORDER_PENDING` 결과 중 PG 상태가 `DONE`인 주문이 실제로 관측되면(설계상 생기면 안 되는 경우) `PENDING → PAID` 허용 여부를 사용자 결정으로 다시 본다.
+- `PG_LOOKUP_ERROR`·`COMPLETE_ERROR`가 자주 쌓이면 웹훅 행 재시도(횟수 제한 포함)를 검토한다.
+- 4단계 복구와 웹훅 처리의 대조 규칙이 달라지면 공용 대조 컴포넌트로 합친다.
 
 ### 6단계 — 프론트 충전 화면과 예약 복귀 흐름
 

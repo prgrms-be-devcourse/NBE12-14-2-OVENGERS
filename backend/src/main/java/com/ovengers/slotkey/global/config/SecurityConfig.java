@@ -61,6 +61,11 @@ public class SecurityConfig {
                                 "/api/v1/auth/verification/check"
                         ).permitAll()
 
+                        // 토스페이먼츠 웹훅: PG가 호출해 JWT를 붙일 수 없다. 본문을 믿지 않고
+                        // PG 조회로만 충전을 확정하므로 이 POST 하나만 연다(pg-charge.md 5단계 결정 1).
+                        .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/tosspayments")
+                        .permitAll()
+
                                         // 공간 목록, 상세, 슬롯 가용성 비회원 조회 허용
                                         .requestMatchers(
                                                         HttpMethod.GET,
