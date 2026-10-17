@@ -134,6 +134,9 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     Page<Reservation> findAllByMemberId(Long memberId, Pageable pageable);
     Page<Reservation> findAllByMemberIdAndStatus(Long memberId, ReservationStatus status, Pageable pageable);
 
+    // 관리자 회원 상세 - 전체 예약 건수
+    long countByMemberId(Long memberId);
+
     @Query(
             value = """
                     SELECT r FROM Reservation r

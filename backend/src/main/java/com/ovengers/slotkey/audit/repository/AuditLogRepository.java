@@ -20,6 +20,13 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
     Optional<AuditLog> findFirstByTargetTypeAndTargetIdAndActionInOrderByCreatedAtDescIdDesc(
             AuditTargetType targetType, Long targetId, Collection<AuditAction> actions);
 
+    // 관리자 회원 상세 - 계정 정지 감사 로그 건수
+    long countByTargetTypeAndTargetIdAndActionIn(
+            AuditTargetType targetType,
+            Long targetId,
+            Collection<AuditAction> actions
+    );
+
     @Query(
             value = """
                     SELECT a FROM AuditLog a

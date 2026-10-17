@@ -6,6 +6,7 @@ import com.ovengers.slotkey.global.security.AuthPrincipal;
 import com.ovengers.slotkey.member.authorization.MemberAuthorizationService;
 import com.ovengers.slotkey.member.dto.request.MemberCreditGrantRequest;
 import com.ovengers.slotkey.member.dto.request.MemberStatusChangeRequest;
+import com.ovengers.slotkey.member.dto.response.AdminMemberDetailResponse;
 import com.ovengers.slotkey.member.dto.response.AdminMemberResponse;
 import com.ovengers.slotkey.member.dto.response.MemberStatusChangeResponse;
 import com.ovengers.slotkey.member.entity.MemberStatus;
@@ -73,6 +74,37 @@ public class AdminMemberController {
                 PageResponse.from(adminMemberService.getMembers(status, keyword, pageable));
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+
+
+    @Operation(
+            summary = "관리자 회원 상세 조회",
+            description = "특정 회원의 기본 정보, 전체 예약 건수, 정지 기록 건수를 조회합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "회원 상세 조회 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "MEMBER_NOT_FOUND: 회원이 존재하지 않음",
+                    content = @Content
+            )
+    })
+    @GetMapping("/{memberId}")
+    public ResponseEntity<ApiResponse<AdminMemberDetailResponse>> getMemberDetail(
+            @PathVariable("memberId") Long memberId,
+            @AuthenticationPrincipal AuthPrincipal authPrincipal
+    ) {
+        memberAuthorizationService.validateCanManageMember(authPrincipal);
+
+        AdminMemberDetailResponse response =
+                adminMemberService.getMemberDetail(memberId);
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
 
     @Operation(
             summary = "회원 정지",

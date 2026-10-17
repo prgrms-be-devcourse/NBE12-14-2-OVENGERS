@@ -230,4 +230,45 @@ class AuditLogRepositoryTest extends IntegrationTestSupport {
         assertThat(found.get().getId()).isEqualTo(latestId);
         assertThat(found.get().getAction()).isEqualTo(AuditAction.REACTIVATE_MEMBER);
     }
+
+    @Test
+    @DisplayName("회원 정지 기록은 관리자 정지와 시스템 잠금만 집계한다")
+    void countSuspensionLogs_onlySuspendAndLock() {
+        // given
+        LocalDateTime now = FixedClockConfig.FIXED_DATE_TIME;
+
+        // 회원 100번: 관리자 정지
+        insertAuditLog(1L, AuditAction.SUSPEND_MEMBER,
+                AuditTargetType.MEMBER, 100L,
+                "관리자 정지", null, null, now);
+
+        // 회원 100번: 시스템 잠금
+        insertAuditLog(null, AuditAction.LOCK_MEMBER_BY_VERIFICATION,
+                AuditTargetType.MEMBER, 100L,
+                "인증 실패", null, null, now);
+
+        // 회원 100번: 복구 (집계에서 제외)
+        insertAuditLog(1L, AuditAction.REACTIVATE_MEMBER,
+                AuditTargetType.MEMBER, 100L,
+                "복구", null, null, now);
+
+        // 회원 200번: 다른 회원이므로 제외
+        insertAuditLog(1L, AuditAction.SUSPEND_MEMBER,
+                AuditTargetType.MEMBER, 200L,
+                "다른 회원 정지", null, null, now);
+
+        // when
+        long count = auditLogRepository.countByTargetTypeAndTargetIdAndActionIn(
+                AuditTargetType.MEMBER,
+                100L,
+                List.of(
+                        AuditAction.SUSPEND_MEMBER,
+                        AuditAction.LOCK_MEMBER_BY_VERIFICATION
+                )
+        );
+
+        // then
+        assertThat(count).isEqualTo(2L);
+    }
+
 }

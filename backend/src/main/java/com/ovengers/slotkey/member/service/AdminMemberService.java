@@ -9,12 +9,14 @@ import com.ovengers.slotkey.auth.service.VerificationGuardService;
 import com.ovengers.slotkey.credit.service.CreditGrantService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
+import com.ovengers.slotkey.member.dto.response.AdminMemberDetailResponse;
 import com.ovengers.slotkey.member.dto.response.AdminMemberResponse;
 import com.ovengers.slotkey.member.dto.response.MemberStatusChangeResponse;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.entity.MemberRole;
 import com.ovengers.slotkey.member.entity.MemberStatus;
 import com.ovengers.slotkey.member.repository.MemberRepository;
+import com.ovengers.slotkey.reservation.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,12 +37,44 @@ public class AdminMemberService {
     private final CreditGrantService creditGrantService;
     private final Clock clock;
     private final VerificationGuardService verificationGuardService;
+    private final ReservationRepository reservationRepository;
 
     @Transactional(readOnly = true)
     public Page<AdminMemberResponse> getMembers(MemberStatus status, String keyword, Pageable pageable) {
         return memberRepository.searchMembers(keyword, status, pageable)
                 .map(this::toAdminMemberResponse);
     }
+
+
+    // 관리자 회원 상세 조회
+    @Transactional(readOnly = true)
+    public AdminMemberDetailResponse getMemberDetail(Long memberId) {
+
+        Member member = findMember(memberId);
+
+        AdminMemberResponse memberResponse =
+                toAdminMemberResponse(member);
+
+        long totalReservationCount =
+                reservationRepository.countByMemberId(memberId);
+
+        long suspensionCount =
+                auditLogRepository.countByTargetTypeAndTargetIdAndActionIn(
+                        AuditTargetType.MEMBER,
+                        memberId,
+                        List.of(
+                                AuditAction.SUSPEND_MEMBER,
+                                AuditAction.LOCK_MEMBER_BY_VERIFICATION
+                        )
+                );
+
+        return new AdminMemberDetailResponse(
+                memberResponse,
+                totalReservationCount,
+                suspensionCount
+        );
+    }
+
 
     // 계정 정지
     @Transactional
