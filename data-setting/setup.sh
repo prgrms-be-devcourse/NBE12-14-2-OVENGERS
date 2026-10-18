@@ -76,6 +76,9 @@ mysql_run <<'SQL'
 SELECT COUNT(*) AS schema_check FROM member;
 SELECT COUNT(*) AS schema_check FROM spaces;
 SELECT COUNT(*) AS schema_check FROM credit_transaction;
+-- V14(local_credential)·V15(email_verified_at)가 없으면 회원 생성이 실패하므로 먼저 확인합니다.
+SELECT COUNT(*) AS schema_check FROM local_credential;
+SELECT COUNT(email_verified_at) AS schema_check FROM member;
 CREATE TABLE IF NOT EXISTS slotkey_sample_registry (
   kind VARCHAR(20) NOT NULL,
   seed_key VARCHAR(100) NOT NULL,

@@ -108,7 +108,7 @@ if 'CREATE PROCEDURE' in sql:
     if os.environ.get('FAKE_SQL_FAIL'):
         sys.exit(9)
 elif 'flyway_schema_history' in sql:
-    print(os.environ.get('FAKE_FLYWAY_VERSION', '12'))
+    print(os.environ.get('FAKE_FLYWAY_VERSION', '15'))
 elif 'information_schema.tables' in sql:
     print('0')
 """)
@@ -152,7 +152,8 @@ elif 'information_schema.tables' in sql:
         self.run_script("setup", succeeds=False)
         self.assertFalse(self.log.exists())
         self.config.chmod(0o600)
-        self.env["FAKE_FLYWAY_VERSION"] = "11"
+        # V14(local_credential)·V15(email_verified_at)가 없으면 회원 생성 SQL이 실패하므로 V15 이상만 허용한다.
+        self.env["FAKE_FLYWAY_VERSION"] = "14"
         self.run_script("setup", succeeds=False)
         self.assertNotIn("CREATE TABLE", self.log.read_text())
 
@@ -215,7 +216,9 @@ PRIMARY KEY(kind,seed_key), UNIQUE KEY uq_sample_row(kind,row_id)) ENGINE=InnoDB
         self.seed()
         self.seed()
         self.assertEqual(self.sql("SELECT COUNT(*) FROM member; SELECT COUNT(*) FROM spaces; SELECT COUNT(*),SUM(amount) FROM credit_transaction;"), "101\n39\n100\t10000000")
-        self.assertEqual(self.sql("SELECT COUNT(*) FROM member WHERE password_hash='" + HASH + "';"), "101")
+        # V14 이후 비밀번호 해시는 local_credential에 있다. V15 정책처럼 샘플 회원은 이메일 인증 완료로 둔다.
+        self.assertEqual(self.sql("SELECT COUNT(*) FROM local_credential c JOIN member m ON m.id=c.member_id WHERE c.password_hash='" + HASH + "';"), "101")
+        self.assertEqual(self.sql("SELECT COUNT(*) FROM member WHERE email_verified_at IS NOT NULL;"), "101")
         self.assertEqual(self.sql("SELECT COUNT(DISTINCT image_path),COUNT(*) FROM spaces WHERE image_path REGEXP '^/api/v1/space-images/a5100000-0000-4000-8000-[0-9]{12}[.]jpg$';"), "39\t39")
         status = self.sql((ROOT / "sql/aws_status.sql").read_text())
         self.assertIn("AWS 관리자\t1", status)
@@ -223,18 +226,19 @@ PRIMARY KEY(kind,seed_key), UNIQUE KEY uq_sample_row(kind,row_id)) ENGINE=InnoDB
 
     def test_update_preserves_financial_and_reservation_state(self):
         self.seed()
-        self.sql("""UPDATE member SET balance=101000,status='SUSPENDED',nickname='사용자수정',password_hash='changed' WHERE id=1;
+        self.sql("""UPDATE member SET balance=101000,status='SUSPENDED',nickname='사용자수정' WHERE id=1;
+UPDATE local_credential SET password_hash='changed' WHERE member_id=1;
 INSERT INTO credit_transaction(member_id,amount,type,balance_after,created_at) VALUES(1,1000,'ADMIN_GRANT',101000,NOW());
 INSERT INTO reservation(member_id,space_id,start_time,end_time,status,price_per_slot_snapshot,total_amount,created_at)
 VALUES(1,1,'2030-01-01 10:00:00','2030-01-01 11:00:00','CONFIRMED',2000,4000,NOW());
 INSERT INTO reservation_slot(reservation_id,space_id,slot_start) VALUES(1,1,'2030-01-01 10:00:00');
 UPDATE spaces SET name='표시수정',image_path='/old.jpg',price_per_slot=9000,capacity=20,opening_time='09:00:00',closing_time='22:00:00',status='INACTIVE',version=7 WHERE id=1;""")
-        before = self.sql("SELECT * FROM member; SELECT * FROM credit_transaction; SELECT * FROM reservation; SELECT * FROM reservation_slot;")
+        before = self.sql("SELECT * FROM member; SELECT * FROM local_credential; SELECT * FROM credit_transaction; SELECT * FROM reservation; SELECT * FROM reservation_slot;")
         self.seed(create=False)
         self.seed()
-        self.assertEqual(self.sql("SELECT * FROM member; SELECT * FROM credit_transaction; SELECT * FROM reservation; SELECT * FROM reservation_slot;"), before)
+        self.assertEqual(self.sql("SELECT * FROM member; SELECT * FROM local_credential; SELECT * FROM credit_transaction; SELECT * FROM reservation; SELECT * FROM reservation_slot;"), before)
         self.assertEqual(self.sql("SELECT price_per_slot,capacity,opening_time,closing_time,status,version FROM spaces WHERE id=1;"), "9000\t20\t09:00:00\t22:00:00\tINACTIVE\t7")
-        self.assertEqual(self.sql("SELECT name LIKE '[AWS]%', image_path LIKE '/api/v1/space-images/%' FROM spaces WHERE id=1;"), "1\t1")
+        self.assertEqual(self.sql("SELECT name, image_path LIKE '/api/v1/space-images/%' FROM spaces WHERE id=1;"), "[판교] 차콜 포커스룸\t1")
 
     def test_update_empty_and_setup_missing(self):
         self.seed(create=False)
@@ -247,14 +251,14 @@ UPDATE spaces SET name='표시수정',image_path='/old.jpg',price_per_slot=9000,
         self.assertEqual(self.sql("SELECT COUNT(*) FROM spaces;"), "39")
 
     def test_untracked_late_collision_rolls_back(self):
-        self.sql(f"INSERT INTO member(email,password_hash,nickname,role,status,balance,created_at,updated_at) VALUES('aws100@amazon.com','{HASH}','existing','USER','ACTIVE',5,NOW(),NOW());")
+        self.sql(f"INSERT INTO member(email,nickname,role,status,balance,created_at,updated_at) VALUES('aws100@amazon.com','existing','USER','ACTIVE',5,NOW(),NOW());")
         self.seed(succeeds=False)
         self.assertEqual(self.sql("SELECT COUNT(*) FROM member; SELECT COUNT(*) FROM spaces; SELECT COUNT(*) FROM credit_transaction; SELECT COUNT(*) FROM slotkey_sample_registry;"), "1\n0\n0\n0")
         self.assertEqual(self.sql("SELECT balance FROM member; SELECT IS_FREE_LOCK(CONCAT(DATABASE(),':slotkey-samples'));"), "5\n1")
 
     def test_local_admin_and_legacy_aws_admin(self):
-        self.sql(f"""INSERT INTO member(email,password_hash,nickname,role,status,balance,created_at,updated_at)
-VALUES('admin000@sample.com','{HASH}','local','ADMIN','ACTIVE',0,NOW(),NOW());
+        self.sql("""INSERT INTO member(email,nickname,role,status,balance,created_at,updated_at)
+VALUES('admin000@sample.com','local','ADMIN','ACTIVE',0,NOW(),NOW());
 INSERT INTO slotkey_sample_registry VALUES('MEMBER','admin-000',1);""")
         self.seed()
         self.assertEqual(self.sql("SELECT m.email FROM member m JOIN slotkey_sample_registry r ON r.row_id=m.id WHERE r.kind='MEMBER' AND r.seed_key='admin-000';"), "admin000@sample.com")

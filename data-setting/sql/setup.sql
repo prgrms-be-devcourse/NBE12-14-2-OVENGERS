@@ -35,18 +35,21 @@ BEGIN
       IF EXISTS (SELECT 1 FROM member WHERE email=sample_email) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Sample email already belongs to an untracked member. No existing data modified.';
       END IF;
-      INSERT INTO member(email,password_hash,nickname,role,status,balance,created_at,updated_at)
+      -- V14부터 비밀번호 해시는 local_credential에 둔다. V15 정책처럼 샘플 회원은 이메일 인증 완료로 만든다.
+      INSERT INTO member(email,nickname,role,status,balance,email_verified_at,created_at,updated_at)
       VALUES(
   sample_email,
-  '$2b$12$kRiVg0sZNHrmMtl9Q7eIguuqTOc0vQY51A/REFpC5sUmr7zyRzM8u',
   CONCAT('샘플회원',LPAD(n,3,'0')),
   'USER',
   'ACTIVE',
   1000000,
   NOW(6),
+  NOW(6),
   NOW(6)
 );
       SET sample_id=LAST_INSERT_ID();
+      INSERT INTO local_credential(member_id,password_hash,password_changed_at)
+      VALUES(sample_id,'$2b$12$kRiVg0sZNHrmMtl9Q7eIguuqTOc0vQY51A/REFpC5sUmr7zyRzM8u',NOW(6));
       INSERT INTO slotkey_sample_registry VALUES('MEMBER',sample_key,sample_id);
       INSERT INTO credit_transaction(member_id,amount,type,reservation_id,balance_after,reason,created_at)
       VALUES(sample_id,1000000,'SIGNUP_GRANT',NULL,1000000,'로컬 샘플 데이터 초기 잔액',NOW());
@@ -60,7 +63,7 @@ BEGIN
     WHILE n<=13 DO
       SET sample_key=CONCAT(region_slug,'-',LPAD(n,2,'0'));
       SET photo_idx=1+MOD((region_idx-1)*13+n-1,39);
-      SET sample_name=CONCAT('[샘플] ',region_name,' ',ELT(photo_idx,'차콜 포커스룸','골든 포레스트 컨퍼런스룸','스노우뷰 미팅룸','코랄 미팅룸','클래스 세미나룸','파크뷰 워크숍룸','선샤인 오피스','우드 커넥트룸','쉐도우 라운지','화이트보드 미팅룸','포커스 클래스룸','미드나잇 블루룸','오픈 클래스룸','모노 미팅룸','그랜드 세미나홀','갤러리 컨퍼런스룸','글라스 오피스','우드 데스크룸','브릭 우드 미팅룸','라이트 미팅룸','베리 브릭룸','오렌지 포인트룸','스카이라이트 보드룸','그린 테이블룸','시티뷰 미팅룸','노트북 워크룸','그리너리 워크라운지','팀 커넥트룸','쿨그레이 미팅룸','우드 스퀘어룸','오크 워크숍룸','펜던트 라운지','블루 가든룸','블랙 체어 클래스룸','플랜트 스크린룸','플랜트 스튜디오룸','블루 오디토리움','데이라이트 세미나룸','민트 글라스룸'));
+      SET sample_name=CONCAT('[',region_name,'] ',ELT(photo_idx,'차콜 포커스룸','골든 포레스트 컨퍼런스룸','스노우뷰 미팅룸','코랄 미팅룸','클래스 세미나룸','파크뷰 워크숍룸','선샤인 오피스','우드 커넥트룸','쉐도우 라운지','화이트보드 미팅룸','포커스 클래스룸','미드나잇 블루룸','오픈 클래스룸','모노 미팅룸','그랜드 세미나홀','갤러리 컨퍼런스룸','글라스 오피스','우드 데스크룸','브릭 우드 미팅룸','라이트 미팅룸','베리 브릭룸','오렌지 포인트룸','스카이라이트 보드룸','그린 테이블룸','시티뷰 미팅룸','노트북 워크룸','그리너리 워크라운지','팀 커넥트룸','쿨그레이 미팅룸','우드 스퀘어룸','오크 워크숍룸','펜던트 라운지','블루 가든룸','블랙 체어 클래스룸','플랜트 스크린룸','플랜트 스튜디오룸','블루 오디토리움','데이라이트 세미나룸','민트 글라스룸'));
       SET sample_image=CONCAT('/images/slotkey-test-data/space-',LPAD(photo_idx,2,'0'),'.jpg');
       IF NOT EXISTS (SELECT 1 FROM slotkey_sample_registry WHERE kind='SPACE' AND seed_key=sample_key) THEN
         IF EXISTS (SELECT 1 FROM spaces WHERE name=sample_name) THEN
@@ -93,21 +96,24 @@ IF NOT EXISTS (
   END IF;
 
   INSERT INTO member(
-    email, password_hash, nickname, role, status,
-    balance, created_at, updated_at
+    email, nickname, role, status,
+    balance, email_verified_at, created_at, updated_at
   )
   VALUES(
     'admin000@sample.com',
-    '$2b$12$kRiVg0sZNHrmMtl9Q7eIguuqTOc0vQY51A/REFpC5sUmr7zyRzM8u',
     '샘플관리자',
     'ADMIN',
     'ACTIVE',
     0,
     NOW(6),
+    NOW(6),
     NOW(6)
   );
 
   SET sample_id=LAST_INSERT_ID();
+
+  INSERT INTO local_credential(member_id,password_hash,password_changed_at)
+  VALUES(sample_id,'$2b$12$kRiVg0sZNHrmMtl9Q7eIguuqTOc0vQY51A/REFpC5sUmr7zyRzM8u',NOW(6));
 
   INSERT INTO slotkey_sample_registry
   VALUES('MEMBER','admin-000',sample_id);

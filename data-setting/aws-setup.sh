@@ -109,7 +109,7 @@ SELECT IF(COUNT(*) > 0 AND SUM(success=0)=0,
   COALESCE(MAX(CAST(version AS UNSIGNED)),0),0) FROM flyway_schema_history;
 SQL
 )"
-[[ "$LATEST" =~ ^[0-9]+$ && "$LATEST" -ge 12 ]] || fail '백엔드를 실행해 Flyway V12 이상을 먼저 적용하세요.'
+[[ "$LATEST" =~ ^[0-9]+$ && "$LATEST" -ge 15 ]] || fail '백엔드를 실행해 Flyway V15 이상을 먼저 적용하세요.'
 
 status() {
   local exists

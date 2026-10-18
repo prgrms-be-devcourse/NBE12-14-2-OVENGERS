@@ -49,6 +49,13 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Access logs link sample data to a non-sample booking. Cleanup refused.';
   END IF;
   IF EXISTS (
+    SELECT 1 FROM inquiries
+    WHERE answered_by_member_id IN (SELECT row_id FROM slotkey_sample_registry WHERE kind='MEMBER')
+    AND member_id NOT IN (SELECT row_id FROM slotkey_sample_registry WHERE kind='MEMBER')
+  ) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Sample admin answered a non-sample inquiry. Cleanup refused.';
+  END IF;
+  IF EXISTS (
     SELECT 1 FROM reservation_slot WHERE space_id IN (SELECT row_id FROM slotkey_sample_registry WHERE kind='SPACE')
     AND reservation_id NOT IN (SELECT id FROM sample_owned_reservations)
   ) THEN
@@ -62,6 +69,12 @@ BEGIN
   DELETE FROM reservation_status_history WHERE reservation_id IN (SELECT id FROM sample_owned_reservations);
   DELETE FROM reservation_slot WHERE reservation_id IN (SELECT id FROM sample_owned_reservations);
   DELETE FROM credit_transaction WHERE member_id IN (SELECT row_id FROM slotkey_sample_registry WHERE kind='MEMBER');
+  -- V10 이후 회원에 연결된 기능 데이터. charge_order는 credit_transaction이 참조하므로 원장 삭제 뒤에 지운다.
+  DELETE FROM charge_order WHERE member_id IN (SELECT row_id FROM slotkey_sample_registry WHERE kind='MEMBER');
+  DELETE FROM inquiries WHERE member_id IN (SELECT row_id FROM slotkey_sample_registry WHERE kind='MEMBER');
+  DELETE FROM notification WHERE member_id IN (SELECT row_id FROM slotkey_sample_registry WHERE kind='MEMBER');
+  DELETE FROM waitlist_entry WHERE member_id IN (SELECT row_id FROM slotkey_sample_registry WHERE kind='MEMBER');
+  DELETE FROM local_credential WHERE member_id IN (SELECT row_id FROM slotkey_sample_registry WHERE kind='MEMBER');
   DELETE FROM idempotency_key WHERE member_id IN (SELECT row_id FROM slotkey_sample_registry WHERE kind='MEMBER');
   DELETE FROM refresh_token WHERE member_id IN (SELECT row_id FROM slotkey_sample_registry WHERE kind='MEMBER');
   -- 대상이 샘플인 감사 기록만 삭제. 일반 공간 등에 남긴 감사 기록은 보존합니다.
