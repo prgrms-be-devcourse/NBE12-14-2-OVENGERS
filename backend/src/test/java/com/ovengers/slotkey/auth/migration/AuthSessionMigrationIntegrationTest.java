@@ -81,7 +81,7 @@ class AuthSessionMigrationIntegrationTest {
 
             flyway.migrate();
 
-            assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("25");
+            assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("26");
             try (Connection connection = connection(mysql);
                  Statement statement = connection.createStatement();
                  ResultSet result = statement.executeQuery(
@@ -100,6 +100,26 @@ class AuthSessionMigrationIntegrationTest {
                                  + "AND column_name = 'consumed_at'")) {
                 assertThat(result.next()).isTrue();
                 assertThat(result.getString(1)).isEqualTo("YES");
+            }
+            try (Connection connection = connection(mysql);
+                 Statement statement = connection.createStatement();
+                 ResultSet result = statement.executeQuery(
+                         "SELECT COUNT(*) FROM information_schema.columns "
+                                 + "WHERE table_schema = DATABASE() "
+                                 + "AND table_name = 'login_attempt_bucket' "
+                                 + "AND column_name IN ('email', 'window_id', 'attempt_count')")) {
+                result.next();
+                assertThat(result.getInt(1)).isEqualTo(3);
+            }
+            try (Connection connection = connection(mysql);
+                 Statement statement = connection.createStatement();
+                 ResultSet result = statement.executeQuery(
+                         "SELECT IS_NULLABLE FROM information_schema.columns "
+                                 + "WHERE table_schema = DATABASE() "
+                                 + "AND table_name = 'login_attempt_bucket' "
+                                 + "AND column_name = 'attempt_count'")) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString(1)).isEqualTo("NO");
             }
         }
     }

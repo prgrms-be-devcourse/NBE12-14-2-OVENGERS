@@ -30,6 +30,7 @@ public enum ErrorCode {
     VERIFICATION_GRANT_INVALID(HttpStatus.BAD_REQUEST, "VERIFICATION_GRANT_INVALID", "인증 증표가 만료되었거나 사용할 수 없습니다. 이메일 인증을 다시 진행해주세요."),
     //── Refresh_token ─────────────────────────────────────────
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."),
+    LOGIN_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "LOGIN_RATE_LIMITED", "로그인 요청이 일시적으로 제한되었습니다."),
     ACCOUNT_INACTIVE(HttpStatus.FORBIDDEN, "ACCOUNT_INACTIVE", "이용이 제한된 계정입니다."),
     INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "INVALID_REFRESH_TOKEN", "리프레시 토큰이 유효하지 않습니다. 다시 로그인해주세요."),
     INVALID_ACCESS_TOKEN(HttpStatus.UNAUTHORIZED, "INVALID_ACCESS_TOKEN", "액세스 토큰이 유효하지 않습니다."),

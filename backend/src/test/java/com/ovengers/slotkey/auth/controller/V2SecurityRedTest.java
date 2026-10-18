@@ -73,12 +73,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 /**
  * V2 보안 회귀 테스트.
  *
- * 완료된 V2 범위와 RT Rotation 목표는 활성 상태로 검증하고,
- * 로그인 요청 제한 테스트만 4번 이슈 구현 전까지 비활성 상태로 유지한다.
+ * 완료된 V2 보안 범위의 요구사항을 회귀 테스트로 검증한다.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -264,14 +265,13 @@ class V2SecurityRedTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    @Disabled("V2 구현 전까지 CI에서 비활성화")
     @Test
-    @DisplayName("V2: 반복 로그인 실패는 요청 제한 응답을 반환한다")
+    @DisplayName("V2: 성공·실패 합산 10회 로그인은 허용하고 11번째 요청은 제한한다")
     void repeated_login_failures_are_rate_limited() throws Exception {
         String email = newEmail("rate-limit");
-        login(email);
+        MvcResult successfulLogin = login(email);
 
-        for (int attempt = 1; attempt <= 5; attempt++) {
+        for (int attempt = 2; attempt <= 10; attempt++) {
             mvc.perform(post("/api/v1/auth/login")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(Map.of(
@@ -287,7 +287,14 @@ class V2SecurityRedTest {
                                 "email", email,
                                 "password", "Wrong1234!"
                         ))))
-                .andExpect(status().isTooManyRequests());
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "840"))
+                .andExpect(jsonPath("$.status").value("FAIL"))
+                .andExpect(jsonPath("$.code").value("LOGIN_RATE_LIMITED"));
+
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + accessToken(successfulLogin)))
+                .andExpect(status().isOk());
     }
 
     @Test

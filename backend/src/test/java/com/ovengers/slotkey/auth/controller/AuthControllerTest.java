@@ -257,7 +257,7 @@ public class AuthControllerTest {
     @Test
     @DisplayName("비밀번호가 틀리면 로그인을 거절하고 쿠키를 발급하지 않는다")
     void t5() throws Exception {
-        String email = "login-failure@example.com";
+        String email = "login-failure-" + java.util.UUID.randomUUID() + "@example.com";
 
         memberRepository.save(
                 new Member(
@@ -734,7 +734,7 @@ public class AuthControllerTest {
     @Test
     @DisplayName("로그아웃 후 기존 액세스 토큰은 즉시 사용할 수 없다")
     void t17() throws Exception {
-        String email = "access-after-logout@example.com";
+        String email = "access-after-logout-" + java.util.UUID.randomUUID() + "@example.com";
 
         // 1. 실제 로그인으로 두 토큰 발급
         MvcResult loginResult = loginForTest(email);
@@ -765,7 +765,7 @@ public class AuthControllerTest {
     @Test
     @DisplayName("로그아웃은 같은 회원의 다른 로그인 세션에는 영향을 주지 않는다")
     void logoutRevokesOnlyTheSessionFromItsRefreshCookie() throws Exception {
-        String email = "separate-login-sessions@example.com";
+        String email = "separate-login-sessions-" + java.util.UUID.randomUUID() + "@example.com";
         MvcResult firstLogin = loginForTest(email);
         MvcResult secondLogin = mvc.perform(
                         post("/api/v1/auth/login")

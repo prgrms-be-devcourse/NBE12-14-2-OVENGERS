@@ -5,12 +5,14 @@ import com.ovengers.slotkey.auth.dto.request.SignupRequest;
 import com.ovengers.slotkey.auth.dto.request.PasswordResetRequest;
 import com.ovengers.slotkey.auth.dto.response.LoginResponse;
 import com.ovengers.slotkey.auth.dto.response.SignupResponse;
+import com.ovengers.slotkey.auth.ratelimit.LoginRateLimitService;
 import com.ovengers.slotkey.auth.service.AuthService;
+import com.ovengers.slotkey.auth.service.PasswordResetService;
 import com.ovengers.slotkey.member.dto.request.MemberWithdrawalRequest;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.service.MemberService;
 import com.ovengers.slotkey.member.service.MemberWithdrawalService;
-import com.ovengers.slotkey.auth.service.PasswordResetService;
+import com.ovengers.slotkey.global.error.ErrorCode;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -43,6 +45,7 @@ public class AuthController {
     private final AuthService authService;
     private final MemberWithdrawalService memberWithdrawalService;
     private final PasswordResetService passwordResetService;
+    private final LoginRateLimitService loginRateLimitService;
     private final Clock clock;
 
     @Value("${app.auth.cookie.secure}")
@@ -163,6 +166,14 @@ public class AuthController {
     public ResponseEntity<ApiResponse<LoginResponse>> login(
             @RequestBody @Valid LoginRequest request
     ){
+        var attempt = loginRateLimitService.acquire(request.email());
+        if (!attempt.allowed()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header(HttpHeaders.RETRY_AFTER,
+                            Long.toString(attempt.retryAfterSeconds()))
+                    .body(ApiResponse.fail(ErrorCode.LOGIN_RATE_LIMITED));
+        }
+
         // 1. 로그인 처리 후 액세스·리프레시 토큰을 받음
         LoginResult result = authService.login(
                 request.email(),
