@@ -37,6 +37,7 @@ export const ROUTES = {
   adminReservations: '/admin/reservations',
   adminReservationDetail: (reservationId: number | string) => `/admin/reservations/${reservationId}`,
   adminMembers: '/admin/members',
+  adminMemberDetail: (memberId: number | string) => `/admin/members/${memberId}`,
 };
 
 export interface NavItem {

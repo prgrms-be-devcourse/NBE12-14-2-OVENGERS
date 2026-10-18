@@ -8,6 +8,7 @@ const PLACEHOLDER = '_';
 const SEGMENT_ANCHOR = {
   spaceId: 'spaces',
   reservationId: 'reservations',
+  memberId: 'members',
 } as const;
 
 /**

@@ -79,6 +79,8 @@ export const API_ROUTES = {
     reservation: (reservationId: number | string) => `/admin/reservations/${reservationId}`,
     forceCancel: (reservationId: number | string) => `/admin/reservations/${reservationId}/force-cancel`,
     members: '/admin/members',
+    memberDetail: (memberId: number | string) => `/admin/members/${memberId}`,
+    memberCreditTransactions: (memberId: number | string) => `/admin/members/${memberId}/credit-transactions`,
     memberSuspend: (memberId: number | string) => `/admin/members/${memberId}/suspend`,
     memberRestore: (memberId: number | string) => `/admin/members/${memberId}/restore`,
     // 크레딧 지급(ADMIN_GRANT). 회수 없음, 자기 자신 지급 불가(core-domain-decisions.md 1-3).

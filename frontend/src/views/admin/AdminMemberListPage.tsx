@@ -19,6 +19,9 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import EmptyState from '../../components/common/EmptyState';
 import Toast from '../../components/common/Toast';
+import Link from 'next/link';
+import { ROUTES } from '../../constants/routePaths';
+
 
 export default function AdminMemberListPage() {
   const [filter, setFilter] = useState<{ status: MemberStatus | ''; keyword: string }>({
@@ -117,11 +120,13 @@ export default function AdminMemberListPage() {
               <tbody>
                 {members.map((member) => (
                   <tr key={member.memberId}>
-                    <td>
-                      {member.nickname}
-                      <small>{member.email}</small>
-                    </td>
-                    <td>{MEMBER_ROLE_LABEL[member.role] ?? member.role}</td>
+                      <td>
+                          <Link href={ROUTES.adminMemberDetail(member.memberId)} className="soft-link" title={`${member.nickname} 회원 상세 보기`}>
+                              {member.nickname}
+                          </Link>
+                          <small>{member.email}</small>
+                      </td>
+                      <td>{MEMBER_ROLE_LABEL[member.role] ?? member.role}</td>
                     <td>
                       <MemberStatusBadge status={member.status} />
                     </td>
