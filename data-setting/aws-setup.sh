@@ -154,4 +154,4 @@ ROUTINE="slotkey_aws_sample_$$_${RANDOM}"
 } > "$SQL_TEMP"
 mysql_run < "$SQL_TEMP"
 status
-echo '완료. 기존 회원·비밀번호·잔액·예약 및 공간 가격/영업시간은 보존됩니다.'
+echo '완료. 기존 회원·비밀번호·잔액·예약과 공간 수용인원·영업시간·상태는 보존되고, 샘플 공간 이름·사진·요금은 기준값으로 갱신됩니다(요금이 바뀐 공간만 version +1).'

@@ -181,7 +181,10 @@ elif 'information_schema.tables' in sql:
 
     def test_update_requires_no_password(self):
         del self.env["AWS_SAMPLE_PASSWORD_HASH_FILE"]
-        self.run_script("update")
+        result = self.run_script("update")
+        # 요금은 기준값으로 갱신되므로 완료 안내가 "가격 보존"이라고 말하면 안 된다(sample-pricing.md).
+        self.assertNotIn("가격/영업시간은 보존", result.stdout)
+        self.assertIn("요금은 기준값으로 갱신", result.stdout)
         self.assertIn("SET @aws_sample_create_missing = 0;", self.log.read_text())
 
     def test_invalid_hash_rejected_before_database_write(self):
