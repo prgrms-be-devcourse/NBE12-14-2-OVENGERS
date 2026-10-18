@@ -44,7 +44,7 @@
 | 409 | 상태 충돌 | 슬롯 중복(`RESERVATION_SLOT_CONFLICT`), 이미 취소/만료/확정된 예약에 대한 요청(`RESERVATION_STATE_CONFLICT`), `space.version` 불일치(`SPACE_VERSION_MISMATCH`), 공간 운영시간 축소 충돌(`SPACE_OPERATING_HOURS_CONFLICT`), 이메일 중복(`EMAIL_ALREADY_EXISTS`), 다른 충전 주문의 멱등키 재사용(`IDEMPOTENCY_KEY_REUSED`), 이미 신청한 대기(`WAITLIST_DUPLICATE`) |
 | 413 | 페이로드 초과 | 공간 대표 사진 파일 크기 5MB 초과(`IMAGE_SIZE_EXCEEDED`) |
 | 422 | 비즈니스 규칙 위반 | 크레딧 잔액 부족(`INSUFFICIENT_BALANCE`), 연장 불가(`RESERVATION_EXTEND_NOT_ALLOWED`), 비활성 공간(`SPACE_INACTIVE`), 관리자 정지/복구 불가(`TARGET_IS_ADMIN`), 자기 자신 크레딧 지급 불가(`SELF_GRANT_NOT_ALLOWED`), 답변 완료 문의 수정 불가(`INQUIRY_ALREADY_ANSWERED`), 대기 불필요(`WAITLIST_NOT_NEEDED`), 본인 점유와 겹침(`WAITLIST_ALREADY_HOLDING`), 대기 3건 초과(`WAITLIST_LIMIT_EXCEEDED`) |
-| 429 | 요청 제한 | 이메일 인증 임시 차단(`VERIFICATION_TEMPORARILY_BLOCKED`), 인증번호 30초 내 재요청(`VERIFICATION_RESEND_TOO_SOON`). 범용 API 요청 제한은 미구현(V2 목표) |
+| 429 | 요청 제한 | 이메일 인증 임시 차단(`VERIFICATION_TEMPORARILY_BLOCKED`), 인증번호 30초 내 재요청(`VERIFICATION_RESEND_TOO_SOON`). V2 4번(로컬 커밋 `ee39f91`): 이메일별 로그인 제한(`LOGIN_RATE_LIMITED`, `Retry-After` 헤더). 그 밖의 범용 API 요청 제한은 미구현(V2 목표) |
 | 500 | 서버 오류 | 이미지 디스크 저장 실패(`IMAGE_STORAGE_ERROR`) |
 | 503 | 외부 의존 실패 | 인증 메일 발송 실패(`VERIFICATION_MAIL_FAILED`). V2 1번(dev 병합 전): 보호 요청의 세션 조회 DB 장애(`AUTHENTICATION_SERVICE_UNAVAILABLE`) — [2-5](#2-5-v2-1번-변경--db-로그인-세션-dev-병합-전) |
 
@@ -115,6 +115,7 @@
 | 대상 | V2 1번 변경 후 계약 |
 | --- | --- |
 | 로그인 | 로그인마다 서버 세션을 만든다. 응답 형식은 같다. AT payload에 `sid`(세션 ID)가 추가되고, AT 만료는 `min(발급 + 5분, 세션 만료)`다. RT 쿠키의 DB 행은 그 세션에 연결되며 만료는 세션 만료(로그인 + 24시간)와 같다 |
+| 로그인 요청 제한 (4번, 로컬 커밋 `ee39f91`) | 요청 본문 검증을 통과한 로그인 요청을 이메일별로 센다. UTC 정렬 고정 15분 구간마다 성공·실패 합산 10회까지 처리하고, 11번째부터 구간 종료까지 비밀번호 확인 없이 429 `LOGIN_RATE_LIMITED`(공통 `ApiResponse`)와 `Retry-After: <남은 초>`(올림)를 반환한다. 미가입 이메일도 같다. 형식 오류(400)는 세지 않는다. 제한 저장소 장애는 503 `AUTHENTICATION_SERVICE_UNAVAILABLE`. 기존 세션·회원 상태에는 영향이 없다. **오류 계약 추가**(새 코드·헤더)이며 성공 응답 계약은 같다 |
 | 보호 요청 | JWT 서명·만료 검증 뒤 `sid`가 없거나 문자열이 아니면, 또는 세션이 없음·폐기·만료이거나 JWT `id`가 세션 소유 회원과 다르거나 회원이 `ACTIVE`가 아니면 `INVALID_ACCESS_TOKEN`(401). 정지·탈퇴 회원의 기존 AT도 이 경로로 401이다(`ACCOUNT_INACTIVE`가 아님). 세션 조회 중 DB 장애(트랜잭션 시작 실패 포함)는 인증 없이 `AUTHENTICATION_SERVICE_UNAVAILABLE`(503, 공통 `ApiResponse`) |
 | 토큰 재발급 | 기존 검사에 세션 미폐기·미만료 확인이 더해진다(위반 시 `INVALID_REFRESH_TOKEN` 401). 새 AT는 같은 `sid`이고 세션·RT 만료는 연장되지 않는다. 1·2번 기준 동작에서 3번 구현 커밋 `a29dfc9`의 RT 회전 동작으로 변경됐다(V2 3번 이슈) |
 | 토큰 재발급 (3번, 로컬 커밋 `a29dfc9`) | 성공할 때마다 새 AT(본문 `{ accessToken }`, 형식 동일)와 새 RT 쿠키(`Set-Cookie: refreshToken`, 기존 속성, `Max-Age` = 남은 세션 수명)를 준다. 구 RT는 한 번만 쓸 수 있다. 이미 사용한 RT를 다시 보내면 401 `INVALID_REFRESH_TOKEN`과 함께 **그 로그인 세션과 세션의 모든 RT가 폐기**된다(같은 회원의 다른 세션은 유지). 같은 RT 동시 제출은 하나만 교체되고 나머지가 재사용으로 판정되어 결국 그 세션이 폐기된다. grace 기간은 없다. 로그인 응답의 RT 쿠키 `Max-Age`도 남은 세션 수명(로그인 직후 약 86400)이다 |
@@ -122,7 +123,7 @@
 | 로그아웃 | 쿠키 RT가 속한 세션과 그 세션의 RT를 함께 폐기한다. 이후 그 세션의 기존 AT는 401, RT로 refresh도 401. 같은 회원의 다른 로그인 세션은 유지된다. 쿠키가 없거나 미등록이면 기존처럼 204 |
 | 전환 (V24) | 기존 RT는 마이그레이션에서 삭제되고, `sid` 없는 기존 AT는 거부되므로 배포 후 모든 사용자가 다시 로그인해야 한다 |
 
-아직 구현되지 않은 것: 요청 제한(4번). RT 회전·재사용 탐지(3번)는 로컬 커밋 `a29dfc9`에 포함됐으며 미Push·미병합·미배포다. 위 "계정 사건" 행은 1번 커밋 이후의 2번 커밋 변경이다. 로그인·refresh 경로의 DB 장애는 503이 아니라 Spring 기본 오류 응답이다.
+4번 로그인 요청 제한은 로컬 커밋 `ee39f91`에 포함됐으며 미Push·미병합·미배포다(위 "로그인 요청 제한 (4번)" 행). RT 회전·재사용 탐지(3번)는 로컬 커밋 `a29dfc9`에 포함됐으며 미Push·미병합·미배포다. 위 "계정 사건" 행은 1번 커밋 이후의 2번 커밋 변경이다. 로그인·refresh 경로의 DB 장애는 503이 아니라 Spring 기본 오류 응답이다.
 
 ## 3. 회원 (Member)
 

@@ -20,6 +20,8 @@
 | **2번 이슈** 전체 실행 (126개 스위트, 미커밋 작업 트리) | 16:45:20~16:51:52 | 999 | 995 | 0 | 0 | 4 |
 | **3번 이슈** 관련 5개 클래스 선택 실행 (미커밋 작업 트리) | 17:25:26~17:26:13 | 47 | 46 | 0 | 0 | 1 |
 | **3번 이슈** 마이그레이션 테스트 수정 후 `AuthSessionMigrationIntegrationTest` (미커밋 작업 트리) | 17:36:53 | 2 | 2 | 0 | 0 | 0 |
+| **4번 이슈** 선택 실행 (`LoginRateLimitIntegrationTest` 7, `AuthSessionMigrationIntegrationTest` 2, `AuthControllerTest` 3개 메서드, `V2SecurityRedTest` 1개 메서드; 미커밋 작업 트리) | 17:55:25~17:56:02 | 13 | 13 | 0 | 0 | 0 |
+| **4번 이슈** 영향 클래스 전체 실행 (`AuthControllerTest` 25, `V2SecurityRedTest` 15, `PasswordResetControllerTest` 1; 미커밋 작업 트리) | 18:04:04~18:04:28 | 41 | 41 | 0 | 0 | 0 |
 
 - 집계 기준: XML `tests`에 건너뜀이 포함된다(통과 = tests − failures − errors − skipped).
 - 첫 실행의 실패 49개: `AdminStatsControllerIntegrationTest` 35, `ReservationSearchSecurityIntegrationTest` 9, `StatsControllerIntegrationTest` 5.
@@ -29,6 +31,7 @@
 - 995개 전체 실행과 UTC 68개 선택 실행은 마지막 예외 처리 보완(`TransactionException`) **이전** 코드 기준이다. 보완 이후에는 `AuthControllerTest` 25개 선택 실행만 통과했다(2026-10-18 16:10 KST, 커밋 직전 작업 트리). 보완 이후 전체 실행은 없다.
 - 2번 이슈 두 실행은 1번 커밋 위의 미커밋 2번 변경 기준이며, 마지막 소스 수정(16:43:39) 이후 실행이다(파일 시각 기준). 남은 `@Disabled` 4개: RT 재사용 불가·RT Rotation 후 계속 갱신·동일 RT 동시 사용 1회 성공(3번 이슈), 반복 로그인 실패 429(4번 이슈).
 - 3번 이슈 실행은 마지막 소스 수정(17:24:32) 이후다. 남은 `@Disabled` 1개는 반복 로그인 실패 429(4번 이슈). `AuthSessionMigrationIntegrationTest`의 Flyway 버전 단언 차단 사항은 수정 후 단독 실행(2개 통과)으로 해결됐다. 두 3번 실행은 별도 선택 실행이며 합쳐서 전체 회귀 통과로 보지 않는다. `V2SecurityRedTest`는 이후 표시 이름·주석만 바뀌고 다시 실행되지 않았다. **3번 변경 이후 전체 테스트는 실행하지 않았다.**
+- V2 4번 이슈는 로컬 구현 커밋 `ee39f91`(미Push·미병합·미배포)으로 고정됐다. 첫 실행은 메서드 단위 선택 실행이었고, 이후 영향 클래스 3개를 클래스 전체로 실행해 41개 통과했다(마지막 소스 수정 17:55:03 이후). 두 실행은 별도 기록이다. `V2SecurityRedTest` 15개 전체 통과는 이 클래스의 결과이며, **4번 변경 뒤 전체 백엔드 테스트는 실행하지 않았다.** 테스트 소스에 남은 `@Disabled`는 없다.
 - 이 결과는 로컬 테스트 근거이며 실제 배포 환경 검증과는 별개다.
 
 ---
