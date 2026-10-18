@@ -304,7 +304,7 @@ stateDiagram-v2
 ```
 
 - 알림은 힌트이고 자리를 보장하지 않는다. 순번을 약속하려면 직접 예약 경로를 막아야 해 예약 동시성 경로를 건드리므로 자동 선점권은 3차로 미뤘다.
-- 같은 이벤트가 중복 전달되어도 알림은 한 번만 생긴다(`UNIQUE(consumer, event_id)` + `UNIQUE(event_id, waitlist_entry_id)`). Kafka는 로컬 compose 프로필(`kafka`)과 `SLOTKEY_KAFKA_ENABLED=true`에서만 켜지고, 기본값(꺼짐)에서는 알림이 생성되지 않는다.
+- 같은 이벤트가 중복 전달되어도 알림은 한 번만 생긴다(`UNIQUE(consumer, event_id)` + `UNIQUE(event_id, waitlist_entry_id)`). Kafka는 compose 프로필(`kafka`)로 띄우고 `SLOTKEY_KAFKA_ENABLED=true`일 때만 relay·컨슈머가 켜지며, 기본값(꺼짐)에서는 알림이 생성되지 않는다. 로컬과 운영 서버(2026-10-17부터 c7i-flex.large) 모두 같은 compose 정의로 Kafka를 띄운다.
 - 상세: [예약 대기](docs/decisions/waitlist.md), [Outbox·Kafka](docs/decisions/outbox-kafka.md)
 
 ### 예약 상태 전이
