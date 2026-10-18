@@ -90,7 +90,7 @@ export default function WaitlistApplyPanel({
       {applied && (
         <p role="status">
           <strong>대기 신청이 완료되었습니다.</strong>{' '}
-          <Link href={ROUTES.waitlist}>내 대기 보기</Link>
+          <Link href={ROUTES.waitlist}>빈자리 알림 보기</Link>
         </p>
       )}
       <Button

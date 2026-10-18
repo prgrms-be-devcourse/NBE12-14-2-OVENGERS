@@ -41,7 +41,7 @@ export default function DoorVerifyForm({
       }}
     >
       <Select
-        label="내 예약"
+        label="출입할 예약"
         required
         disabled={disabled || loading}
         options={[

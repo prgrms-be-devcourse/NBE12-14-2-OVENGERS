@@ -27,7 +27,7 @@ import ErrorMessage from '../../components/common/ErrorMessage';
 export default function DoorTerminalPage() {
   const { member, initializing } = useAuth();
   if (initializing) return <LoadingSpinner />;
-  if (!member) return <section className="terminal panel"><h1>모의 출입</h1><p>로그인 후 내 예약으로 출입을 확인할 수 있습니다.</p><Link className="btn primary" href={ROUTES.login}>로그인</Link></section>;
+  if (!member) return <section className="terminal panel"><h1>출입하기</h1><p>로그인하면 예약한 오피스의 출입을 확인할 수 있습니다.</p><Link className="btn primary" href={ROUTES.login}>로그인</Link></section>;
   return <MemberDoorTerminal key={member.memberId} />;
 }
 
@@ -68,14 +68,14 @@ function MemberDoorTerminal() {
   const { execute, loading, error, setError } = useAction(async () => {
     setResult(null);
     const selected = reservations?.find((item) => String(item.reservationId) === form.reservationId);
-    if (!selected) throw new Error('내 예약을 먼저 선택해 주세요.');
+    if (!selected) throw new Error('출입할 예약을 먼저 선택해 주세요.');
     // 이름은 표시용이다. 본인 예약 상세를 재조회하고 공간 ID로만 연결한다.
     const current = await getMyReservation(selected.reservationId);
     if (current.reservationId !== selected.reservationId || current.spaceId !== selected.spaceId) {
       throw new Error('예약 정보가 변경되었습니다. 목록을 새로고침하고 다시 선택해 주세요.');
     }
     if (!['CONFIRMED', 'IN_USE'].includes(current.status)) {
-      throw new Error('현재 출입할 수 없는 예약 상태입니다. 내 예약을 확인해 주세요.');
+      throw new Error('현재 출입할 수 없는 예약 상태입니다. 예약 내역을 확인해 주세요.');
     }
     const response = await verifyAccess({
       token: (form.accessKey ?? '').replace(/\s/g, ''),
@@ -88,8 +88,8 @@ function MemberDoorTerminal() {
     <div className={`terminal ${styles.page}`}>
       <div className="terminal-top">
         <p className="page-kicker">ACCESS YOUR SPACE</p>
-        <h1 ref={formHeading} tabIndex={-1}>모의 출입</h1>
-        <p>{allowed ? '예약한 오피스에서 좋은 시간을 시작하세요.' : '내 예약을 선택하고 출입을 확인하세요.'}</p>
+        <h1 ref={formHeading} tabIndex={-1}>출입하기</h1>
+        <p>{allowed ? '예약한 오피스에서 좋은 시간을 시작하세요.' : '출입할 예약을 선택하고 출입을 확인하세요.'}</p>
       </div>
 
       {allowed && result ? (
@@ -106,7 +106,7 @@ function MemberDoorTerminal() {
             {result.attemptedAt && <div><dt>승인 시각</dt><dd>{formatDateTime(result.attemptedAt)}</dd></div>}
           </dl>
           <div className={styles.actions}>
-            <Link className={styles.primary} href={ROUTES.reservations}>내 예약 보기</Link>
+            <Link className={styles.primary} href={ROUTES.reservations}>예약 내역 보기</Link>
             <button type="button" className={styles.reset} onClick={() => {
               setResult(null);
               setForm({ accessKey: '', reservationId: '' });
@@ -116,7 +116,7 @@ function MemberDoorTerminal() {
           </div>
         </section>
       ) : <>
-      {reservationsLoading && <p role="status">내 예약을 불러오고 있습니다…</p>}
+      {reservationsLoading && <p role="status">예약 내역을 불러오고 있습니다…</p>}
       <ErrorMessage error={reservationsError} onRetry={reloadReservations} />
       {!reservationsLoading && !reservationsError && reservations?.length === 0 && <p>출입을 확인할 예약이 없습니다. 확정되었거나 이용 중인 예약만 표시됩니다.</p>}
       <DoorVerifyForm

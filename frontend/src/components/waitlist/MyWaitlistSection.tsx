@@ -47,7 +47,7 @@ export default function MyWaitlistSection() {
 
   return (
     <section className="section" aria-labelledby="my-waitlist-title">
-      <h2 id="my-waitlist-title">내 대기</h2>
+      <h2 id="my-waitlist-title">빈자리 알림</h2>
       <p className="muted">자리가 나면 알려 드립니다. 알림은 안내일 뿐 예약은 선착순입니다.</p>
       <ErrorMessage error={error} onRetry={() => { void run().catch(() => {}); }} />
       <ErrorMessage error={cancelError} />

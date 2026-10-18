@@ -3,21 +3,18 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef } from 'react';
-import { ROUTES, USER_NAV } from '../../constants/routePaths';
+import { ROUTES, visibleUserNav } from '../../constants/routePaths';
 import { useAuth } from '../../hooks/useAuth';
 import { formatCredit } from '../../utils/price';
 import BrandMark from '../brand/BrandMark';
 import NotificationLink from '../notification/NotificationLink';
 import ActiveLink from './ActiveLink';
 
-/** 로그인한 일반 회원에게만 보이는 상단 메뉴 */
-const MEMBER_ONLY_NAV: Set<string> = new Set([ROUTES.ranking, ROUTES.reservations, ROUTES.waitlist]);
-
 export default function Header() {
   const { member, isAdmin, logout } = useAuth();
   const pathname = usePathname();
   const isHome = pathname === '/';
-  const hideMyReservations = isAdmin || pathname === '/admin' || pathname.startsWith('/admin/');
+  const hideMemberMenus = isAdmin || pathname === '/admin' || pathname.startsWith('/admin/');
   const accountRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const menu = accountRef.current;
@@ -79,7 +76,7 @@ export default function Header() {
       </Link>
 
       <nav className="nav" aria-label="주요 메뉴">
-        {USER_NAV.filter((item) => !MEMBER_ONLY_NAV.has(item.href) || (member && !hideMyReservations)).map((item) => (
+        {visibleUserNav(hideMemberMenus).map((item) => (
           <ActiveLink key={item.href} href={item.href}>{item.label}</ActiveLink>
         ))}
       </nav>

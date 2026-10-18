@@ -58,10 +58,10 @@ export default function WaitlistPage() {
       <div className="pagehead">
         <div>
           <p className="page-kicker waitlist-kicker">MY WAITLIST</p>
-          <h1>내 대기</h1>
+          <h1>빈자리 알림</h1>
           <p>
             자리가 나면 알려 드립니다. 알림은 안내일 뿐 예약은 선착순이며, 대기는 예약이 아닙니다.
-            확정된 일정은 <Link href={ROUTES.reservations}>내 예약</Link>에서 확인하세요.
+            확정된 일정은 <Link href={ROUTES.reservations}>예약 내역</Link>에서 확인하세요.
           </p>
         </div>
         <Link href={ROUTES.spaces} className="btn primary">

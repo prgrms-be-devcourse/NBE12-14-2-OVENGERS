@@ -45,14 +45,24 @@ export interface NavItem {
   requiresAuth?: boolean;
 }
 
-/** 상단 메뉴 (일반 사용자) */
+/**
+ * 상단 메뉴 (일반 사용자). 비로그인 방문자에게도 같은 메뉴를 보여 주고,
+ * requiresAuth 메뉴는 화면의 RequireAuth 가 로그인 화면으로 보낸다.
+ */
 export const USER_NAV: NavItem[] = [
   { href: ROUTES.spaces, label: '오피스 찾기' },
-  { href: ROUTES.ranking, label: '베스트 랭킹' },
-  { href: ROUTES.reservations, label: '내 예약' },
-  { href: ROUTES.waitlist, label: '내 대기' },
-  { href: ROUTES.door, label: '모의 출입' },
+  { href: ROUTES.ranking, label: '인기 오피스' },
+  { href: ROUTES.reservations, label: '예약 내역', requiresAuth: true },
+  { href: ROUTES.waitlist, label: '빈자리 알림', requiresAuth: true },
+  { href: ROUTES.door, label: '출입하기', requiresAuth: true },
 ];
+
+/** 관리자 화면에서 숨기는 회원 전용 메뉴 */
+const MEMBER_ONLY_NAV: Set<string> = new Set([ROUTES.ranking, ROUTES.reservations, ROUTES.waitlist]);
+
+export function visibleUserNav(hideMemberMenus: boolean): NavItem[] {
+  return hideMemberMenus ? USER_NAV.filter((item) => !MEMBER_ONLY_NAV.has(item.href)) : USER_NAV;
+}
 
 /** 좌측 메뉴 (관리자) */
 export const ADMIN_NAV: NavItem[] = [

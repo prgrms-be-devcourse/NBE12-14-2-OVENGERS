@@ -66,7 +66,7 @@ export default function WithdrawalDialog({ balance, onClose }: {
         <ErrorMessage error={validationError} />
         <ErrorMessage error={error} />
         {error?.code === 'WITHDRAWAL_ACTIVE_RESERVATION' && (
-          <p><Link href={ROUTES.reservations} className="soft-link" onClick={onClose}>내 예약 확인하기</Link></p>
+          <p><Link href={ROUTES.reservations} className="soft-link" onClick={onClose}>예약 내역 확인하기</Link></p>
         )}
         <div className="actions wrap">
           <Button disabled={loading} onClick={onClose}>취소</Button>

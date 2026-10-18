@@ -122,7 +122,7 @@ const endsAt = new Date(`${reservation.endTime}+09:00`);
       {confirmed && <PaymentCelebration key={reservationId} reservationId={reservationId} />}
       {(confirmed || inUse || status === RESERVATION_STATUS.COMPLETED) && <ReservationSteps currentStep={3} />}
       <nav className="crumb" aria-label="현재 위치">
-        <Link href={ROUTES.reservations}>내 예약</Link>
+        <Link href={ROUTES.reservations}>예약 내역</Link>
         <span>›</span>
         <span>{formatReservationNo(reservation.reservationId)}</span>
       </nav>
@@ -261,7 +261,7 @@ const endsAt = new Date(`${reservation.endTime}+09:00`);
           </>
 
           <p className="note">
-            출입은 <Link href={ROUTES.door} className="soft-link">모의 출입</Link>에서 확인합니다.
+            출입은 <Link href={ROUTES.door} className="soft-link">출입하기</Link> 화면에서 확인합니다.
           </p>
         </aside>
       </div>
