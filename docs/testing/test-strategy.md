@@ -3,6 +3,8 @@
 > **원칙**: 문서에 명시된 비즈니스 규칙과 보안 정책은 전부 대응하는 테스트 코드로 검증되어야 한다. (**규칙 하나 = 테스트 하나**)
 >
 > 본 문서는 [`docs/core-domain-decisions.md`](../core-domain-decisions.md) 및 세부 결정 문서들의 정책이 백엔드/프론트엔드 어디에서 어떻게 검증되고 있는지, 그리고 현재 구현되지 않은 미검증 영역이 무엇인지 실행 가능한 기준으로 매핑한 테스트 전략 문서다.
+>
+> **2026-10-18 부분 대조 (`16b9ead`)**: Kotlin 전환 준비에 필요한 문의·충전 원장 설명을 정정했다. 기존 표의 줄 번호·기타 gap·과거 통과 수는 전체 재검증 결과가 아니다. 추가된 인증·PG/웹훅·Outbox/알림·통계의 기존 테스트/보강 대응표는 [마이그레이션 테스트 기준선](../plans/kotlin-migration/01-test-baseline.md)에 있으며, 실제 실행 성공은 [날짜별 결과](test-results.md)로 구분한다.
 
 ---
 
@@ -12,7 +14,7 @@
 - **`Clock` 주입 (`FixedClockConfig`)**: 시간 경계 조건 검증 시 `Thread.sleep` 없이 가상 시간을 주입하여 `HELD` 10분 만료, 체크인 시작 15분 전/후 경계, 노쇼 판정 등을 밀리초 단위로 정확하게 검증한다.
 - **다중 스레드/커넥션 (`CountDownLatch`, `ExecutorService`)**: 동시성 테스트에서 복수의 스레드가 동시에 같은 리소스에 경합을 유도하여 데이터 정합성을 검증한다.
 - **MockMvc / Spring Security Test**: 관리자 권한(`ROLE_ADMIN`), 인증 토큰 누락, 위변조, 정지 회원 토큰 등의 인가 흐름을 슬라이스/통합 테스트한다.
-- **Node.js 내장 Test Runner (`node --test`)**: 프론트엔드의 컴포넌트 정적 렌더링(HTML 마크업), 날짜/시간대 포맷팅, 검색 필터 유효성, 문의 API 페이로드 규격을 14개 자동화 테스트로 검증한다.
+- **Node.js 내장 Test Runner (`node --test`)**: 프론트엔드의 정적 렌더링, 시간대·검색 필터·API 페이로드 등을 검증한다. 과거 14개 통과 수를 현재 전체 테스트 수로 사용하지 않고 새 실행에서 집계한다.
 
 ---
 
@@ -42,7 +44,7 @@
 | --- | --- | --- | --- |
 | 2-1 | 잔액 부족 상태에서 결제(`/pay`) 시도 | 서비스 단위 테스트에서 `BusinessException(INSUFFICIENT_BALANCE)` 발생 및 확정 전이 미실행 확인. 통합 동시성 테스트에서 잔액 부족 실패 시 Idempotency-Key 미소진으로 충전 후 동일 키 재시도 성공 확인 (※ HTTP 422 응답 자체는 컨트롤러 테스트 대상이며, 서비스 테스트에서 직접 검증하지 않음) | [`ReservationPaymentConfirmServiceTest`](../../backend/src/test/java/com/ovengers/slotkey/reservation/service/ReservationPaymentConfirmServiceTest.java) (`confirm_insufficientBalance_propagatesExceptionWithoutTransition`, L196~L214), [`ReservationPaymentConcurrencyTest`](../../backend/src/test/java/com/ovengers/slotkey/reservation/service/ReservationPaymentConcurrencyTest.java) (`pay_insufficientBalance_doesNotConsumeIdempotencyKey`, L106~L125) |
 | 2-2 | 동시 결제 2건의 겹치는 금액 차감 시도 (동시 차감 경합 및 음수 잔액 방지) | 조건부 UPDATE(`balance >= :amount`)를 통한 원자적 음수 차단 | *자동화 테스트 미구현 (향후 보강 대상)* |
-| 2-3 | 크레딧 거래 엔티티 생성 및 잔액 반영 단위 검증 | 거래 유형(`RESERVATION_CHARGE`), 차감액, `balanceAfter` 필드 생성 및 Mock 저장 검증 (`SUM(amount) == balance` 실 DB 무결성 쿼리는 미검증) | [`CreditServiceImplTest`](../../backend/src/test/java/com/ovengers/slotkey/credit/CreditServiceImplTest.java) (`charge_success`, L72~L97) |
+| 2-3 | 크레딧 거래 엔티티 생성 및 잔액 반영 단위 검증 | RESERVATION_CHARGE·차감액·balanceAfter·Mock 저장을 확인한다. 이 단위 테스트는 DB SUM 검증이 아니지만 PG 충전 통합 테스트에는 별도의 원장 SUM/잔액 assertion이 있다. | [`CreditServiceImplTest`](../../backend/src/test/java/com/ovengers/slotkey/credit/CreditServiceImplTest.java) (`charge_success`), [`ChargeOrderConfirmIntegrationTest`](../../backend/src/test/java/com/ovengers/slotkey/credit/service/ChargeOrderConfirmIntegrationTest.java) (`assertBalanceInvariant`) |
 | 2-4 | 취소 환불 구간별 분리 호출 (시작 1시간 전 마감 후 50% 위약금 구간) | 서비스 단위 테스트에서 `creditService.refund`(전액) 및 `penalize`(50% 위약금) 분리 호출 및 응답 금액(`refundAmount`, `penaltyAmount`) 계산 검증 (※ 실제 DB에 `REFUND`와 `PENALTY` 두 건의 원장 행이 영속화되는 통합 검증은 별도 대상) | [`ReservationCancelServiceTest`](../../backend/src/test/java/com/ovengers/slotkey/reservation/service/ReservationCancelServiceTest.java) (`cancel_afterOneHourDeadline_halfRefund`, L144~L163) |
 | 2-5 | 관리자 크레딧 지급 | 양수 금액 지급 및 잔액 반영 | [`CreditGrantServiceTest`](../../backend/src/test/java/com/ovengers/slotkey/credit/CreditGrantServiceTest.java) |
 
@@ -120,15 +122,15 @@
 
 ## 9. 현재 미구현 및 미검증 영역 (Gap Analysis)
 
-문서의 신뢰성을 위해 현재 테스트 코드가 존재하지 않거나 자동화 검증이 미비한 영역을 명확히 구분합니다:
+과거 미검증 목록을 바탕으로 하되 2026-10-18에는 아래 문의·충전 항목을 부분 대조했다. 나머지 항목은 신규 작업 전 현재 소스와 재대조하며 “테스트 부재”를 그대로 신규 작성 지시로 쓰지 않는다. 소스 존재와 실행 성공은 구분한다.
 
 1. **프론트엔드 자동화 테스트의 범위와 한계**:
-   - **기구현 검증**: Node.js 내장 test runner 기반 단위 테스트([`frontend/tests/reservation-card.test.cjs`](../../frontend/tests/reservation-card.test.cjs), [`frontend/tests/inquiry-and-search.test.cjs`](../../frontend/tests/inquiry-and-search.test.cjs)) **14개 통과 확인** (`node --test tests/*.test.cjs`). 예약 카드 시간 포맷팅(`HH:mm`) 정적 렌더링, 공간 검색 필터 직렬화, 문의 API 페이로드/HTML escaping, 관리자 대시보드 서울 기준 시각 및 활성 예약 집계 로직이 자동 검증됨.
+   - **과거 실행 기록**: 2026-09-24 기록의 Node 테스트 14개 통과는 당시 결과다. 현재 테스트 목록/케이스 수는 `node --test tests/*.cjs`로 새로 집계한다. 기존 예약 카드·검색·문의·관리자 대시보드 정적 검증과 이후 추가된 테스트를 구분한다.
    - **미구현 영역**: Jest/Vitest 통합 테스트 러너 환경, Playwright/Cypress 브라우저 E2E 테스트, 실제 브라우저 DOM 렌더링 및 클릭·입력 상호작용 자동화 테스트는 부재함.
-2. **회원 1:1 문의 (Inquiry) 도메인 백엔드 테스트 부재**:
-   - V10 마이그레이션 및 API(`POST /api/v1/inquiries`, `GET /api/v1/admin/inquiries` 등)와 프론트엔드 화면은 구현되어 있으나, 백엔드 전용 단위/통합 테스트 클래스가 현재 작성되어 있지 않음 (**미검증·향후 보강 대상**).
-3. **크레딧 동시 차감 경합 및 무결성 쿼리 테스트 부재**:
-   - 크레딧 증가와 상태 변경 간의 경합(`CreditBalanceConcurrencyIntegrationTest`)은 검증되어 있으나, 복수 결제의 동시 차감 시 음수 잔액 방지 DB 경합 테스트 및 전체 `credit_transaction` SUM 일치 DB 통합 테스트는 미구현 상태임.
+2. **문의의 회원·서비스/DB 검증 보강**:
+   - [`AdminInquiryControllerTest`](../../backend/src/test/java/com/ovengers/slotkey/inquiry/controller/AdminInquiryControllerTest.java)에 11개 테스트가 있다. 실제 SecurityFilterChain을 포함한 WebMvcTest로 목록의 관리자/일반 회원/미인증, 필터/기본 페이징·상세/404·답변 성공 JSON/위임을 확인한다. 서비스는 MockBean이므로 회원 소유권·수정·답변의 실제 저장/상태 전이와 거절 부작용 부재는 별도 보강 대상이다. 이번에는 재실행하지 않았다.
+3. **크레딧 동시 차감 및 복합 원장 흐름 보강**:
+   - `CreditBalanceConcurrencyIntegrationTest`는 크레딧 증가/회원 상태 변경 경합이다. [`ChargeOrderConfirmIntegrationTest`](../../backend/src/test/java/com/ovengers/slotkey/credit/service/ChargeOrderConfirmIntegrationTest.java)의 `assertBalanceInvariant`는 실제 DB의 회원 잔액과 원장 SUM을 비교한다. 다만 PG 충전 경로의 assertion을 모든 예약 차감·환불·위약금 조합의 검증 완료로 확대하지 않는다. 서로 다른 예약의 잔액 초과 동시 차감 등은 [금전·경합 계획](../plans/kotlin-migration/02-money-and-concurrency.md)에 따라 누락을 대조·보강한다.
 4. **상태 전이 6종 전수 매트릭스 및 노쇼 크레딧 미환불 DB 검증 부재**:
    - 조건부 UPDATE의 0 반환 시 예외 발생 단위 테스트는 있으나, 상태 전이 불가 6종 조합에 대한 전수 통합 테스트 및 노쇼 전이 시 실제 크레딧 잔액 미변동 실 DB 검증은 미구현 상태임.
 5. **사용자 일반 취소 재취소 및 이용 시작 후 취소 거절 시간 경계 테스트 부재**:

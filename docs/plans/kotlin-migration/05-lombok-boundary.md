@@ -4,11 +4,13 @@
 
 ## 현재 경계
 
-운영 Java 파일 70개가 Lombok을 import한다. [`Space`](../../../backend/src/main/java/com/ovengers/slotkey/space/entity/Space.java), [`Reservation`](../../../backend/src/main/java/com/ovengers/slotkey/reservation/entity/Reservation.java), [`Inquiry`](../../../backend/src/main/java/com/ovengers/slotkey/inquiry/entity/Inquiry.java)는 builder·getter·무인자 생성자에 의존한다. [`SpaceResponse`](../../../backend/src/main/java/com/ovengers/slotkey/space/dto/response/SpaceResponse.java)는 `record`이지만 Lombok builder를 사용한다. 서비스/컨트롤러의 `@RequiredArgsConstructor`와 테스트의 `@InjectMocks`도 호출 형태에 영향을 준다.
+2026-10-18 / `16b9ead`의 운영 Java 280개 중 **82개 파일**이 Lombok을 import한다. [`Space`](../../../backend/src/main/java/com/ovengers/slotkey/space/entity/Space.java), [`Reservation`](../../../backend/src/main/java/com/ovengers/slotkey/reservation/entity/Reservation.java), [`Inquiry`](../../../backend/src/main/java/com/ovengers/slotkey/inquiry/entity/Inquiry.java)는 builder·getter·무인자 생성자에 의존한다. [`SpaceResponse`](../../../backend/src/main/java/com/ovengers/slotkey/space/dto/response/SpaceResponse.java)는 `record`이지만 Lombok builder를 사용한다. 서비스/컨트롤러의 `@RequiredArgsConstructor`와 테스트의 `@InjectMocks`도 호출 형태에 영향을 준다.
+
+추가된 PG·Outbox·대기/알림·통계 영역에는 수동 생성자/getter도 섞여 있다. `ChargeOrder`, `WaitlistEntry`, `SpaceRankingSnapshot`, `SlotReleasedHandler` 등의 명시적 API와, `LocalCredential`·인증 엔티티의 Lombok API를 파일별로 구분한다. “추가 파일 전체가 Lombok 의존”이라고 가정하지 않는다.
 
 ## 조사와 수정 방법
 
-1. **인벤토리 작성.** `rg -l 'import lombok' backend/src/main/java`로 파일을 추출하고 `엔티티`, `DTO`, `서비스/컨트롤러`, `기타`로 분류한다. 첫 Kotlin 전환 후보가 호출하는 Lombok getter·builder·생성자와 Java 테스트의 호출부를 표시한다. 70개 파일을 한 번에 고치지 않는다.
+1. **인벤토리 작성.** `rg -l 'import lombok' backend/src/main/java`로 착수 시 목록을 다시 추출하고 엔티티/DTO/서비스·컨트롤러/기타로 분류한다. record 포함 파일 85개와 Lombok 파일 82개는 집계 기준이 다르다. 첫 전환 후보의 Lombok 생성 API와 명시적 Java API, Java 테스트 호출부를 구분해 직접 경계만 정리한다.
 2. **경계별 해결 선택.** 직접 의존이 적으면 Java 쪽에 명시적 생성자/팩터리·메서드를 추가해 Kotlin 호출부가 안정적인 JVM API를 보게 한다. 클래스 자체를 Kotlin으로 옮길 때는 주 생성자와 필요한 팩터리로 대체하고 Java 호출부를 같은 PR에서 수정한다. 같은 모듈의 Java Lombok 생성 멤버를 Kotlin 소스가 대량 참조해야 한다면 공식 [Kotlin Lombok 컴파일러 플러그인](https://kotlinlang.org/docs/lombok.html)을 작은 시범 파일에서 검증한 뒤 채택 여부를 정한다.
 3. **Java 호환 확인.** `Space.builder()`와 `SpaceResponse.builder()`, `Reservation.createHeld()`, 테스트의 `getXxx()` 호출을 검색한다. Kotlin `data class` 프로퍼티는 Java `record`의 `name()` 접근자를 그대로 만들지 않으므로 [03 계약 문서](03-api-contract.md)에 따라 호출부를 함께 수정한다.
 4. **Spring 주입 전환.** Lombok `@RequiredArgsConstructor`를 제거하는 파일은 Kotlin 주 생성자에 모든 의존성을 `private val`로 선언한다. Bean 생성 및 `@Transactional` 프록시 테스트를 실행한다. Java Mockito `@InjectMocks` 테스트는 생성자 변경 후 클린 컴파일과 실제 객체 생성까지 확인한다.
@@ -27,5 +29,5 @@
 ## 완료 조건
 
 - 첫 전환 범위의 Lombok 경계가 목록화되고 해결 방식이 파일별로 정해진다.
-- `cd backend && ./gradlew clean compileKotlin compileJava test`가 통과한다.
+- `cd backend && ./gradlew clean compileKotlin compileJava test`와 최종 필터 없는 `./gradlew clean build`가 통과한다.
 - Java 테스트의 builder/getter 사용과 Kotlin 호출이 모두 컴파일·동작한다. 남은 Lombok 의존성은 빌드에 유지된다.
