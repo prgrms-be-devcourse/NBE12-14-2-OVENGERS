@@ -576,7 +576,7 @@ bash data-setting/setup.sh setup
 ```
 - **관리자 계정**: `admin000@sample.com` / `00000000`
 - **일반 회원 계정**: `user001@sample.com` ~ `user100@sample.com` / `00000000` (샘플 계정당 1,000,000 크레딧 및 `SIGNUP_GRANT` 원장 보유)
-- ※ 참고: 신규 회원가입 시 기본 지급되는 크레딧은 `50,000` 크레딧(`application.yml`의 `app.credit.signup-grant`)이며, 개발 샘플 계정에는 테스트 편의를 위해 `1,000,000` 크레딧이 초기 적재되어 있습니다.
+- ※ 참고: 신규 회원가입 시 기본 지급되는 크레딧은 `300,000` 크레딧(`application.yml`의 `app.credit.signup-grant`)이며, 개발 샘플 계정에는 테스트 편의를 위해 `1,000,000` 크레딧이 초기 적재되어 있습니다.
 
 샘플 데이터 적재가 완료되면 백엔드 서버를 다시 기동하여 실행 상태를 유지합니다:
 ```bash
