@@ -56,11 +56,13 @@ class StatsControllerIntegrationTest extends IntegrationTestSupport {
     private SettableClock settableClock;
 
     private String userToken;
+    private Member userMember;
 
     @BeforeEach
     void setUp() {
         settableClock.set(ZonedDateTime.of(2026, 10, 16, 10, 0, 0, 0, SettableClockConfig.KST));
-        userToken = bearer(saveMember(MemberRole.USER));
+        userMember = saveMember(MemberRole.USER);
+        userToken = bearer(userMember);
     }
 
     @Test
@@ -146,7 +148,9 @@ class StatsControllerIntegrationTest extends IntegrationTestSupport {
         snapshotRepository.saveAndFlush(new SpaceRankingSnapshot(RankingPeriodType.DAILY, yesterday, a, "판교",
                 100, 2, 4, yesterday.plusDays(1).atTime(0, 1)));
 
-        settableClock.set(ZonedDateTime.of(2026, 10, 17, 10, 0, 0, 0, SettableClockConfig.KST));
+        // 통계 기준 시각을 다음 날로 옮긴 뒤, 만료되지 않는 세션을 다시 발급해 통계 응답을 검증한다.
+        settableClock.set(ZonedDateTime.of(2026, 10, 17, 9, 59, 0, 0, SettableClockConfig.KST));
+        userToken = bearer(userMember);
         mockMvc.perform(get(SPACE_RANKING).header(HttpHeaders.AUTHORIZATION, userToken)
                         .param("period", "DAILY").param("date", "2026-10-16"))
                 .andExpect(status().isOk())
@@ -172,7 +176,7 @@ class StatsControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     private String bearer(Member member) {
-        return "Bearer " + jwtProvider.genAccessToken(member);
+        return "Bearer " + issueSessionBoundAccessToken(member, jwtProvider);
     }
 
     private Long saveSpace(String name, String location) {

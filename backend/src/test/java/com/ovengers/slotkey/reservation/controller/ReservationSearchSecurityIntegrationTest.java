@@ -1,6 +1,8 @@
 package com.ovengers.slotkey.reservation.controller;
 
 import com.ovengers.slotkey.global.security.jwt.JwtProvider;
+import com.ovengers.slotkey.auth.repository.AuthSessionRepository;
+import com.ovengers.slotkey.auth.repository.RefreshTokenRepository;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.entity.MemberRole;
 import com.ovengers.slotkey.member.repository.MemberRepository;
@@ -63,6 +65,12 @@ class ReservationSearchSecurityIntegrationTest extends IntegrationTestSupport {
     private ReservationStatusHistoryRepository reservationStatusHistoryRepository;
 
     @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
+    private AuthSessionRepository authSessionRepository;
+
+    @Autowired
     private JwtProvider jwtProvider;
 
     private Member memberA;
@@ -80,6 +88,8 @@ class ReservationSearchSecurityIntegrationTest extends IntegrationTestSupport {
         reservationStatusHistoryRepository.deleteAllInBatch();
         reservationRepository.deleteAllInBatch();
         spaceRepository.deleteAllInBatch();
+        refreshTokenRepository.deleteAllInBatch();
+        authSessionRepository.deleteAllInBatch();
         memberRepository.deleteAllInBatch();
         resA.clear();
         resB.clear();
@@ -91,9 +101,9 @@ class ReservationSearchSecurityIntegrationTest extends IntegrationTestSupport {
         ReflectionTestUtils.setField(admin, "role", MemberRole.ADMIN);
         admin = memberRepository.save(admin);
 
-        tokenA = jwtProvider.genAccessToken(memberA);
-        tokenB = jwtProvider.genAccessToken(memberB);
-        tokenAdmin = jwtProvider.genAccessToken(admin);
+        tokenA = issueSessionBoundAccessToken(memberA, jwtProvider);
+        tokenB = issueSessionBoundAccessToken(memberB, jwtProvider);
+        tokenAdmin = issueSessionBoundAccessToken(admin, jwtProvider);
 
         // 2. 공간 등록 (S1 ~ S4)
         Space spaceS1 = spaceRepository.save(Space.builder()
@@ -445,6 +455,8 @@ class ReservationSearchSecurityIntegrationTest extends IntegrationTestSupport {
         reservationStatusHistoryRepository.deleteAllInBatch();
         reservationRepository.deleteAllInBatch();
         spaceRepository.deleteAllInBatch();
+        refreshTokenRepository.deleteAllInBatch();
+        authSessionRepository.deleteAllInBatch();
         memberRepository.deleteAllInBatch();
     }
 }

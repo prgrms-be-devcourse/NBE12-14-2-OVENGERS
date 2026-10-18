@@ -6,15 +6,18 @@ import com.ovengers.slotkey.credit.entity.ChargeOrderStatus;
 import com.ovengers.slotkey.credit.service.ChargeOrderConfirmService;
 import com.ovengers.slotkey.credit.service.ChargeOrderService;
 import com.ovengers.slotkey.global.config.SecurityConfig;
+import com.ovengers.slotkey.global.config.ClockConfig;
 import com.ovengers.slotkey.global.config.WebMvcConfig;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.global.error.GlobalExceptionHandler;
 import com.ovengers.slotkey.global.security.CurrentMemberArgumentResolver;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.global.security.jwt.JwtProvider;
 import com.ovengers.slotkey.global.security.jwt.JwtUtil;
 import com.ovengers.slotkey.member.entity.MemberRole;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +36,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 import static org.mockito.BDDMockito.given;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -45,6 +50,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @Import({
         SecurityConfig.class,
+        ClockConfig.class,
         JwtProvider.class,
         WebMvcConfig.class,
         CurrentMemberArgumentResolver.class,
@@ -61,6 +67,15 @@ class ChargeOrderControllerTest {
     @MockBean
     private ChargeOrderConfirmService chargeOrderConfirmService;
 
+    @MockBean
+    private AuthSessionService authSessionService;
+
+    @BeforeEach
+    void allowTestSession() {
+        given(authSessionService.validate(anyString(), anyLong()))
+                .willReturn(AuthSessionService.ValidationResult.VALID);
+    }
+
     @Value("${custom.jwt.secret-key}")
     private String secretKey;
 
@@ -73,7 +88,8 @@ class ChargeOrderControllerTest {
                 Map.of(
                         "id", 7L,
                         "email", "member@test.com",
-                        "role", MemberRole.USER.name()
+                        "role", MemberRole.USER.name(),
+                        "sid", "test-session"
                 )
         );
         ChargeOrderResponse response = new ChargeOrderResponse(
@@ -305,7 +321,8 @@ class ChargeOrderControllerTest {
                 Map.of(
                         "id", 7L,
                         "email", "member@test.com",
-                        "role", MemberRole.USER.name()
+                        "role", MemberRole.USER.name(),
+                        "sid", "test-session"
                 )
         );
     }
@@ -330,7 +347,8 @@ class ChargeOrderControllerTest {
                 Map.of(
                         "id", 7L,
                         "email", "member@test.com",
-                        "role", MemberRole.USER.name()
+                        "role", MemberRole.USER.name(),
+                        "sid", "test-session"
                 )
         );
         MockHttpServletRequestBuilder request = post(

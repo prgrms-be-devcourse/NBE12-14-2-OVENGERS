@@ -2,6 +2,8 @@ package com.ovengers.slotkey.inquiry.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ovengers.slotkey.global.config.SecurityConfig;
+import com.ovengers.slotkey.global.config.ClockConfig;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.global.config.WebMvcConfig;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
@@ -15,6 +17,7 @@ import com.ovengers.slotkey.inquiry.entity.InquiryStatus;
 import com.ovengers.slotkey.inquiry.service.AdminInquiryService;
 import com.ovengers.slotkey.member.entity.MemberRole;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +41,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -48,7 +53,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(AdminInquiryController.class)
 @ActiveProfiles("test")
-@Import({SecurityConfig.class, JwtProvider.class, WebMvcConfig.class, CurrentMemberArgumentResolver.class, GlobalExceptionHandler.class})
+@Import({SecurityConfig.class, ClockConfig.class, JwtProvider.class, WebMvcConfig.class, CurrentMemberArgumentResolver.class, GlobalExceptionHandler.class})
 @DisplayName("관리자 문의 컨트롤러 웹 계층 테스트")
 class AdminInquiryControllerTest {
 
@@ -61,6 +66,15 @@ class AdminInquiryControllerTest {
     @MockBean
     private AdminInquiryService adminInquiryService;
 
+    @MockBean
+    private AuthSessionService authSessionService;
+
+    @BeforeEach
+    void allowTestSession() {
+        given(authSessionService.validate(anyString(), anyLong()))
+                .willReturn(AuthSessionService.ValidationResult.VALID);
+    }
+
     @Value("${custom.jwt.secret-key}")
     private String secretKey;
 
@@ -71,7 +85,8 @@ class AdminInquiryControllerTest {
                 Map.of(
                         "id", id,
                         "email", email,
-                        "role", role.name()
+                        "role", role.name(),
+                        "sid", "test-session"
                 )
         );
     }

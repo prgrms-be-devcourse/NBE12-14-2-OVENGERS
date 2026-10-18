@@ -15,6 +15,28 @@ public interface RefreshTokenRepository
 
     Optional<RefreshToken> findByTokenHash(String tokenHash);
 
+    @Query("""
+        SELECT t FROM RefreshToken t
+        JOIN FETCH t.member
+        JOIN FETCH t.authSession
+        WHERE t.tokenHash = :tokenHash
+        """)
+    Optional<RefreshToken> findWithSessionByTokenHash(
+            @Param("tokenHash") String tokenHash
+    );
+
+    @Modifying(flushAutomatically = true)
+    @Query("""
+        UPDATE RefreshToken t
+        SET t.revokedAt = :now
+        WHERE t.authSession.id = :sessionId
+          AND t.revokedAt IS NULL
+        """)
+    int revokeAllBySessionId(
+            @Param("sessionId") String sessionId,
+            @Param("now") LocalDateTime now
+    );
+
     @Modifying(flushAutomatically = true)
     @Query("""
         UPDATE RefreshToken t

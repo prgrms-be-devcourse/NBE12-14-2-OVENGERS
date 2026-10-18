@@ -1,6 +1,8 @@
 package com.ovengers.slotkey.auth.service;
 
 import com.ovengers.slotkey.auth.entity.RefreshToken;
+import com.ovengers.slotkey.auth.entity.AuthSession;
+import com.ovengers.slotkey.auth.dto.internal.IssuedRefreshToken;
 import com.ovengers.slotkey.auth.repository.RefreshTokenRepository;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.entity.MemberStatus;
@@ -11,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.HexFormat;
 import java.util.UUID;
 import com.ovengers.slotkey.global.error.BusinessException;
@@ -23,9 +26,12 @@ import jakarta.persistence.LockModeType;
 public class RefreshTokenService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final EntityManager entityManager;
+    private final AuthSessionService authSessionService;
+    private final Clock clock;
     // 리프레시 토큰 발급
     @Transactional
-    public String issueRefreshToken(Member member) {
+    public IssuedRefreshToken issueRefreshToken(Member member) {
+        AuthSession authSession = authSessionService.create(member);
         // 1. 사용자에게 전달할 UUID 원문 생성
         String rawToken = generateRefreshToken();
 
@@ -33,11 +39,12 @@ public class RefreshTokenService {
         String tokenHash = hashRefreshToken(rawToken);
 
         // 3. 만료 시각 설정: 발급 시점부터 1일
-        LocalDateTime expiresAt = LocalDateTime.now().plusDays(1);
+        LocalDateTime expiresAt = authSession.getExpiresAt();
 
         // 4. 회원·해시·만료 시각으로 엔티티 생성
         RefreshToken refreshToken = new RefreshToken(
                 member,
+                authSession,
                 tokenHash,
                 expiresAt
         );
@@ -46,7 +53,11 @@ public class RefreshTokenService {
         refreshTokenRepository.save(refreshToken);
 
         // 6. 쿠키로 전달할 수 있도록 원문 반환
-        return rawToken;
+        return new IssuedRefreshToken(
+                rawToken,
+                authSession.getId(),
+                authSession.getExpiresAt()
+        );
     }
     // 사용자에게 전달할 리프레시 토큰 원문 생성
     private String generateRefreshToken() {
@@ -71,7 +82,7 @@ public class RefreshTokenService {
 
     // 리프레시를 검증하고 해당 회원을 반환
     @Transactional
-    public Member validateRefreshToken(String rawToken) {
+    public RefreshValidation validateRefreshToken(String rawToken) {
         // 1. 쿠키에 토큰이 있는지 확인
         if (rawToken == null || rawToken.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
@@ -81,15 +92,16 @@ public class RefreshTokenService {
         String tokenHash = hashRefreshToken(rawToken);
 
         RefreshToken refreshToken = refreshTokenRepository
-                .findByTokenHash(tokenHash)
+                .findWithSessionByTokenHash(tokenHash)
                 .orElseThrow(() ->
                         new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN)
                 );
 
         // 3. 만료·폐기 여부 확인
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
 
-        if (refreshToken.isExpired(now) || refreshToken.isRevoked()) {
+        if (refreshToken.isExpired(now) || refreshToken.isRevoked()
+                || !refreshToken.getAuthSession().isActiveAt(now)) {
             throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
         // 4. 현재 계정 상태 확인
@@ -105,7 +117,7 @@ public class RefreshTokenService {
             throw new BusinessException(ErrorCode.ACCOUNT_INACTIVE);
         }
 
-        return member;
+        return new RefreshValidation(member, refreshToken.getAuthSession());
     }
 
     // 리프레시 토큰 폐기 revoke_at의 값이 null이 아니면 폐기
@@ -118,9 +130,15 @@ public class RefreshTokenService {
 
         String tokenHash = hashRefreshToken(rawToken);
 
-        refreshTokenRepository.findByTokenHash(tokenHash)
-                .ifPresent(refreshToken ->
-                        refreshToken.revoke(LocalDateTime.now())
-                );
+        refreshTokenRepository.findWithSessionByTokenHash(tokenHash)
+                .ifPresent(refreshToken -> {
+                    LocalDateTime now = LocalDateTime.now(clock);
+                    authSessionService.revoke(refreshToken.getAuthSession(), now);
+                    refreshTokenRepository.revokeAllBySessionId(
+                            refreshToken.getAuthSession().getId(), now
+                    );
+                });
     }
+
+    public record RefreshValidation(Member member, AuthSession authSession) {}
 }

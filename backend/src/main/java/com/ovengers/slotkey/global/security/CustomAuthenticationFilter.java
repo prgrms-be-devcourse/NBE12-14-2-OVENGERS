@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ovengers.slotkey.global.common.response.ApiResponse;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.global.security.jwt.JwtProvider;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,6 +26,7 @@ public class CustomAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtProvider jwtProvider;
     private final ObjectMapper objectMapper;
+    private final AuthSessionService authSessionService;
 
     // 액세스 토큰 검사를 생략할 POST 요청
     private static final Set<String> PUBLIC_AUTH_PATHS = Set.of(
@@ -86,6 +88,23 @@ public class CustomAuthenticationFilter extends OncePerRequestFilter {
         AuthPrincipal principal = extractPrincipal(payload);
 
         if (principal == null) {
+            writeError(response, ErrorCode.INVALID_ACCESS_TOKEN);
+            return;
+        }
+
+        Object sessionId = payload.get("sid");
+        if (!(sessionId instanceof String sid)) {
+            writeError(response, ErrorCode.INVALID_ACCESS_TOKEN);
+            return;
+        }
+
+        AuthSessionService.ValidationResult sessionResult =
+                authSessionService.validate(sid, principal.memberId());
+        if (sessionResult == AuthSessionService.ValidationResult.UNAVAILABLE) {
+            writeError(response, ErrorCode.AUTHENTICATION_SERVICE_UNAVAILABLE);
+            return;
+        }
+        if (sessionResult != AuthSessionService.ValidationResult.VALID) {
             writeError(response, ErrorCode.INVALID_ACCESS_TOKEN);
             return;
         }

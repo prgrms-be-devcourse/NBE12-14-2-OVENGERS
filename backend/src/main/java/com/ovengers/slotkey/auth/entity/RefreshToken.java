@@ -22,6 +22,10 @@ public class RefreshToken {
         @JoinColumn(name = "member_id", nullable = false)
         private Member member;
 
+        @ManyToOne(fetch = FetchType.LAZY, optional = false)
+        @JoinColumn(name = "auth_session_id", nullable = false)
+        private AuthSession authSession;
+
         // 리프레시 토큰 원문을 해시한 값
         @Column(name = "token_hash", nullable = false, unique = true, length = 64)
         private String tokenHash;
@@ -48,10 +52,12 @@ public class RefreshToken {
 
         public RefreshToken(
                 Member member,
+                AuthSession authSession,
                 String tokenHash,
                 LocalDateTime expiresAt
         ) {
             this.member = member;
+            this.authSession = authSession;
             this.tokenHash = tokenHash;
             this.expiresAt = expiresAt;
         }

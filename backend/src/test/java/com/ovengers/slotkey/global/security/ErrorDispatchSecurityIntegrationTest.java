@@ -1,8 +1,10 @@
 package com.ovengers.slotkey.global.security;
 
 import com.ovengers.slotkey.global.config.SecurityConfig;
+import com.ovengers.slotkey.global.config.ClockConfig;
 import com.ovengers.slotkey.global.security.jwt.JwtProvider;
 import com.ovengers.slotkey.global.security.jwt.JwtUtil;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.member.entity.MemberRole;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.FilterChain;
@@ -43,6 +45,10 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -68,7 +74,7 @@ class ErrorDispatchSecurityIntegrationTest {
             JpaRepositoriesAutoConfiguration.class
     })
     @EnableWebSecurity
-    @Import({SecurityConfig.class, JwtProvider.class})
+    @Import({SecurityConfig.class, ClockConfig.class, JwtProvider.class})
     static class TestAppConfig {
 
         @Bean
@@ -79,6 +85,14 @@ class ErrorDispatchSecurityIntegrationTest {
         @Bean
         public DispatchRecordingFilter dispatchRecordingFilter() {
             return new DispatchRecordingFilter();
+        }
+
+        @Bean
+        public AuthSessionService authSessionService() {
+            AuthSessionService service = mock(AuthSessionService.class);
+            when(service.validate(anyString(), anyLong()))
+                    .thenReturn(AuthSessionService.ValidationResult.VALID);
+            return service;
         }
     }
 
@@ -152,7 +166,8 @@ class ErrorDispatchSecurityIntegrationTest {
                 Map.of(
                         "id", id,
                         "email", email,
-                        "role", role.name()
+                        "role", role.name(),
+                        "sid", "test-session"
                 )
         );
     }

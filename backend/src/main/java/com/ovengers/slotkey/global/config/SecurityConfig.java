@@ -5,6 +5,7 @@ import com.ovengers.slotkey.global.common.response.ApiResponse;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.global.security.CustomAuthenticationFilter;
 import com.ovengers.slotkey.global.security.jwt.JwtProvider;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -24,6 +25,7 @@ public class SecurityConfig {
 
     private final JwtProvider jwtProvider;
     private final ObjectMapper objectMapper;
+    private final AuthSessionService authSessionService;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -32,7 +34,8 @@ public class SecurityConfig {
         CustomAuthenticationFilter customAuthenticationFilter =
                 new CustomAuthenticationFilter(
                         jwtProvider,
-                        objectMapper
+                        objectMapper,
+                        authSessionService
                 );
 
         http

@@ -95,7 +95,6 @@ class V2SecurityRedTest {
     @MockBean
     private VerificationMailSender mailSender;
 
-    @Disabled("V2 구현 전까지 CI에서 비활성화")
     @Test
     @DisplayName("V2: 로그아웃하면 기존 Access Token은 즉시 폐기된다")
     void logout_invalidates_existing_access_token() throws Exception {

@@ -52,24 +52,31 @@ public class AuthService {
             throw new BusinessException(ErrorCode.ACCOUNT_INACTIVE);
         }
         // 액세스 토큰 생성
-        String accessToken = jwtProvider.genAccessToken(member);
-
         // 리프레시 토큰 생성 및 DB 저장
-        String refreshToken = refreshTokenService.issueRefreshToken(member);
+        var issuedRefreshToken = refreshTokenService.issueRefreshToken(member);
+        String accessToken = jwtProvider.genAccessToken(
+                member,
+                issuedRefreshToken.sessionId(),
+                issuedRefreshToken.sessionExpiresAt()
+        );
 
         // 두 토큰을 컨트롤러에 전달
-        return new LoginResult(accessToken, refreshToken);
+        return new LoginResult(accessToken, issuedRefreshToken.rawToken());
     }
 
     //리프레시 토큰을 이용해 엑세스 토큰을 갱신하기
     @Transactional
     public String refresh(String rawRefreshToken) {
         // 리프레시가 유효한지 확인하고 회원을 받음
-        Member member = refreshTokenService
+        var validation = refreshTokenService
                 .validateRefreshToken(rawRefreshToken);
 
         // 검증된 회원의 새 액세스 토큰 발급
-        return jwtProvider.genAccessToken(member);
+        return jwtProvider.genAccessToken(
+                validation.member(),
+                validation.authSession().getId(),
+                validation.authSession().getExpiresAt()
+        );
     }
     
     //로그아웃 메서드, 리프레시 토큰에 값을 넣어 로그아웃
