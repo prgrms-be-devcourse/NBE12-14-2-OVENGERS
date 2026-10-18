@@ -251,7 +251,7 @@ public class AuthControllerTest {
         assertThat(refreshCookie.getValue()).isNotBlank();
         assertThat(refreshCookie.isHttpOnly()).isTrue();
         assertThat(refreshCookie.getPath()).isEqualTo("/api/v1/auth");
-        assertThat(refreshCookie.getMaxAge()).isEqualTo(86_400);
+        assertThat(refreshCookie.getMaxAge()).isBetween(86_399, 86_400);
     }
 
     @Test

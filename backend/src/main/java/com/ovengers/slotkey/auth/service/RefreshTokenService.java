@@ -1,144 +1,167 @@
 package com.ovengers.slotkey.auth.service;
 
-import com.ovengers.slotkey.auth.entity.RefreshToken;
-import com.ovengers.slotkey.auth.entity.AuthSession;
 import com.ovengers.slotkey.auth.dto.internal.IssuedRefreshToken;
+import com.ovengers.slotkey.auth.entity.AuthSession;
+import com.ovengers.slotkey.auth.entity.RefreshToken;
+import com.ovengers.slotkey.auth.repository.AuthSessionRepository;
 import com.ovengers.slotkey.auth.repository.RefreshTokenRepository;
+import com.ovengers.slotkey.global.error.BusinessException;
+import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.entity.MemberStatus;
+import com.ovengers.slotkey.member.repository.MemberRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.LocalDateTime;
 import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.UUID;
-import com.ovengers.slotkey.global.error.BusinessException;
-import com.ovengers.slotkey.global.error.ErrorCode;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 
 @Service
 @RequiredArgsConstructor
 public class RefreshTokenService {
+
     private final RefreshTokenRepository refreshTokenRepository;
+    private final AuthSessionRepository authSessionRepository;
+    private final MemberRepository memberRepository;
     private final EntityManager entityManager;
-    private final AuthSessionService authSessionService;
     private final Clock clock;
-    // 리프레시 토큰 발급
+
     @Transactional
     public IssuedRefreshToken issueRefreshToken(Member member) {
-        AuthSession authSession = authSessionService.create(member);
-        // 1. 사용자에게 전달할 UUID 원문 생성
+        AuthSession authSession = authSessionRepository.save(
+                new AuthSession(member, LocalDateTime.now(clock))
+        );
         String rawToken = generateRefreshToken();
-
-        // 2. DB에 저장할 해시 생성
-        String tokenHash = hashRefreshToken(rawToken);
-
-        // 3. 만료 시각 설정: 발급 시점부터 1일
-        LocalDateTime expiresAt = authSession.getExpiresAt();
-
-        // 4. 회원·해시·만료 시각으로 엔티티 생성
-        RefreshToken refreshToken = new RefreshToken(
+        refreshTokenRepository.save(new RefreshToken(
                 member,
                 authSession,
-                tokenHash,
-                expiresAt
-        );
+                hashRefreshToken(rawToken),
+                authSession.getExpiresAt()
+        ));
 
-        // 5. DB에 저장
-        refreshTokenRepository.save(refreshToken);
-
-        // 6. 쿠키로 전달할 수 있도록 원문 반환
         return new IssuedRefreshToken(
                 rawToken,
                 authSession.getId(),
                 authSession.getExpiresAt()
         );
     }
-    // 사용자에게 전달할 리프레시 토큰 원문 생성
-    private String generateRefreshToken() {
-        return UUID.randomUUID().toString();
-    }
 
-
-    // 발급 후 DB에 저장할 리프레시 토큰 해시 생성
-    private String hashRefreshToken(String rawToken) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-
-            byte[] hashBytes = digest.digest(
-                    rawToken.getBytes(StandardCharsets.UTF_8)
-            );
-
-            return HexFormat.of().formatHex(hashBytes);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256을 사용할 수 없습니다.", e);
-        }
-    }
-
-    // 리프레시를 검증하고 해당 회원을 반환
+    /**
+     * Locks in the global order member -> session -> token. A replay returns a
+     * value instead of throwing so the revocation transaction can commit before
+     * the caller converts it to an HTTP 401.
+     */
     @Transactional
-    public RefreshValidation validateRefreshToken(String rawToken) {
-        // 1. 쿠키에 토큰이 있는지 확인
+    public RotationResult rotate(String rawToken) {
         if (rawToken == null || rawToken.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
 
-        // 2. 받은 원문을 해시해서 DB 기록 조회
         String tokenHash = hashRefreshToken(rawToken);
+        RefreshTokenRepository.RefreshTokenReference reference = refreshTokenRepository
+                .findReferenceByTokenHash(tokenHash)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN));
 
-        RefreshToken refreshToken = refreshTokenRepository
-                .findWithSessionByTokenHash(tokenHash)
-                .orElseThrow(() ->
-                        new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN)
-                );
+        Member member = memberRepository.findByIdForUpdate(reference.getMemberId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN));
+        AuthSession session = authSessionRepository.findByIdForUpdate(reference.getSessionId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN));
+        RefreshToken refreshToken = refreshTokenRepository.findByIdForUpdate(reference.getId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN));
 
-        // 3. 만료·폐기 여부 확인
         LocalDateTime now = LocalDateTime.now(clock);
-
-        if (refreshToken.isExpired(now) || refreshToken.isRevoked()
-                || !refreshToken.getAuthSession().isActiveAt(now)) {
+        if (!member.getId().equals(refreshToken.getMember().getId())
+                || !session.getId().equals(refreshToken.getAuthSession().getId())) {
             throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
-        // 4. 현재 계정 상태 확인
-        Member member = refreshToken.getMember();
 
-        entityManager.refresh(member, LockModeType.PESSIMISTIC_WRITE);
+        if (refreshToken.isConsumed() && session.isActiveAt(now)
+                && !refreshToken.isExpired(now)) {
+            session.revoke(now);
+            refreshTokenRepository.revokeAllBySessionId(session.getId(), now);
+            return RotationResult.reusedResult();
+        }
+
+        if (refreshToken.isExpired(now) || refreshToken.isRevoked()
+                || !session.isActiveAt(now)) {
+            throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
+        }
 
         if (member.getStatus() == MemberStatus.WITHDRAWN) {
             throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
         }
-
         if (member.getStatus() != MemberStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.ACCOUNT_INACTIVE);
         }
 
-        return new RefreshValidation(member, refreshToken.getAuthSession());
+        refreshToken.consume(now);
+        String replacement = generateRefreshToken();
+        refreshTokenRepository.saveAndFlush(new RefreshToken(
+                member,
+                session,
+                hashRefreshToken(replacement),
+                session.getExpiresAt()
+        ));
+
+        return RotationResult.rotated(replacement, member, session);
     }
 
-    // 리프레시 토큰 폐기 revoke_at의 값이 null이 아니면 폐기
     @Transactional
     public void revokeRefreshToken(String rawToken) {
-        // 쿠키가 없으면 처리할 토큰도 없으므로 종료
         if (rawToken == null || rawToken.isBlank()) {
             return;
         }
 
         String tokenHash = hashRefreshToken(rawToken);
-
         refreshTokenRepository.findWithSessionByTokenHash(tokenHash)
                 .ifPresent(refreshToken -> {
                     LocalDateTime now = LocalDateTime.now(clock);
-                    authSessionService.revoke(refreshToken.getAuthSession(), now);
-                    refreshTokenRepository.revokeAllBySessionId(
-                            refreshToken.getAuthSession().getId(), now
-                    );
+                    AuthSession session = refreshToken.getAuthSession();
+                    entityManager.refresh(session, LockModeType.PESSIMISTIC_WRITE);
+                    session.revoke(now);
+                    refreshTokenRepository.revokeAllBySessionId(session.getId(), now);
                 });
     }
 
-    public record RefreshValidation(Member member, AuthSession authSession) {}
+    private String generateRefreshToken() {
+        return UUID.randomUUID().toString();
+    }
+
+    private String hashRefreshToken(String rawToken) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(
+                    digest.digest(rawToken.getBytes(StandardCharsets.UTF_8))
+            );
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256을 사용할 수 없습니다.", e);
+        }
+    }
+
+    public record RotationResult(
+            boolean reused,
+            String rawToken,
+            Member member,
+            AuthSession session
+    ) {
+        private static RotationResult reusedResult() {
+            return new RotationResult(true, null, null, null);
+        }
+
+        private static RotationResult rotated(
+                String rawToken,
+                Member member,
+                AuthSession session
+        ) {
+            return new RotationResult(false, rawToken, member, session);
+        }
+    }
 }

@@ -38,6 +38,10 @@ public class RefreshToken {
         @Column(name = "revoked_at")
         private LocalDateTime revokedAt;
 
+        // 사용 완료 시각은 해당 RT의 재사용 탐지 기간 동안 보존한다.
+        @Column(name = "consumed_at")
+        private LocalDateTime consumedAt;
+
         // 폐기 여부 확인
         public boolean isRevoked() {
         return revokedAt != null;
@@ -47,6 +51,16 @@ public class RefreshToken {
         public void revoke(LocalDateTime now) {
         if (revokedAt == null) {
             revokedAt = now;
+            }
+        }
+
+        public boolean isConsumed() {
+            return consumedAt != null;
+        }
+
+        public void consume(LocalDateTime now) {
+            if (consumedAt == null) {
+                consumedAt = now;
             }
         }
 

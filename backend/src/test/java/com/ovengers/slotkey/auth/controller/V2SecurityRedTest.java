@@ -3,24 +3,35 @@ package com.ovengers.slotkey.auth.controller;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ovengers.slotkey.auth.entity.LocalCredential;
+import com.ovengers.slotkey.auth.entity.RefreshToken;
+import com.ovengers.slotkey.auth.repository.RefreshTokenRepository;
 import com.ovengers.slotkey.auth.entity.VerificationPurpose;
 import com.ovengers.slotkey.auth.mail.VerificationMailSender;
 import com.ovengers.slotkey.auth.service.VerificationChallengeService;
 import com.ovengers.slotkey.auth.service.VerificationCheckService;
+import com.ovengers.slotkey.auth.service.AuthService;
+import com.ovengers.slotkey.auth.service.PasswordResetService;
+import com.ovengers.slotkey.global.security.jwt.JwtProvider;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.entity.MemberRole;
 import com.ovengers.slotkey.member.entity.MemberStatus;
 import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.auth.repository.LocalCredentialRepository;
 import com.ovengers.slotkey.support.MySqlTestContainerConfig;
+import com.ovengers.slotkey.support.SettableClockConfig;
+import com.ovengers.slotkey.support.SettableClockConfig.SettableClock;
 import jakarta.servlet.http.Cookie;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,6 +43,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import java.time.Clock;
+import java.time.ZonedDateTime;
+import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -48,8 +64,11 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.reset;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -58,13 +77,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * V2 보안 회귀 테스트.
  *
- * 완료된 V2 범위는 활성 상태로 검증하고, RT Rotation 및 요청 제한 테스트는
- * 해당 이슈 구현 전까지 비활성 상태로 유지한다.
+ * 완료된 V2 범위와 RT Rotation 목표는 활성 상태로 검증하고,
+ * 로그인 요청 제한 테스트만 4번 이슈 구현 전까지 비활성 상태로 유지한다.
  */
 @SpringBootTest
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
-@Import(MySqlTestContainerConfig.class)
+@Import({MySqlTestContainerConfig.class, SettableClockConfig.class})
 class V2SecurityRedTest {
 
     private static final String PASSWORD = "Test1234!";
@@ -76,11 +95,23 @@ class V2SecurityRedTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @Autowired
+    @SpyBean
     private MemberRepository memberRepository;
 
     @Autowired
     private LocalCredentialRepository localCredentialRepository;
+
+    @SpyBean
+    private RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
+    private AuthService authService;
+
+    @Autowired
+    private JwtProvider jwtProvider;
+
+    @Autowired
+    private PasswordResetService passwordResetService;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -95,13 +126,26 @@ class V2SecurityRedTest {
     private PlatformTransactionManager transactionManager;
 
     @Autowired
+    private EntityManager entityManager;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
     private Clock clock;
 
+    @Autowired
+    private SettableClock settableClock;
+
     @MockBean
     private VerificationMailSender mailSender;
+
+    @BeforeEach
+    void setTestTime() {
+        settableClock.set(ZonedDateTime.of(
+                2027, 3, 1, 0, 1, 0, 0, SettableClockConfig.KST
+        ));
+    }
 
     @Test
     @DisplayName("V2: 로그아웃하면 기존 Access Token은 즉시 폐기된다")
@@ -142,21 +186,46 @@ class V2SecurityRedTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    @Disabled("V2 구현 전까지 CI에서 비활성화")
     @Test
     @DisplayName("V2: Refresh Token은 재사용할 수 없다")
     void refresh_token_is_rotated_and_cannot_be_reused() throws Exception {
         String email = newEmail("rotation");
         MvcResult login = login(email);
+        String oldAccessToken = accessToken(login);
         Cookie originalRefreshCookie = login.getResponse().getCookie("refreshToken");
+        MvcResult siblingLogin = loginExisting(email, PASSWORD);
+        String siblingAccessToken = accessToken(siblingLogin);
+        Cookie siblingRefreshCookie = refreshCookie(siblingLogin);
 
-        mvc.perform(post("/api/v1/auth/refresh")
+        MvcResult rotation = mvc.perform(post("/api/v1/auth/refresh")
                         .cookie(originalRefreshCookie))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andReturn();
+        Cookie rotatedCookie = refreshCookie(rotation);
 
         mvc.perform(post("/api/v1/auth/refresh")
                         .cookie(originalRefreshCookie))
                 .andExpect(status().isUnauthorized());
+
+        assertThat(refreshToken(originalRefreshCookie.getValue()).getConsumedAt())
+                .isNotNull();
+        assertThat(refreshToken(originalRefreshCookie.getValue()).getRevokedAt())
+                .isNotNull();
+        assertThat(refreshToken(rotatedCookie.getValue()).getRevokedAt())
+                .isNotNull();
+        assertThatSessionRevoked(originalRefreshCookie.getValue());
+
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + oldAccessToken))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/auth/refresh").cookie(rotatedCookie))
+                .andExpect(status().isUnauthorized());
+
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + siblingAccessToken))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/auth/refresh").cookie(siblingRefreshCookie))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -221,23 +290,37 @@ class V2SecurityRedTest {
                 .andExpect(status().isTooManyRequests());
     }
 
-    @Disabled("V2 구현 전까지 CI에서 비활성화")
     @Test
     @DisplayName("V2: 정상 사용자는 RT Rotation 후 새 RT로 계속 갱신할 수 있다")
     void refresh_token_rotation_allows_next_refresh_with_new_token() throws Exception {
         String email = newEmail("rotation-success");
         MvcResult login = login(email);
         Cookie rt1 = refreshCookie(login);
+        LocalDateTime sessionExpiry = refreshToken(rt1.getValue()).getExpiresAt();
+        assertThat(cookieMaxAge(login)).isEqualTo(24 * 60 * 60L);
+
+        settableClock.set(ZonedDateTime.of(
+                2027, 3, 1, 4, 1, 0, 0, SettableClockConfig.KST
+        ));
 
         MvcResult firstRefresh = mvc.perform(post("/api/v1/auth/refresh")
                         .cookie(rt1))
                 .andExpect(status().isOk())
                 .andReturn();
 
+        assertAccessTokenLifetime(accessToken(firstRefresh), sessionExpiry);
         Cookie rt2 = refreshCookie(firstRefresh);
         assertThat(rt2).as("첫 refresh 응답은 RT2를 발급해야 한다")
                 .isNotNull();
         assertThat(rt2.getValue()).isNotBlank().isNotEqualTo(rt1.getValue());
+        assertThat(cookieMaxAge(firstRefresh)).isEqualTo(20 * 60 * 60L);
+        assertThat(refreshToken(rt1.getValue()).getConsumedAt())
+                .isEqualTo(LocalDateTime.of(2027, 3, 1, 4, 1));
+        assertThat(refreshToken(rt2.getValue()).getExpiresAt()).isEqualTo(sessionExpiry);
+
+        settableClock.set(ZonedDateTime.of(
+                2027, 3, 1, 7, 1, 0, 0, SettableClockConfig.KST
+        ));
 
         MvcResult secondRefresh = mvc.perform(post("/api/v1/auth/refresh")
                         .cookie(rt2))
@@ -248,6 +331,19 @@ class V2SecurityRedTest {
         assertThat(rt3).as("두 번째 refresh 응답은 RT3를 발급해야 한다")
                 .isNotNull();
         assertThat(rt3.getValue()).isNotBlank().isNotEqualTo(rt2.getValue());
+        assertAccessTokenLifetime(accessToken(secondRefresh), sessionExpiry);
+        assertThat(secondRefresh.getResponse().getHeader("Set-Cookie"))
+                .contains("HttpOnly", "Max-Age=");
+        assertThat(cookieMaxAge(secondRefresh)).isEqualTo(17 * 60 * 60L);
+        assertThat(refreshToken(rt2.getValue()).getConsumedAt())
+                .isEqualTo(LocalDateTime.of(2027, 3, 1, 7, 1));
+        assertThat(refreshToken(rt3.getValue()).getExpiresAt()).isEqualTo(sessionExpiry);
+
+        settableClock.set(ZonedDateTime.of(
+                2027, 3, 2, 0, 1, 0, 0, SettableClockConfig.KST
+        ));
+        mvc.perform(post("/api/v1/auth/refresh").cookie(rt3))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -567,12 +663,13 @@ class V2SecurityRedTest {
         }
     }
 
-    @Disabled("V2 구현 전까지 CI에서 비활성화")
     @Test
     @DisplayName("V2: 동일 Refresh Token 동시 사용은 정확히 하나만 성공한다")
     void same_refresh_token_concurrent_use_allows_exactly_one_request()
             throws Exception {
-        Cookie refreshToken = refreshCookie(login(newEmail("refresh-concurrent")));
+        MvcResult login = login(newEmail("refresh-concurrent"));
+        String oldAccessToken = accessToken(login);
+        Cookie refreshToken = refreshCookie(login);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -616,12 +713,121 @@ class V2SecurityRedTest {
                     .hasSize(1);
             assertThat(results.stream().filter(result -> result.status() == 401).toList())
                     .hasSize(1);
-            assertThat(results.stream()
+            RefreshAttempt winningAttempt = results.stream()
                     .filter(result -> result.status() == 200)
-                    .findFirst().orElseThrow().newRefreshToken())
+                    .findFirst().orElseThrow();
+            assertThat(winningAttempt.newRefreshToken())
                     .as("동시 refresh 성공 응답은 새 RT를 발급해야 한다")
                     .isNotNull();
+
+            assertThat(refreshToken(refreshToken.getValue()).getConsumedAt()).isNotNull();
+            assertThat(refreshToken(refreshToken.getValue()).getRevokedAt()).isNotNull();
+            assertThat(refreshToken(winningAttempt.newRefreshToken().getValue()).getRevokedAt())
+                    .isNotNull();
+            assertThatSessionRevoked(refreshToken.getValue());
+
+            mvc.perform(get("/api/v1/members/me")
+                            .header("Authorization", "Bearer " + oldAccessToken))
+                    .andExpect(status().isUnauthorized());
+            mvc.perform(post("/api/v1/auth/refresh")
+                            .cookie(winningAttempt.newRefreshToken()))
+                    .andExpect(status().isUnauthorized());
         } finally {
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("V2: 새 RT 저장 실패 시 RT1 소비가 롤백되어 다시 교체할 수 있다")
+    void replacement_insert_failure_rolls_back_consumption() throws Exception {
+        MvcResult login = login(newEmail("rotation-rollback"));
+        Cookie rt1 = refreshCookie(login);
+        doThrow(new IllegalStateException("replacement insert failure"))
+                .when(refreshTokenRepository).saveAndFlush(any(RefreshToken.class));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> authService.refresh(rt1.getValue())
+        ).isInstanceOf(RuntimeException.class);
+
+        assertThat(refreshToken(rt1.getValue()).getConsumedAt()).isNull();
+        assertThat(refreshToken(rt1.getValue()).getRevokedAt()).isNull();
+
+        reset(refreshTokenRepository);
+        var retried = authService.refresh(rt1.getValue());
+        assertThat(retried.accessToken()).isNotBlank();
+        assertThat(retried.refreshToken()).isNotBlank().isNotEqualTo(rt1.getValue());
+        assertThat(refreshToken(rt1.getValue()).getConsumedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("V2: RT 식별 정보 조회 후 재설정이 먼저 커밋되면 이후 회원 잠금 조회에서 오래된 RT를 거부한다")
+    void refresh_revalidates_after_password_reset_wins_member_lock() throws Exception {
+        String email = newEmail("refresh-reset-order");
+        MvcResult login = login(email);
+        String oldAccessToken = accessToken(login);
+        Cookie rt1 = refreshCookie(login);
+        String grant = issueGrant(email, VerificationPurpose.PASSWORD_RESET);
+        Long memberId = memberRepository.findByEmail(email).orElseThrow().getId();
+
+        CountDownLatch memberLocked = new CountDownLatch(1);
+        CountDownLatch refreshLockRequested = new CountDownLatch(1);
+        CountDownLatch allowResetCommit = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> resetFuture = executor.submit(() ->
+                    new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                        memberRepository.findByEmailForUpdate(email).orElseThrow();
+                        memberLocked.countDown();
+                        try {
+                            if (!refreshLockRequested.await(10, TimeUnit.SECONDS)
+                                    || !allowResetCommit.await(10, TimeUnit.SECONDS)) {
+                                throw new IllegalStateException("refresh lock ordering timed out");
+                            }
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException(e);
+                        }
+                        passwordResetService.reset(
+                                email, grant, NEW_PASSWORD, NEW_PASSWORD
+                        );
+                    })
+            );
+            assertThat(memberLocked.await(10, TimeUnit.SECONDS)).isTrue();
+
+            doAnswer(invocation -> {
+                refreshLockRequested.countDown();
+                return java.util.Optional.ofNullable(entityManager.find(
+                        Member.class,
+                        invocation.getArgument(0),
+                        LockModeType.PESSIMISTIC_WRITE
+                ));
+            }).when(memberRepository).findByIdForUpdate(eq(memberId));
+
+            Future<MvcResult> refreshFuture = executor.submit(() ->
+                    mvc.perform(post("/api/v1/auth/refresh").cookie(rt1)).andReturn()
+            );
+
+            assertThat(refreshLockRequested.await(10, TimeUnit.SECONDS)).isTrue();
+            // The RT reference was read before the reset transaction commits. The latch is
+            // released immediately before the member-lock query, so the test verifies that
+            // the subsequent query observes the committed reset state; it does not assert
+            // that the refresh thread was already blocked inside the database lock query.
+            allowResetCommit.countDown();
+
+            resetFuture.get(10, TimeUnit.SECONDS);
+            MvcResult refreshResult = refreshFuture.get(10, TimeUnit.SECONDS);
+            assertThat(refreshResult.getResponse().getStatus()).isEqualTo(401);
+            assertThat(refreshToken(rt1.getValue()).getConsumedAt()).isNull();
+            assertThat(refreshToken(rt1.getValue()).getRevokedAt()).isNotNull();
+            assertThatSessionRevoked(rt1.getValue());
+
+            mvc.perform(get("/api/v1/members/me")
+                            .header("Authorization", "Bearer " + oldAccessToken))
+                    .andExpect(status().isUnauthorized());
+            assertThat(loginExisting(email, NEW_PASSWORD).getResponse().getStatus()).isEqualTo(200);
+        } finally {
+            allowResetCommit.countDown();
             executor.shutdownNow();
             assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
         }
@@ -688,6 +894,48 @@ class V2SecurityRedTest {
                 .isNotNull();
         assertThat(cookie.getValue()).isNotBlank();
         return cookie;
+    }
+
+    private long cookieMaxAge(MvcResult result) {
+        String header = result.getResponse().getHeader("Set-Cookie");
+        assertThat(header).contains("refreshToken=", "Max-Age=");
+        String maxAge = header.substring(header.indexOf("Max-Age=") + "Max-Age=".length())
+                .split(";", 2)[0];
+        return Long.parseLong(maxAge);
+    }
+
+    private RefreshToken refreshToken(String rawToken) {
+        return refreshTokenRepository.findByTokenHash(hashToken(rawToken)).orElseThrow();
+    }
+
+    private String hashToken(String rawToken) {
+        try {
+            return HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256")
+                            .digest(rawToken.getBytes(StandardCharsets.UTF_8))
+            );
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private void assertThatSessionRevoked(String rawToken) {
+        Integer revoked = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM auth_session s
+                JOIN refresh_token t ON t.auth_session_id = s.id
+                WHERE t.token_hash = ? AND s.revoked_at IS NOT NULL
+                """, Integer.class, hashToken(rawToken));
+        assertThat(revoked).isEqualTo(1);
+    }
+
+    private void assertAccessTokenLifetime(String token, LocalDateTime sessionExpiry) {
+        Map<String, Object> claims = jwtProvider.payloadOrNull(token);
+        long issuedAt = ((Number) claims.get("iat")).longValue();
+        long expiresAt = ((Number) claims.get("exp")).longValue();
+        assertThat(expiresAt - issuedAt).isLessThanOrEqualTo(300L);
+        assertThat(Instant.ofEpochSecond(expiresAt))
+                .isBeforeOrEqualTo(sessionExpiry.atZone(clock.getZone()).toInstant());
     }
 
     private String accessToken(MvcResult result) throws Exception {

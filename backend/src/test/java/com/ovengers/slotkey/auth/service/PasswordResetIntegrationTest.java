@@ -160,7 +160,7 @@ class PasswordResetIntegrationTest {
                 "Old1234!",
                 localCredentialRepository.findById(member.getId()).orElseThrow().getPasswordHash()
         )).isTrue();
-        assertThat(authService.refresh(oldRefreshToken)).isNotBlank();
+        assertThat(authService.refresh(oldRefreshToken).accessToken()).isNotBlank();
     }
 
     private Member createMember(String email, String rawPassword) {

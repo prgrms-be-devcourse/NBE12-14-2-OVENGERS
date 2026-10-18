@@ -39,7 +39,9 @@ class AuthSessionMigrationIntegrationTest {
                         """);
             }
 
-            flyway(mysql).load().migrate();
+            Flyway v24 = flyway(mysql).target("24").load();
+            v24.migrate();
+            assertThat(v24.info().current().getVersion().getVersion()).isEqualTo("24");
 
             try (Connection connection = connection(mysql);
                  Statement statement = connection.createStatement()) {
@@ -79,7 +81,7 @@ class AuthSessionMigrationIntegrationTest {
 
             flyway.migrate();
 
-            assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("24");
+            assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("25");
             try (Connection connection = connection(mysql);
                  Statement statement = connection.createStatement();
                  ResultSet result = statement.executeQuery(
@@ -88,6 +90,16 @@ class AuthSessionMigrationIntegrationTest {
                                  + "AND table_name = 'auth_session'")) {
                 result.next();
                 assertThat(result.getInt(1)).isEqualTo(1);
+            }
+            try (Connection connection = connection(mysql);
+                 Statement statement = connection.createStatement();
+                 ResultSet result = statement.executeQuery(
+                         "SELECT IS_NULLABLE FROM information_schema.columns "
+                                 + "WHERE table_schema = DATABASE() "
+                                 + "AND table_name = 'refresh_token' "
+                                 + "AND column_name = 'consumed_at'")) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString(1)).isEqualTo("YES");
             }
         }
     }

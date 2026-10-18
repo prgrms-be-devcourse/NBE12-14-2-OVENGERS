@@ -2,6 +2,7 @@ package com.ovengers.slotkey.auth.repository;
 
 import com.ovengers.slotkey.auth.entity.RefreshToken;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -9,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import jakarta.persistence.LockModeType;
 
 public interface RefreshTokenRepository
         extends JpaRepository<RefreshToken, Long> {
@@ -24,6 +26,19 @@ public interface RefreshTokenRepository
     Optional<RefreshToken> findWithSessionByTokenHash(
             @Param("tokenHash") String tokenHash
     );
+
+    @Query("""
+        SELECT t.id AS id, t.member.id AS memberId, t.authSession.id AS sessionId
+        FROM RefreshToken t
+        WHERE t.tokenHash = :tokenHash
+        """)
+    Optional<RefreshTokenReference> findReferenceByTokenHash(
+            @Param("tokenHash") String tokenHash
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM RefreshToken t WHERE t.id = :tokenId")
+    Optional<RefreshToken> findByIdForUpdate(@Param("tokenId") Long tokenId);
 
     @Modifying(flushAutomatically = true)
     @Query("""
@@ -48,4 +63,10 @@ public interface RefreshTokenRepository
             @Param("memberId") Long memberId,
             @Param("now") LocalDateTime now
     );
+
+    interface RefreshTokenReference {
+        Long getId();
+        Long getMemberId();
+        String getSessionId();
+    }
 }
