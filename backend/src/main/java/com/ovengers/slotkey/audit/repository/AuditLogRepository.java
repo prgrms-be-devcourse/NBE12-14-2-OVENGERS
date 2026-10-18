@@ -56,4 +56,12 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
             @Param("toExclusive") LocalDateTime toExclusive,
             Pageable pageable
     );
+
+    // 관리자 회원 상세 - 회원별 정지·복구·인증 잠금 이력 조회
+    Page<AuditLog> findByTargetTypeAndTargetIdAndActionIn(
+            AuditTargetType targetType,
+            Long targetId,
+            Collection<AuditAction> actions,
+            Pageable pageable
+    );
 }

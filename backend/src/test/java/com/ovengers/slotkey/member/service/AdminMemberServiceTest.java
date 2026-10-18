@@ -17,6 +17,7 @@ import com.ovengers.slotkey.member.entity.MemberRole;
 import com.ovengers.slotkey.member.entity.MemberStatus;
 import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
+import com.ovengers.slotkey.space.repository.SpaceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,6 +65,9 @@ class AdminMemberServiceTest {
     @Mock
     private CreditTransactionRepository creditTransactionRepository;
 
+    @Mock
+    private SpaceRepository spaceRepository;
+
     private Clock clock;
     private AdminMemberService adminMemberService;
 
@@ -82,8 +86,10 @@ class AdminMemberServiceTest {
                 clock,
                 verificationGuardService,
                 reservationRepository,
-                creditTransactionRepository
+                creditTransactionRepository,
+                spaceRepository
         );
+
     }
 
     @Test

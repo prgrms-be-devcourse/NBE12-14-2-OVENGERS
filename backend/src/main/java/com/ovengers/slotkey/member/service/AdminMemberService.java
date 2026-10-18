@@ -10,15 +10,15 @@ import com.ovengers.slotkey.credit.repository.CreditTransactionRepository;
 import com.ovengers.slotkey.credit.service.CreditGrantService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
-import com.ovengers.slotkey.member.dto.response.AdminMemberCreditTransactionResponse;
-import com.ovengers.slotkey.member.dto.response.AdminMemberDetailResponse;
-import com.ovengers.slotkey.member.dto.response.AdminMemberResponse;
-import com.ovengers.slotkey.member.dto.response.MemberStatusChangeResponse;
+import com.ovengers.slotkey.member.dto.response.*;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.entity.MemberRole;
 import com.ovengers.slotkey.member.entity.MemberStatus;
 import com.ovengers.slotkey.member.repository.MemberRepository;
+import com.ovengers.slotkey.reservation.entity.Reservation;
 import com.ovengers.slotkey.reservation.repository.ReservationRepository;
+import com.ovengers.slotkey.space.entity.Space;
+import com.ovengers.slotkey.space.repository.SpaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -30,6 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -43,6 +45,7 @@ public class AdminMemberService {
     private final VerificationGuardService verificationGuardService;
     private final ReservationRepository reservationRepository;
     private final CreditTransactionRepository creditTransactionRepository;
+    private final SpaceRepository spaceRepository;
 
     @Transactional(readOnly = true)
     public Page<AdminMemberResponse> getMembers(MemberStatus status, String keyword, Pageable pageable) {
@@ -99,6 +102,82 @@ public class AdminMemberService {
         return creditTransactionRepository
                 .findByMember_Id(memberId, sortedPageable)
                 .map(AdminMemberCreditTransactionResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AdminMemberReservationResponse> getMemberReservations(
+            Long memberId,
+            Pageable pageable
+    ) {
+        findMember(memberId);
+
+        Pageable sortedPageable = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "id")
+        );
+
+        Page<Reservation> reservations =
+                reservationRepository.findAllByMemberId(
+                        memberId,
+                        sortedPageable
+                );
+
+        List<Long> spaceIds = reservations.getContent().stream()
+                .map(Reservation::getSpaceId)
+                .distinct()
+                .toList();
+
+        Map<Long, String> spaceNames = spaceRepository
+                .findAllById(spaceIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        Space::getId,
+                        Space::getName
+                ));
+
+        return reservations.map(reservation ->
+                AdminMemberReservationResponse.from(
+                        reservation,
+                        spaceNames.getOrDefault(
+                                reservation.getSpaceId(),
+                                "삭제된 공간"
+                        )
+                )
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AdminMemberStatusHistoryResponse> getMemberStatusHistory(
+            Long memberId,
+            Pageable pageable
+    ) {
+        // 1. 회원 존재 여부 확인
+        findMember(memberId);
+
+        // 2. 최신 변경 기록부터 조회
+        Pageable sortedPageable = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(
+                        Sort.Order.desc("createdAt"),
+                        Sort.Order.desc("id")
+                )
+        );
+
+        // 3. 정지·복구·인증 잠금 기록 조회 후 DTO 변환
+        return auditLogRepository
+                .findByTargetTypeAndTargetIdAndActionIn(
+                        AuditTargetType.MEMBER,
+                        memberId,
+                        List.of(
+                                AuditAction.SUSPEND_MEMBER,
+                                AuditAction.REACTIVATE_MEMBER,
+                                AuditAction.LOCK_MEMBER_BY_VERIFICATION
+                        ),
+                        sortedPageable
+                )
+                .map(AdminMemberStatusHistoryResponse::from);
     }
 
     // 계정 정지

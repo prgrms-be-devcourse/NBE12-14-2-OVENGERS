@@ -6,10 +6,7 @@ import com.ovengers.slotkey.global.security.AuthPrincipal;
 import com.ovengers.slotkey.member.authorization.MemberAuthorizationService;
 import com.ovengers.slotkey.member.dto.request.MemberCreditGrantRequest;
 import com.ovengers.slotkey.member.dto.request.MemberStatusChangeRequest;
-import com.ovengers.slotkey.member.dto.response.AdminMemberCreditTransactionResponse;
-import com.ovengers.slotkey.member.dto.response.AdminMemberDetailResponse;
-import com.ovengers.slotkey.member.dto.response.AdminMemberResponse;
-import com.ovengers.slotkey.member.dto.response.MemberStatusChangeResponse;
+import com.ovengers.slotkey.member.dto.response.*;
 import com.ovengers.slotkey.member.entity.MemberStatus;
 import com.ovengers.slotkey.member.service.AdminMemberService;
 import jakarta.validation.Valid;
@@ -135,6 +132,66 @@ public class AdminMemberController {
         PageResponse<AdminMemberCreditTransactionResponse> response =
                 PageResponse.from(
                         adminMemberService.getMemberCreditTransactions(memberId, pageable)
+                );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "관리자 회원별 예약 내역 조회",
+            description = """
+                특정 회원의 전체 예약 내역을 조회합니다.
+                취소 및 만료된 예약도 포함합니다.
+                예약 ID 내림차순으로 정렬하며,
+                page는 0부터 시작하고 기본 페이지 크기는 20입니다.
+                """
+    )
+    @GetMapping("/{memberId}/reservations")
+    public ResponseEntity<ApiResponse<PageResponse<AdminMemberReservationResponse>>> getMemberReservations(
+            @PathVariable("memberId") Long memberId,
+            @ParameterObject
+            @PageableDefault(size = 20) Pageable pageable,
+            @AuthenticationPrincipal AuthPrincipal authPrincipal
+    ) {
+        memberAuthorizationService.validateCanManageMember(authPrincipal);
+
+        PageResponse<AdminMemberReservationResponse> response =
+                PageResponse.from(
+                        adminMemberService.getMemberReservations(memberId, pageable)
+                );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "관리자 회원 상태 변경 이력 조회",
+            description = "특정 회원의 정지, 복구 및 인증 잠금 기록을 최신순으로 조회합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "회원 상태 변경 이력 조회 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "MEMBER_NOT_FOUND: 회원이 존재하지 않음",
+                    content = @Content
+            )
+    })
+    @GetMapping("/{memberId}/status-history")
+    public ResponseEntity<ApiResponse<PageResponse<AdminMemberStatusHistoryResponse>>>
+    getMemberStatusHistory(
+            @PathVariable("memberId") Long memberId,
+            @ParameterObject
+            @PageableDefault(size = 20) Pageable pageable,
+            @AuthenticationPrincipal AuthPrincipal authPrincipal
+    ) {
+        memberAuthorizationService.validateCanManageMember(authPrincipal);
+
+        PageResponse<AdminMemberStatusHistoryResponse> response =
+                PageResponse.from(
+                        adminMemberService.getMemberStatusHistory(memberId, pageable)
                 );
 
         return ResponseEntity.ok(ApiResponse.success(response));
