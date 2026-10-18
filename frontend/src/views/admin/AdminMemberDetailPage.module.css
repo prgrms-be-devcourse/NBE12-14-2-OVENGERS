@@ -1,0 +1,108 @@
+/* 기존 grid2, grid3를 그대로 사용하면서 카드 정렬만 보정 */
+.summaryGrid,
+.infoGrid {
+    align-items: stretch;
+}
+
+/* 기존 전역 .panel + .panel 여백으로 카드가 밀리는 현상 방지 */
+.summaryGrid > :global(.panel),
+.summaryGrid > :global(.panel + .panel),
+.infoGrid > :global(.panel),
+.infoGrid > :global(.panel + .panel) {
+    margin-top: 0;
+    height: 100%;
+    min-width: 0;
+}
+
+/* 요약 카드의 제목·숫자·설명 간격 */
+.summaryCard {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.summaryCard h3 {
+    margin: 0;
+}
+
+.summaryCard :global(.price) {
+    margin: 0;
+}
+
+.summaryCard :global(.muted) {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+/* 회원 기본 정보 / 계정 상태 카드 */
+.infoCard h3 {
+    margin-bottom: 20px;
+}
+
+.infoCard :global(.definition) {
+    align-items: baseline;
+}
+
+.infoCard :global(.definition strong) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* 프로젝트에서 사용하는 tabs 디자인 재사용 */
+.tabs {
+    flex-wrap: wrap;
+    max-width: 100%;
+    margin: 22px 0 24px;
+}
+
+/* 세 탭에 공통 적용 */
+.tabPanel {
+    min-width: 0;
+}
+
+.tabHeading {
+    margin-bottom: 20px;
+}
+
+.tabTitle {
+    margin: 0 0 8px;
+    font-size: 1.25rem;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--text);
+}
+
+.tabDescription {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--muted);
+}
+
+/* 기존 테이블 스타일은 유지 */
+.tabPanel :global(.tablebox) {
+    width: 100%;
+    margin-top: 0;
+}
+
+/* 표 내용과 숫자 정렬 */
+.tabPanel :global(table) {
+    font-variant-numeric: tabular-nums;
+}
+
+.alignRight {
+    text-align: right;
+}
+
+/* 작은 화면에서도 기존 반응형 grid 동작을 유지 */
+@media (max-width: 600px) {
+    .tabs {
+        gap: 4px;
+    }
+
+    .tabs button {
+        padding: 9px 12px;
+        font-size: 0.9rem;
+    }
+}

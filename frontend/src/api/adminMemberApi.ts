@@ -1,5 +1,5 @@
 
-import type {AdminMember, AdminMemberDetail, AdminMemberCreditTransaction, MemberStatus, Page,} from '../types/api';
+import type {AdminMember, AdminMemberDetail, AdminMemberCreditTransaction, AdminMemberReservation, AdminMemberStatusHistory, MemberStatus, Page,} from '../types/api';
 import { API_ROUTES } from '../constants/apiRoutes';
 import { MEMBER_STATUS } from '../constants/enums';
 import api from './client';
@@ -73,6 +73,34 @@ export function getAdminMemberCreditTransactions(
 ): Promise<Page<AdminMemberCreditTransaction>> {
   return api.get<Page<AdminMemberCreditTransaction>>(
       API_ROUTES.admin.memberCreditTransactions(memberId),
+      {
+        query: { page, size },
+      },
+  );
+}
+
+/** 관리자 회원별 예약 내역 조회 */
+export function getAdminMemberReservations(
+    memberId: number,
+    page = 0,
+    size = 20,
+): Promise<Page<AdminMemberReservation>> {
+  return api.get<Page<AdminMemberReservation>>(
+      API_ROUTES.admin.memberReservations(memberId),
+      {
+        query: { page, size },
+      },
+  );
+}
+
+/** 관리자 회원별 상태 변경 이력 조회 */
+export function getAdminMemberStatusHistory(
+    memberId: number,
+    page = 0,
+    size = 20,
+): Promise<Page<AdminMemberStatusHistory>> {
+  return api.get<Page<AdminMemberStatusHistory>>(
+      API_ROUTES.admin.memberStatusHistory(memberId),
       {
         query: { page, size },
       },

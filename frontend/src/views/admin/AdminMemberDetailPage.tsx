@@ -12,6 +12,8 @@ import type {AdminMember, CreditTransactionType, Meta,} from '../../types/api';
 import MemberStatusBadge from '../../components/member/MemberStatusBadge';
 import MemberStatusChangeDialog from '../../components/member/MemberStatusChangeDialog';
 import CreditGrantDialog from '../../components/member/CreditGrantDialog';
+import AdminMemberReservations from './AdminMemberReservations';
+import AdminMemberStatusHistory from './AdminMemberStatusHistory';
 import { MetaBadge } from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import Pagination from '../../components/common/Pagination';
@@ -21,24 +23,29 @@ import EmptyState from '../../components/common/EmptyState';
 import Toast from '../../components/common/Toast';
 import { formatDateTime } from '../../utils/date';
 import { formatCredit } from '../../utils/price';
+import styles from './AdminMemberDetailPage.module.css';
 
-// 크레딧 거래 유형별 표시 정보
+type MemberDetailTab =
+    | 'credits'
+    | 'reservations'
+    | 'statusHistory';
+
 const TRANSACTION_META: Record<CreditTransactionType, Meta> = {
-    SIGNUP_GRANT: {label: '가입 지급', tone: 'green',},
-    ADMIN_GRANT: {label: '관리자 지급', tone: 'green',},
-    RESERVATION_CHARGE: {label: '예약 결제', tone: 'cyan',},
-    REFUND: {label: '환불', tone: 'green',},
-    PENALTY: {label: '위약금', tone: 'red',},
-    WITHDRAWAL_EXPIRATION: {label: '탈퇴 잔액 소멸', tone: 'gray',},
-    TOP_UP: {label: '크레딧 충전', tone: 'green',},
+    SIGNUP_GRANT: { label: '가입 지급', tone: 'green' },
+    ADMIN_GRANT: { label: '관리자 지급', tone: 'green' },
+    RESERVATION_CHARGE: { label: '예약 결제', tone: 'cyan' },
+    REFUND: { label: '환불', tone: 'green' },
+    PENALTY: { label: '위약금', tone: 'red' },
+    WITHDRAWAL_EXPIRATION: {
+        label: '탈퇴 잔액 소멸',
+        tone: 'gray',
+    },
+    TOP_UP: { label: '크레딧 충전', tone: 'green' },
 };
 
-// 크레딧 변동 금액 표시
 function formatTransactionAmount(amount: number): string {
-    const prefix = amount > 0 ? '+' : '';
-    return `${prefix}${formatCredit(amount)}`;
+    return `${amount > 0 ? '+' : ''}${formatCredit(amount)}`;
 }
-
 
 export default function AdminMemberDetailPage() {
     const rawMemberId = useRouteId('memberId');
@@ -59,26 +66,22 @@ function AdminMemberDetailContent({
     const validMemberId =
         Number.isSafeInteger(memberId) && memberId > 0;
 
+    const [activeTab, setActiveTab] =
+        useState<MemberDetailTab>('credits');
+
+    const [historyVersion, setHistoryVersion] = useState(0);
+    const [statusTarget, setStatusTarget] =
+        useState<AdminMember | null>(null);
+    const [creditTarget, setCreditTarget] =
+        useState<AdminMember | null>(null);
+    const [toast, setToast] = useState<string | null>(null);
+
     // 크레딧 거래 내역 페이지네이션
     const { page, size, setPage } = usePagination({
         initialSize: 20,
     });
 
-    // 정지/복구 대상 회원
-    const [statusTarget, setStatusTarget] =
-        useState<AdminMember | null>(null);
-
-    // 크레딧 지급 대상 회원
-    const [creditTarget, setCreditTarget] =
-        useState<AdminMember | null>(null);
-
-    // 알림 메시지
-    const [toast, setToast] = useState<string | null>(null);
-
-    // --------------------------------------------------
-    // 회원 상세 조회 API
-    // --------------------------------------------------
-
+    // 회원 상세 조회
     const fetchMember = useCallback(
         () => getAdminMemberDetail(memberId),
         [memberId],
@@ -95,10 +98,7 @@ function AdminMemberDetailContent({
         { immediate: validMemberId },
     );
 
-    // --------------------------------------------------
-    // 크레딧 거래 내역 조회 API
-    // --------------------------------------------------
-
+    // 크레딧 거래 내역 조회
     const fetchTransactions = useCallback(
         () => getAdminMemberCreditTransactions(memberId, page, size),
         [memberId, page, size],
@@ -115,10 +115,7 @@ function AdminMemberDetailContent({
         { immediate: validMemberId },
     );
 
-    // --------------------------------------------------
     // 회원 정지 및 복구
-    // --------------------------------------------------
-
     const change = useAction(async (reason: string) => {
         if (!statusTarget) return;
 
@@ -134,20 +131,18 @@ function AdminMemberDetailContent({
 
         setStatusTarget(null);
 
+        // 회원 정보 및 상태 변경 이력 갱신
+        await reloadMember();
+        setHistoryVersion((version) => version + 1);
+
         setToast(
             nextStatus === MEMBER_STATUS.SUSPENDED
                 ? '회원을 정지했습니다.'
                 : '회원을 복구했습니다.',
         );
-
-        // 변경된 회원 상태 다시 조회
-        await reloadMember();
     });
 
-    // --------------------------------------------------
     // 관리자 크레딧 지급
-    // --------------------------------------------------
-
     const grant = useAction(
         async ({
                    amount,
@@ -165,20 +160,16 @@ function AdminMemberDetailContent({
 
             setCreditTarget(null);
 
-            setToast(`${formatCredit(amount)}을 지급했습니다.`);
-
-            // 회원 잔액과 크레딧 내역 갱신
             await Promise.all([
                 reloadMember(),
                 reloadTransactions(),
             ]);
+
+            setToast(`${formatCredit(amount)}을 지급했습니다.`);
         },
     );
 
-    // --------------------------------------------------
     // 잘못된 회원 ID
-    // --------------------------------------------------
-
     if (!validMemberId) {
         return (
             <EmptyState
@@ -195,10 +186,6 @@ function AdminMemberDetailContent({
             />
         );
     }
-
-    // --------------------------------------------------
-    // 회원 조회 로딩 및 오류 처리
-    // --------------------------------------------------
 
     if (memberLoading && !detail) {
         return (
@@ -229,14 +216,9 @@ function AdminMemberDetailContent({
 
     if (!detail) return null;
 
-    // --------------------------------------------------
-    // 화면에 사용할 데이터
-    // --------------------------------------------------
-
     const member = detail.member;
-    const items = transactions?.content ?? [];
+    const transactionsList = transactions?.content ?? [];
 
-    // 관리자 계정과 탈퇴 계정은 관리 대상에서 제외
     const canManage =
         member.role !== MEMBER_ROLE.ADMIN &&
         member.status !== MEMBER_STATUS.WITHDRAWN;
@@ -255,25 +237,22 @@ function AdminMemberDetailContent({
             {/* 회원 상세 헤더 */}
             <div className="pagehead">
                 <div>
-                    <p className="page-kicker">
-                        MEMBER DETAIL
-                    </p>
+                    <p className="page-kicker">MEMBER DETAIL</p>
                     <h1>회원 상세</h1>
+
                     <div className="row wrap">
                         <strong>{member.nickname}</strong>
                         <MemberStatusBadge status={member.status} />
                     </div>
+
                     <p>
                         {member.email} · 회원 번호 #{member.memberId}
                     </p>
                 </div>
 
-                {/* 관리자 액션 */}
                 {canManage && (
                     <div className="row wrap">
-                        <Button
-                            onClick={() => setCreditTarget(member)}
-                        >
+                        <Button onClick={() => setCreditTarget(member)}>
                             크레딧 지급
                         </Button>
 
@@ -293,58 +272,43 @@ function AdminMemberDetailContent({
                 )}
             </div>
 
-            {/* ------------------------------------------------
-          요약 통계
-      ------------------------------------------------ */}
-
-            <div className="grid3">
-                <section className="panel">
+            {/* 요약 통계 */}
+            <div className={`grid3 ${styles.summaryGrid}`}>
+                <section className={`panel ${styles.summaryCard}`}>
                     <h3>보유 크레딧</h3>
-
                     <p className="price">
                         {formatCredit(member.balance)}
                     </p>
-
-                    <p className="muted">
-                        현재 크레딧 잔액
-                    </p>
+                    <p className="muted">현재 크레딧 잔액</p>
                 </section>
 
-                <section className="panel">
+                <section className={`panel ${styles.summaryCard}`}>
                     <h3>전체 예약 건수</h3>
-
                     <p className="price">
                         {detail.totalReservationCount.toLocaleString('ko-KR')}건
                     </p>
-
                     <p className="muted">
                         취소 및 만료된 예약 포함
                     </p>
                 </section>
 
-                <section className="panel">
-                    <h3>정지 발생 횟수</h3>
-
+                <section className={`panel ${styles.summaryCard}`}>
+                    <h3>정지 기록 건수</h3>
                     <p className="price">
-                        {detail.suspensionCount.toLocaleString('ko-KR')}회
+                        {detail.suspensionCount.toLocaleString('ko-KR')}건
                     </p>
-
                     <p className="muted">
-                        관리자 정지 및 시스템 인증 잠금
+                        관리자 정지 및 시스템 인증 잠금 기록
                     </p>
                 </section>
             </div>
 
-            {/* ------------------------------------------------
-          회원 정보
-      ------------------------------------------------ */}
-
+            {/* 회원 정보 */}
             <section className="section">
                 <h2>회원 정보</h2>
 
-                <div className="grid2">
-                    {/* 기본 정보 */}
-                    <div className="panel">
+                <div className={`grid2 ${styles.infoGrid}`}>
+                    <div className={`panel ${styles.infoCard}`}>
                         <h3>기본 정보</h3>
 
                         <div className="definition">
@@ -359,9 +323,7 @@ function AdminMemberDetailContent({
 
                         <div className="definition">
                             <span>이메일</span>
-                            <strong style={{ overflowWrap: 'anywhere' }}>
-                                {member.email}
-                            </strong>
+                            <strong>{member.email}</strong>
                         </div>
 
                         <div className="definition">
@@ -379,8 +341,7 @@ function AdminMemberDetailContent({
                         </div>
                     </div>
 
-                    {/* 계정 상태 */}
-                    <div className="panel">
+                    <div className={`panel ${styles.infoCard}`}>
                         <h3>계정 상태</h3>
 
                         <div className="definition">
@@ -391,13 +352,15 @@ function AdminMemberDetailContent({
                         <div className="definition">
                             <span>최근 상태 변경일</span>
                             <strong>
-                                {formatDateTime(member.lastStatusChangedAt) || '-'}
+                                {formatDateTime(
+                                    member.lastStatusChangedAt,
+                                ) || '-'}
                             </strong>
                         </div>
 
                         <div className="definition">
                             <span>최근 변경 사유</span>
-                            <strong style={{ overflowWrap: 'anywhere' }}>
+                            <strong>
                                 {member.lastStatusChangeReason || '-'}
                             </strong>
                         </div>
@@ -405,124 +368,182 @@ function AdminMemberDetailContent({
                 </div>
             </section>
 
-            {/* ------------------------------------------------
-          크레딧 거래 내역
-      ------------------------------------------------ */}
-
+            {/* 회원 이용 내역 */}
             <section className="section">
-                <h2>크레딧 거래 내역</h2>
-
+                <h2>회원 이용 내역</h2>
                 <p>
-                    해당 회원의 크레딧 지급, 충전, 예약 결제,
-                    환불 내역을 최신순으로 조회합니다.
+                    크레딧 거래, 예약 및 계정 상태 변경 이력을
+                    확인할 수 있습니다.
                 </p>
 
-                {/* 거래 내역 로딩 */}
-                {transactionsLoading && (
-                    <LoadingSpinner
-                        label="크레딧 거래 내역을 불러오는 중입니다…"
-                    />
+                {/* 기존 프로젝트 tabs 스타일 재사용 */}
+                <div
+                    className={`tabs ${styles.tabs}`}
+                    aria-label="회원 이용 내역 선택"
+                >
+                    <button
+                        type="button"
+                        className={
+                            activeTab === 'credits' ? 'active' : ''
+                        }
+                        aria-pressed={activeTab === 'credits'}
+                        onClick={() => setActiveTab('credits')}
+                    >
+                        크레딧 거래 내역
+                    </button>
+
+                    <button
+                        type="button"
+                        className={
+                            activeTab === 'reservations' ? 'active' : ''
+                        }
+                        aria-pressed={activeTab === 'reservations'}
+                        onClick={() => setActiveTab('reservations')}
+                    >
+                        예약 내역
+                    </button>
+
+                    <button
+                        type="button"
+                        className={
+                            activeTab === 'statusHistory' ? 'active' : ''
+                        }
+                        aria-pressed={activeTab === 'statusHistory'}
+                        onClick={() => setActiveTab('statusHistory')}
+                    >
+                        상태 변경 이력
+                    </button>
+                </div>
+
+                {/* 크레딧 거래 내역 */}
+                {activeTab === 'credits' && (
+                    <div className={styles.tabPanel}>
+                        <div className={styles.tabHeading}>
+                            <h3 className={styles.tabTitle}>
+                                크레딧 거래 내역
+                            </h3>
+                            <p className={styles.tabDescription}>
+                                크레딧 지급, 충전, 예약 결제,
+                                환불 내역을 최신순으로 조회합니다.
+                            </p>
+                        </div>
+
+                        {transactionsLoading && (
+                            <LoadingSpinner
+                                label="크레딧 거래 내역을 불러오는 중입니다…"
+                            />
+                        )}
+
+                        <ErrorMessage
+                            error={transactionsError}
+                            onRetry={() => {
+                                void reloadTransactions().catch(() => {});
+                            }}
+                        />
+
+                        {!transactionsLoading &&
+                            !transactionsError &&
+                            transactions &&
+                            transactionsList.length === 0 && (
+                                <EmptyState
+                                    title="크레딧 거래 내역이 없습니다"
+                                    description="아직 발생한 크레딧 거래가 없습니다."
+                                />
+                            )}
+
+                        {!transactionsLoading &&
+                            !transactionsError &&
+                            transactionsList.length > 0 && (
+                                <div className="tablebox" tabIndex={0}>
+                                    <table>
+                                        <caption className="sr-only">
+                                            회원 크레딧 거래 내역
+                                        </caption>
+                                        <thead>
+                                        <tr>
+                                            <th scope="col">거래 번호</th>
+                                            <th scope="col">거래 일시</th>
+                                            <th scope="col">거래 유형</th>
+                                            <th scope="col">변동 금액</th>
+                                            <th scope="col">거래 후 잔액</th>
+                                            <th scope="col">사유</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        {transactionsList.map((transaction) => (
+                                            <tr key={transaction.transactionId}>
+                                                <td>
+                                                    #{transaction.transactionId}
+                                                </td>
+                                                <td>
+                                                    {formatDateTime(
+                                                        transaction.createdAt,
+                                                    ) || '-'}
+                                                </td>
+                                                <td>
+                                                    <MetaBadge
+                                                        meta={
+                                                            TRANSACTION_META[
+                                                                transaction.type
+                                                                ]
+                                                        }
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <MetaBadge
+                                                        meta={{
+                                                            label: formatTransactionAmount(
+                                                                transaction.amount,
+                                                            ),
+                                                            tone:
+                                                                transaction.amount > 0
+                                                                    ? 'green'
+                                                                    : transaction.amount < 0
+                                                                        ? 'red'
+                                                                        : 'gray',
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td>
+                                                    {formatCredit(
+                                                        transaction.balanceAfter,
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    {transaction.reason || '-'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                        {!transactionsLoading &&
+                            !transactionsError &&
+                            transactions && (
+                                <Pagination
+                                    page={transactions.page}
+                                    totalPages={transactions.totalPages}
+                                    totalElements={transactions.totalElements}
+                                    onChange={setPage}
+                                />
+                            )}
+                    </div>
                 )}
 
-                {/* 거래 내역 오류 */}
-                <ErrorMessage
-                    error={transactionsError}
-                    onRetry={() => {
-                        void reloadTransactions().catch(() => {});
-                    }}
-                />
+                {/* 예약 내역 */}
+                {activeTab === 'reservations' && (
+                    <AdminMemberReservations memberId={memberId} />
+                )}
 
-                {/* 내역이 없는 경우 */}
-                {!transactionsLoading &&
-                    !transactionsError &&
-                    items.length === 0 && (
-                        <EmptyState
-                            title="크레딧 거래 내역이 없습니다"
-                            description="아직 발생한 크레딧 거래가 없습니다."
-                        />
-                    )}
-
-                {/* 거래 내역 테이블 */}
-                {!transactionsLoading &&
-                    !transactionsError &&
-                    items.length > 0 && (
-                        <div className="tablebox" tabIndex={0}>
-                            <table>
-                                <caption className="sr-only">
-                                    회원 크레딧 거래 내역
-                                </caption>
-
-                                <thead>
-                                <tr>
-                                    <th scope="col">거래 번호</th>
-                                    <th scope="col">거래 일시</th>
-                                    <th scope="col">거래 유형</th>
-                                    <th scope="col">변동 금액</th>
-                                    <th scope="col">거래 후 잔액</th>
-                                    <th scope="col">사유</th>
-                                </tr>
-                                </thead>
-
-                                <tbody>
-                                {items.map((transaction) => (
-                                    <tr key={transaction.transactionId}>
-                                        <td>
-                                            #{transaction.transactionId}
-                                        </td>
-
-                                        <td>
-                                            {formatDateTime(transaction.createdAt) || '-'}
-                                        </td>
-
-                                        <td>
-                                            <MetaBadge
-                                                meta={
-                                                    TRANSACTION_META[transaction.type]
-                                                }
-                                            />
-                                        </td>
-
-                                        <td>
-                                            <MetaBadge
-                                                meta={{
-                                                    label: formatTransactionAmount(
-                                                        transaction.amount,
-                                                    ),
-                                                    tone:
-                                                        transaction.amount > 0
-                                                            ? 'green'
-                                                            : transaction.amount < 0
-                                                                ? 'red'
-                                                                : 'gray',
-                                                }}
-                                            />
-                                        </td>
-
-                                        <td>
-                                            {formatCredit(transaction.balanceAfter)}
-                                        </td>
-
-                                        <td>
-                                            {transaction.reason || '-'}
-                                        </td>
-                                    </tr>
-                                ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
-                {/* 페이지네이션 */}
-                {!transactionsLoading &&
-                    !transactionsError &&
-                    transactions && (
-                        <Pagination
-                            page={transactions.page}
-                            totalPages={transactions.totalPages}
-                            totalElements={transactions.totalElements}
-                            onChange={setPage}
-                        />
-                    )}
+                {/* 상태 변경 이력 */}
+                {activeTab === 'statusHistory' && (
+                    <AdminMemberStatusHistory
+                        key={historyVersion}
+                        memberId={memberId}
+                    />
+                )}
             </section>
 
             {/* 회원 정지/복구 팝업 */}
@@ -547,7 +568,6 @@ function AdminMemberDetailContent({
                 }}
             />
 
-            {/* 처리 결과 알림 */}
             <Toast
                 message={toast}
                 onClose={() => setToast(null)}

@@ -78,6 +78,34 @@ export interface AdminMemberCreditTransaction {
   createdAt: string;
 }
 
+/** 관리자 회원별 예약 내역 */
+export interface AdminMemberReservation {
+  reservationId: number;
+  spaceId: number;
+  spaceName: string;
+  startTime: string;
+  endTime: string;
+  status: ReservationStatus;
+  totalAmount: number | null;
+  createdAt: string;
+}
+
+/** 관리자 회원 상태 변경 감사 로그 유형 */
+export type AdminMemberStatusHistoryAction =
+    | 'SUSPEND_MEMBER'
+    | 'REACTIVATE_MEMBER'
+    | 'LOCK_MEMBER_BY_VERIFICATION';
+
+/** 관리자 회원별 계정 상태 변경 이력 */
+export interface AdminMemberStatusHistory {
+  historyId: number;
+  action: AdminMemberStatusHistoryAction;
+  actorMemberId: number | null;
+  reason: string | null;
+  beforeValue: string | null;
+  afterValue: string | null;
+  changedAt: string;
+}
 
 export interface AuthTokens {
   accessToken: string;

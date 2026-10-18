@@ -81,6 +81,8 @@ export const API_ROUTES = {
     members: '/admin/members',
     memberDetail: (memberId: number | string) => `/admin/members/${memberId}`,
     memberCreditTransactions: (memberId: number | string) => `/admin/members/${memberId}/credit-transactions`,
+    memberReservations: (memberId: number | string) => `/admin/members/${memberId}/reservations`,
+    memberStatusHistory: (memberId: number | string) => `/admin/members/${memberId}/status-history`,
     memberSuspend: (memberId: number | string) => `/admin/members/${memberId}/suspend`,
     memberRestore: (memberId: number | string) => `/admin/members/${memberId}/restore`,
     // 크레딧 지급(ADMIN_GRANT). 회수 없음, 자기 자신 지급 불가(core-domain-decisions.md 1-3).
