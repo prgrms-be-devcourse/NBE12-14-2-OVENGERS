@@ -1,6 +1,8 @@
 # ERD 및 데이터 모델
 
 > 출처: 기획서 6-1, `데이터모델-아키텍처-결정.md`. 30분 슬롯 통일(항목 1), door_access_token 유니크 제약(항목 2), audit_logs 복합 인덱스(항목 4) 반영본.
+> **2026-10-18 갱신 (V2 1번, dev 병합 전)**: 브랜치 `auth/improvement/v2`의 미커밋 `V24__create_auth_session_and_link_refresh_token.sql`과 엔티티를 대조해 `auth_session`과 `refresh_token.auth_session_id`를 **(V24, dev 병합 전)** 표시와 함께 반영했다. 병합 전까지 dev 스키마는 V23까지다. 동작 설명은 [V2 구현 해설](auth-v2-implementation.md).
+> **2026-10-18 갱신 (V1 인증)**: V14~V16(PR #302)과 현재 엔티티를 대조해 `member.password_hash` 제거·`local_credential` 분리, `member.email_verified_at`, `verification_guard`·`verification_challenge`·`verification_grant`를 반영했다. V2 로그인 세션 등 계획 중인 모델은 구현 전이므로 넣지 않았다([V2 계획](../plans/auth/v2-plan.md)).
 > **2026-10-16 갱신 (베스트 공간 랭킹)**: V22로 `space_ranking_snapshot` 테이블과 집계 인덱스 2개(`idx_reservation_status_start_space`, `idx_credit_transaction_type_created_reservation`)를 추가했다. `spaces.location`은 구조 변경 없이 판교·강남·하남만 쓰도록 요청 검증(`SpaceRegion`)으로 제한한다(DB 제약 아님).
 > **2026-10-16 갱신 (5단계)**: V17~V20의 `waitlist_entry`, `processed_event`, `notification`을 반영했다. 세 테이블과 `outbox_event`는 모두 FK 없이 id만 참조하는 독립 테이블이다.
 > **2026-09-24 갱신**: Flyway V1~V10 전수 대조를 바탕으로 V7 `idempotency_key`, V10 `inquiries`의 테이블·관계·인덱스를 ERD에 추가하고, V4 `payment`의 미생성(빈 마이그레이션 유지) 상태와 담당자 배정 사실(작성 시점 기록과 현재 구현 사실 분리)을 정비했다.
@@ -9,10 +11,15 @@
 
 | 엔터티 | 담당자 | 주요 필드 | 역할 |
 | --- |-----| --- | --- |
-| `member` | 천종원 | id, email, password_hash, nickname, role, status, **balance**, created_at | 회원/관리자. role: USER / ADMIN. status: ACTIVE / SUSPENDED / WITHDRAWN. **balance**: 크레딧 잔액(int, NOT NULL, DEFAULT 0) — 이용 한도, 결제 수단 아님 |
-| `refresh_token` | 천종원 | id, member_id, token_hash, expires_at, revoked_at | 로그인 재발급 토큰. 원문 대신 해시 저장, 재발급 시 검증 후 새 Access Token 발급 (회전은 미구현) |
+| `member` | 천종원 | id, email, nickname, role, status, **balance**, email_verified_at, created_at, updated_at | 회원/관리자. `UNIQUE(email)`. role: USER / ADMIN. status: ACTIVE / SUSPENDED / WITHDRAWN. **balance**: 크레딧 잔액(int, NOT NULL, DEFAULT 0) — 이용 한도, 결제 수단 아님. 비밀번호 해시는 V14에서 `local_credential`로 옮기고 이 테이블에서 제거했다. `email_verified_at`(DATETIME(6), NULL 허용, V15): 신규 가입 시 가입에 쓴 SIGNUP challenge의 인증 시각을 기록한다. V15 적용 시점에 있던 회원은 적용 시각으로 일괄 채웠다(실제 메일 인증 시각이 아니라 정책상 인정 시각) |
+| `local_credential` | 천종원 (V14) | member_id, password_hash, password_changed_at | 로컬 비밀번호 자격 증명. PK = FK `member_id`(`fk_local_credential_member`)로 회원당 최대 1행(엔티티 `@MapsId` 1:1). V14가 기존 `member.password_hash`를 재해싱 없이 옮기며 `password_changed_at`은 이전 시각으로 채웠다. 가입 시 생성, 비밀번호 재설정 시 해시와 변경 시각을 갱신한다. 로그인·재설정은 이 행이 없으면 실패한다 |
+| `verification_guard` | 천종원 (V16) | id, email, purpose, failed_attempts, block_stage, blocked_until, admin_locked, last_sent_at | 이메일·목적별 인증 시도 상태. `UNIQUE(email, purpose)`(`uk_verification_guard_email_purpose`)이며 `INSERT ... ON DUPLICATE KEY UPDATE`로 만들고 `SELECT ... FOR UPDATE`(비관적 잠금)로 잠가 발급·확인·grant 사용을 직렬화한다. purpose: `SIGNUP` / `PASSWORD_RESET`(VARCHAR(30)). CHECK `failed_attempts BETWEEN 0 AND 5`, `block_stage BETWEEN 0 AND 3`. `blocked_until`은 1·2차 임시 차단 종료 시각, `admin_locked`는 3차 최종 잠금, `last_sent_at`은 30초 재발송 간격 기준. 회원 FK 없이 이메일 문자열로 연결한다(가입 전 이메일도 Guard를 가진다). 관리자 회원 복구 시 해당 이메일의 Guard를 모두 초기화한다 |
+| `verification_challenge` | 천종원 (V16) | id, guard_id, code_hash, issued_at, expires_at, verified_at, invalidated_at | 발급한 인증번호 1건. FK `guard_id`(`fk_verification_challenge_guard`), 인덱스 `idx_verification_challenge_guard_id (guard_id, id)`. `code_hash`는 8자리 코드의 HMAC 검증값(64자). `expires_at` = 발급 + 3분. 확인은 Guard의 가장 최근 행만 대상으로 하며, 재발급·차단 시작 시 `invalidated_at`을 기록한다 |
+| `verification_grant` | 천종원 (V16) | id, challenge_id, grant_hash, issued_at, expires_at, consumed_at, invalidated_at | 인증 성공 후 가입·재설정에 한 번 쓰는 증표. FK `challenge_id`(`fk_verification_grant_challenge`) + `UNIQUE(challenge_id)`(challenge당 최대 1개), `UNIQUE(grant_hash)`. 원문은 응답으로 한 번만 주고 해시만 저장한다. `expires_at` = 발급 + 5분. 이메일·목적 컬럼은 없고 challenge → guard로 귀속을 확인한다. `consumed_at`은 가입·재설정 트랜잭션에서 기록한다. `invalidated_at` 컬럼과 엔티티 메서드는 있으나 현재 이를 호출하는 운영 코드는 없다 |
+| `refresh_token` | 천종원 | id, member_id, token_hash, expires_at, revoked_at, auth_session_id **(V24, dev 병합 전)** | 로그인 재발급 토큰. 원문 대신 해시 저장(`UNIQUE(token_hash)`), 재발급 시 검증 후 새 Access Token 발급 (회전은 미구현). V24: `auth_session_id VARCHAR(36) NOT NULL` + FK `fk_refresh_token_auth_session` → `auth_session`, 인덱스 `idx_refresh_token_auth_session_id`. `expires_at`은 소속 세션의 만료와 같다. V24는 컬럼 추가 전에 기존(V1) 행을 모두 삭제한다(전환 1회) |
+| `auth_session` **(V24, dev 병합 전)** | 천종원 | id, member_id, created_at, expires_at, revoked_at | 로그인 1회당 서버 세션. `id`는 UUID 문자열(VARCHAR(36), PK)이며 AT의 `sid` claim. FK `fk_auth_session_member` → `member`, 인덱스 `idx_auth_session_member_id`. `expires_at` = 생성 + 24시간으로 고정(갱신 없음). `revoked_at`은 로그아웃 시 기록. 회원 상태 변경 시 전체 세션 폐기는 아직 없다(V2 2번 이슈) |
 | `spaces` | 김재철 | id, name, location, description, capacity, price_per_slot, image_path, opening_time, closing_time, status, **version** | 관리자가 등록하는 예약 대상 공간. `price_per_slot`은 100원 단위, 30분당 고정 요금. `opening_time`/`closing_time`은 30분 경계인 `TIME`(LocalTime) — "매일 반복되는 규칙"이므로 날짜 없음. **version**: 가격 등 변경에 대한 낙관적 비교용(int) |
-| `audit_logs` | 김재철 | id, actor_member_id, action, target_type, target_id, reason, before_value, after_value, created_at | 관리 작업(공간 등록/수정, 회원 정지/복구, 강제취소, 크레딧 지급)과 시스템 PG 복구 수동 확인 기록. 시스템 작업은 `actor_member_id=NULL`, 충전 복구는 `target_type=CHARGE_ORDER`, `action=CHARGE_RECOVERY_MANUAL_REVIEW`로 남긴다. 인덱스: `(target_type, target_id)`, V9 `idx_audit_logs_created_id (created_at, id)` |
+| `audit_logs` | 김재철 | id, actor_member_id, action, target_type, target_id, reason, before_value, after_value, created_at | 관리 작업(공간 등록/수정, 회원 정지/복구, 강제취소, 크레딧 지급)과 시스템 PG 복구 수동 확인, 이메일 인증 3차 차단에 따른 시스템 회원 정지(`LOCK_MEMBER_BY_VERIFICATION`) 기록. 시스템 작업은 `actor_member_id=NULL`, 충전 복구는 `target_type=CHARGE_ORDER`, `action=CHARGE_RECOVERY_MANUAL_REVIEW`로 남긴다. 인덱스: `(target_type, target_id)`, V9 `idx_audit_logs_created_id (created_at, id)` |
 | `reservation` | 이태호 | id, member_id, space_id, start_time, end_time, status, price_per_slot_snapshot, total_amount, **hold_expires_at**, **checked_in_at**, **checked_out_at**, cancelled_at, created_at | status: `HELD`/`EXPIRED`/`CONFIRMED`/`IN_USE`/`COMPLETED`/`CANCELLED`/`NO_SHOW` (7개). 슬롯 확보 시 `HELD` 생성(`hold_expires_at`=+10분) → Mock 결제 성공 시 `CONFIRMED` (2단계 플로우). ~~completed_at~~은 제거되어 `checked_out_at`으로 통합(체크아웃 시각 = 완료 시각) |
 | `reservation_slot` | 이태호 | id, reservation_id, space_id, slot_start | 예약이 확보한 30분 단위 시간. **살아있는 점유일 때만 존재**(취소/노쇼/만료 시 하드 삭제). `UNIQUE(space_id, slot_start)`로 중복 점유 방지 |
 | `credit_transaction` | 초기 분담: 미정 (구 `payment` 백한비 영역, V6 파일상 '담당: 미정' 기록; 실제 작성·현재 유지보수 담당 미확인) | id, member_id, amount, type, reservation_id, charge_order_id, balance_after, reason, created_at | **크레딧 원장(단일 진실)** — `payment` 테이블을 대체. `amount`는 부호 있음(지급/환급 +, 차감/위약금 -)이며 `SUM(amount) = member.balance`. `type`: SIGNUP_GRANT / ADMIN_GRANT / RESERVATION_CHARGE / REFUND / PENALTY / TOP_UP. PG 충전은 `charge_order_id` UNIQUE로 주문당 원장 1건을 강제한다. `INDEX(member_id, created_at)` |
@@ -36,6 +43,12 @@
 ```
 Member 1 --- N Reservation (DB FK: member_id)
 Member 1 --- N RefreshToken (DB FK: member_id)
+Member 1 --- N AuthSession (DB FK: member_id) — V24, dev 병합 전
+AuthSession 1 --- N RefreshToken (DB FK: auth_session_id, NOT NULL) — V24, dev 병합 전. 현재 RT 회전이 없어 세션당 RT는 1개만 생긴다
+Member 1 --- 0..1 LocalCredential (DB FK = PK: member_id)
+VerificationGuard 1 --- N VerificationChallenge (DB FK: guard_id)
+VerificationChallenge 1 --- 0..1 VerificationGrant (DB FK: challenge_id, UNIQUE)
+Member.email 1 --- 0..2 VerificationGuard.email : 목적별 Guard (논리적 참조: FK 없음, 가입 전 이메일 포함)
 Member 1 --- N CreditTransaction (DB FK: member_id)
 Member 1 --- N ChargeOrder (DB FK: member_id)
 ChargeOrder 1 --- 0..1 CreditTransaction (DB FK: charge_order_id, UNIQUE)
@@ -68,6 +81,11 @@ OutboxEvent.event_id 1 --- N ProcessedEvent.event_id : 컨슈머 처리 기록 (
 erDiagram
     member ||--o{ reservation : owns
     member ||--o{ refresh_token : owns
+    member ||--o{ auth_session : logs_in_v24
+    auth_session ||--o{ refresh_token : issues_v24
+    member ||--o| local_credential : has
+    verification_guard ||--o{ verification_challenge : issues
+    verification_challenge ||--o| verification_grant : grants
     member ||--o{ credit_transaction : grants
     member ||--o{ charge_order : creates
     charge_order ||--o| credit_transaction : creates_top_up
@@ -153,6 +171,10 @@ CHECK (status <> 'ANSWERED' OR (answer_content IS NOT NULL AND answered_at IS NO
 | 추가 | `idx_audit_logs_created_id (created_at, id)` | `V9__add_audit_logs_created_at_id_index.sql`로 감사 로그 정렬·날짜 필터 최적화 복합 인덱스 추가 |
 | 추가 | `inquiries` 테이블 | ERD 반영 + `V10__create_inquiry_table.sql`로 회원 Q&A 및 관리자 답변 테이블 추가 |
 | 추가 | `charge_order` 테이블 및 `credit_transaction.charge_order_id` | ERD 반영 + `V13__create_charge_order_table.sql`로 PG 충전 주문, UNIQUE `order_id`·`payment_key`·`pg_idempotency_key`, 회원별 UNIQUE `client_idempotency_key`, 상태·복구 추적 컬럼과 후보 조회 인덱스, 주문당 TOP_UP 원장 1건을 보장하는 UNIQUE FK 추가 |
+| 분리 | `member.password_hash` → `local_credential` | `V14__separate_local_credential.sql`로 회원당 1행(PK=FK) 자격 증명 테이블을 만들고 기존 해시를 옮긴 뒤 `member.password_hash` 삭제 |
+| 추가 | `member.email_verified_at` | `V15__add_member_email_verified_at.sql`. 기존 회원은 적용 시각으로 채움 |
+| 추가 (dev 병합 전) | `auth_session`, `refresh_token.auth_session_id` | `V24__create_auth_session_and_link_refresh_token.sql`(브랜치 `auth/improvement/v2`, 미커밋). 기존 `refresh_token` 행 삭제 → `auth_session` 생성 → `auth_session_id NOT NULL` + FK·인덱스 추가. 롤백용 down 마이그레이션 없음. 실제 개발·운영 DB 적용 이력은 미확인 |
+| 추가 | `verification_guard`·`verification_challenge`·`verification_grant` | `V16__create_verification_tables.sql`. `UNIQUE(email, purpose)`, CHECK 2개, `(guard_id, id)` 인덱스, grant의 `UNIQUE(challenge_id)`·`UNIQUE(grant_hash)` |
 | 추가 | `outbox_event` 테이블 | ERD 반영 + `V18__create_outbox_event_table.sql`로 슬롯 해제 이벤트 기록 테이블 추가. FK 없음, UNIQUE `event_id`, INDEX `(status, id)` |
 | 추가 | `waitlist_entry` 테이블, `reservation` 인덱스 | ERD 반영 + `V17__create_waitlist_entry_table.sql`로 예약 대기 테이블(활성 UNIQUE, CHECK 2개, 인덱스 2개)과 `idx_reservation_member_space_status_start` 추가. FK 없음 |
 | 추가 | `processed_event` 테이블 | ERD 반영 + `V19__create_processed_event_table.sql`로 컨슈머 멱등 기록 추가. `UNIQUE(consumer, event_id)`, FK 없음 |

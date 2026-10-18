@@ -1,9 +1,59 @@
 # V2: DB 기반 인증 보안 고도화 계획
 
-> 상태: 구현 전 계획 / 2026-10-15  
+> 상태: 계획 2026-10-15 작성. 2026-10-18 기준 **1번 이슈 구현·회귀 검증·코드 리뷰 완료, 미커밋·미배포**(아래 §0). 2번 이후 미착수이며 V2 전체는 완료되지 않았다. V2 전체 보안 요구 충족을 뜻하지 않는다.  
 > 출발점: V1 PR #302, 5c60fa4  
 > 원칙: Redis 없이 DB로 보안 요구사항을 먼저 충족한다.  
 > 관련 문서: [정책](../../decisions/authentication-policy.md), [보안 테스트](../../testing/auth-security-tests.md)
+
+## 0. 진행 상태 (2026-10-18 리뷰 기준)
+
+> 검토 대상은 브랜치 `auth/improvement/v2`의 **미커밋 작업 트리**다. 기준 HEAD `16b9ead32e4608d1cc41ec70a62612b526a34c55`에는 구현이 들어 있지 않다. 구현 구조는 [V2 구현 해설](../../architecture/auth-v2-implementation.md)을 본다.
+
+| 이슈 | 상태 |
+| --- | --- |
+| 1. DB 로그인 세션·현재 세션 로그아웃 | **구현·회귀 검증·코드 리뷰 완료, 미커밋·미배포.** V24의 실제 환경 적용 이력은 미확인(아래 "배포 전 확인") |
+| 2번 이후 | 착수 전 |
+
+**1차 리뷰 지적의 처리 (2차 리뷰에서 코드로 확인)**
+
+| 지적 | 결과 |
+| --- | --- |
+| V24가 기존 RT 행이 있으면 NOT NULL 전환에 실패 | 해결. 먼저 `DELETE FROM refresh_token`(전환 전 V1 RT만 대상, 한 번만 실행) 후 `auth_session_id NOT NULL` + FK. V23에 RT 행을 넣고 V24를 적용하는 업그레이드 테스트와 빈 DB 전체 마이그레이션 테스트 추가 |
+| refresh·JWT의 시스템 시간대 사용 | 해결. RT·세션·JWT 발급·JWT 파서가 모두 주입 `Clock` 사용. 고정 `Clock`으로 UTC·Asia/Seoul 두 시간대와 세션 종료 90초 전 상한을 검증 |
+| JWT 회원 ID와 세션 소유 회원 미대조 | 해결. 세션 조회 조건에 `member.id = JWT id` 추가, 불일치 401 테스트 |
+| DB 장애 시 공통 형식이 아닌 응답 | 해결. 세션 조회 예외 → 인증 미설정, 공통 `ApiResponse` 503 `AUTHENTICATION_SERVICE_UNAVAILABLE`, 로그는 예외 클래스 이름만 |
+| `sid` 없는 AT 발급 경로 | 해결(운영 코드). `JwtProvider.genAccessToken(Member)` 제거. `JwtUtil.createToken` 3인자 정적 메서드는 테스트용으로 남아 있으나 운영 호출부는 없음 |
+
+**조건부 승인 후 마무리 (3차 확인, 2026-10-18)**
+
+- 2차 리뷰 이후 바뀐 파일은 테스트 4개(`JwtProviderTest`, `AdminStatsControllerIntegrationTest`, `StatsControllerIntegrationTest`, `AdminSpaceSecurityIntegrationTest`)뿐이며 운영 코드 변경은 없다(파일 수정 시각 기준). 바뀐 내용은 테스트 이름·주석과 JVM 시간대 기록·비교이며, 기대값은 2차 리뷰 때와 같다.
+- UTC 실행 근거 확보: `JwtProviderTest`가 테스트 JVM의 `ZoneId.systemDefault()`를 출력하고, 시스템 속성 `slotkey.test.expected-zone`이 있으면 그 값과 비교한다. UTC 선택 실행 XML에서 `AUTH_TEST_JVM_ZONE_ID=UTC`와 결과를 확인했다(아래 표).
+- 정지·탈퇴 관련 테스트 이름은 "세션 폐기"가 아니라 "현재 회원 상태 조회로 기존 AT 거부"를 뜻하도록 정정됐다.
+
+**배포 전 확인 (미확인 유지)**
+
+- V24의 실제 개발·운영 DB 적용 이력. 1차 초안 V24(내용이 다름)를 적용한 DB가 있으면 Flyway 체크섬 불일치로 기동이 실패하므로 배포 전에 `flyway_schema_history`를 확인해야 한다. 배포 검증은 하지 않았다.
+
+**후속 개선(1번 범위 밖으로 유지)**: 로그인·refresh 경로의 DB 장애는 현재 Spring 기본 500이다. 보호 요청의 503 공통 응답과 맞추는 것은 후속 개선이다.
+
+**테스트 결과 — 출처 구분**
+
+| 구분 | 내용 |
+| --- | --- |
+| Codex 보고 | 최종 전체 995 / 통과 985 / 실패 0 / 건너뜀 10. 수정 전 첫 전체 실행 별도 보관 |
+| 아티팩트로 확인(최종) | Codex가 남긴 임시 디렉터리의 JUnit XML 126개를 직접 집계: tests 995, failures 0, errors 0, skipped 10, 통과 985. 실행 2026-10-18 15:37:25~15:43:38 KST. 변경된 소스의 마지막 수정 시각(15:36:51)이 실행 시작보다 앞서 현재 작업 트리와 일치하는 것으로 판단(파일 시각 기준이며 빌드 입력의 해시 확인은 아님) |
+| 아티팩트로 확인(수정 전 첫 전체 실행) | 같은 방식 집계: 995 / 통과 936 / 실패 49 / 건너뜀 10, 15:27:54~15:34:11 KST. 실패 분포 `AdminStatsControllerIntegrationTest` 35, `ReservationSearchSecurityIntegrationTest` 9, `StatsControllerIntegrationTest` 5 — `sid` 없는 토큰의 401과 `auth_session` FK로 인한 회원 삭제 실패 |
+| 1차 리뷰 때 보고된 987/871/116/10 | 해당 실행의 아티팩트를 찾지 못해 여전히 미확인. 49개 실패 실행과 다른 실행이다 |
+| 건너뜀 10개 | 모두 `V2SecurityRedTest`의 `@Disabled`: 비밀번호 재설정 3개·정지 1개·정지 후 복구 1개·탈퇴 1개(2번 이슈), RT 재사용·Rotation·동시 사용 3개(3번), 반복 로그인 실패 429 1개(4번) |
+| 아티팩트로 확인(UTC 선택 실행) | 5개 클래스 XML: tests 68, failures 0, errors 0, skipped 0. 실행 16:01:12~16:01:36 KST로 마지막 테스트 수정(15:59:19) 이후. `JwtProviderTest` 출력 `AUTH_TEST_JVM_ZONE_ID=UTC`. 대상 `AuthControllerTest` 24, `AdminStatsControllerIntegrationTest` 36, `StatsControllerIntegrationTest` 6, `RefreshTokenServiceTest` 1, `JwtProviderTest` 1 |
+| 최종 전체 실행과 마지막 수정의 관계 | 전체 실행(15:37~15:43) 이후 테스트 4개가 바뀌었다. 그중 3개는 UTC 선택 실행에 포함됐고, `AdminSpaceSecurityIntegrationTest`는 이름만 바뀌어(기대값 동일) 바뀐 뒤 다시 실행되지 않았다. `AuthSessionMigrationIntegrationTest`는 UTC 실행에 포함되지 않았다 |
+| 리뷰어의 재실행 | 하지 않았다 |
+
+원시 결과는 `/tmp` 아래에 있어 영구 증거가 아니다. 보관이 필요하면 커밋 후 CI(`backend-ci.yml`)에서 `build/test-results/test`와 HTML 보고서를 Actions artifact로 업로드하고 그 실행 링크를 기록하는 방식을 제안한다.
+
+**배포 영향(코드 검토로 확인, 실제 적용은 미검증)**: 기존 AT는 `sid`가 없어 거부되고 기존 RT는 V24가 삭제하므로 모든 사용자가 다시 로그인해야 한다. 구버전 서버는 `auth_session_id` 없이 RT를 저장하므로 V24 적용 DB에서 로그인할 수 없고 `sid`를 검사하지 않으므로, 구·신 서버 혼합 운영과 앱만 되돌리는 롤백은 불가하다. 개발·운영 DB 적용과 실제 환경 동작은 확인하지 않았다.
+
+**회원 상태 차단과 세션 폐기의 구분**: 정지·탈퇴 후 기존 AT 거부는 보호 요청의 회원 상태 조회 결과다. 세션은 폐기되지 않으므로 복구하면 이전 세션이 다시 유효해진다. 비밀번호 재설정도 세션을 폐기하지 않는다. 이는 2번 이슈 범위다.
 
 ## 1. 해결할 문제
 

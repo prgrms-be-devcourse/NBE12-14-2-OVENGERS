@@ -5,6 +5,8 @@
 > **2026-09-17 갱신 (docs/api)**: 실제 컨트롤러 코드 기준으로 동기화 — Base URL `/api/v1`, 취소 API `POST .../cancel`, 요청/응답 필드, 관리자 예약 목록 필터 미지원, 미구현 API 표시. **프론트는 이 문서를 기준으로 한다.** (claude.ai 프로젝트 문서 `claude/api-명세서.md`는 구버전 — 참고 금지)
 > **2026-09-24 갱신 (대단위 1)**: 컨트롤러·DTO·`SecurityConfig`·`ErrorCode` 전수 조사 기반 정합성 동기화 — 실제 응답 DTO 필드, 엔드포인트별 페이지네이션 반환 형태(`PageResponse` vs Spring `Page`), 오프셋 없는 ISO-8601 LocalDateTime(KST), 멱등성 캐시 동작, 실존 `ErrorCode` 반영 및 미구현/결정 필요 항목(`termsVersion`, 동일 멱등키 충돌 검사, 정지 계정 즉시 차단) 분리 명시.
 
+> **2026-10-18 갱신 (V2 1번, dev 병합 전)**: 브랜치 `auth/improvement/v2`의 미커밋 변경(DB 로그인 세션·세션 단위 로그아웃·`AUTHENTICATION_SERVICE_UNAVAILABLE` 503)을 §2-5에 따로 적었다. 병합 전까지 §2의 다른 표와 공통 사항은 dev(V1) 동작이다.
+> **2026-10-18 갱신 (V1 인증)**: PR #302(`46526a5`)로 구현된 이메일 인증번호 발급·확인, grant 기반 회원가입·비밀번호 재설정, `VERIFICATION_*` 에러 코드를 Controller·DTO·서비스·`ErrorCode` 기준으로 §2에 반영했다. V2 목표(세션·즉시 폐기·RT Rotation·요청 제한)는 구현 전이며 [인증 고도화 로드맵](../plans/auth/roadmap.md)을 따른다. 정책 설명은 [인증 정책](../decisions/authentication-policy.md)에 둔다.
 > **2026-10-16 갱신 (베스트 공간 랭킹)**: 관리자 통계 API(§14: 공간·지역 랭킹, 상태별 건수)를 구현 기준으로 확정했고, 공간 등록·수정의 `location`을 판교·강남·하남으로 제한했다. 결정 기록은 [decisions/space-ranking.md](../decisions/space-ranking.md).
 > **2026-10-16 갱신 (5단계)**: 예약 대기 API(§12), 내 알림 조회 API(§13), `WAITLIST_*` 에러 코드 5개, 새 테이블(`waitlist_entry`, `processed_event`, `notification`)을 반영했다. 슬롯이 풀리면 Outbox → Kafka → 컨슈머가 대기자에게 알림을 저장한다(알림은 힌트이며 예약은 선착순, 자리를 보장하지 않는다). 결정 기록은 [decisions/waitlist.md](../decisions/waitlist.md), [decisions/outbox-kafka.md](../decisions/outbox-kafka.md)를 본다.
 
@@ -13,8 +15,8 @@
 - Base URL: `/api/v1` (예: `/spaces` → 실제로는 `/api/v1/spaces`)
   - 출입(§7) API도 `/api/v1`로 통일됨(2026-09-17, 기존 `/api`).
 - 인증: Access Token(JWT, `Authorization: Bearer <token>`), Refresh Token(DB 저장, `POST /auth/refresh`, `POST /auth/logout`에서 HttpOnly 쿠키로 전달, Path=`/api/v1/auth`, maxAge=1일).
-- JWT 페이로드는 `id`, `email`, `role`, 만료 시각(`exp`)을 포함한다. 보호 API 요청 시 서명과 만료 시각을 검증하여 인증하며, **매 요청마다 회원 DB를 재조회하지 않는다**. 비즈니스 서비스(`ReservationHoldService`, `DoorAccessVerificationService` 등)에서도 회원 `ACTIVE` 여부를 별도 재조회하지 않으므로, 회원이 정지되어도 기존 Access Token은 만료 전까지 기술적으로 요청이 통과될 수 있다. 토큰 재발급(`POST /auth/refresh`) 시에만 DB 조회를 거쳐 `ACCOUNT_INACTIVE`(403)로 차단된다. (정지 즉시 기존 토큰 및 서비스 차단은 **결정 필요** 항목으로 관리)
-- 인증 불필요 API: 회원가입, 로그인, 토큰 재발급, 로그아웃, 공간 목록/상세 조회, 슬롯 가용성 조회, 공간 이미지 공개 조회(`GET /space-images/{fileName}`), 토스페이먼츠 웹훅 수신(`POST /webhooks/tosspayments`, §5-0-3 — 이 경로의 `POST`만 연다).
+- JWT 페이로드는 `id`, `email`, `role`, 만료 시각(`exp`)을 포함한다. 보호 API 요청 시 서명과 만료 시각을 검증하여 인증하며, **매 요청마다 회원 DB를 재조회하지 않는다**. 비즈니스 서비스(`ReservationHoldService`, `DoorAccessVerificationService` 등)에서도 회원 `ACTIVE` 여부를 별도 재조회하지 않으므로, 회원이 정지되어도 기존 Access Token은 만료 전까지 기술적으로 요청이 통과될 수 있다. 토큰 재발급(`POST /auth/refresh`) 시에만 DB 조회를 거쳐 `ACCOUNT_INACTIVE`(403)로 차단된다. (정지·로그아웃 후 기존 토큰 즉시 차단은 **V2 확정 목표이며 dev에는 미구현** — §11-3. dev 병합 전 V2 1번 변경은 AT에 `sid`를 넣고 보호 요청마다 세션과 회원 상태를 조회한다 — [2-5](#2-5-v2-1번-변경--db-로그인-세션-dev-병합-전))
+- 인증 불필요 API: 이메일 인증번호 발급·확인, 회원가입, 로그인, 비밀번호 재설정, 토큰 재발급, 로그아웃, 공간 목록/상세 조회, 슬롯 가용성 조회, 공간 이미지 공개 조회(`GET /space-images/{fileName}`), 토스페이먼츠 웹훅 수신(`POST /webhooks/tosspayments`, §5-0-3 — 이 경로의 `POST`만 연다).
 - 공통 응답: `{ status, code, message, data }` (`status`: SUCCESS | FAIL, 성공 시 `code`: "OK"). 단, `ApiResponse` 클래스에 `@JsonInclude(JsonInclude.Include.NON_NULL)`가 적용되어 있어 Java 상에서 `data == null`인 경우(실패 응답 또는 `ApiResponse<Void>`) 실제 HTTP JSON 직렬화 시 `"data"` 필드 자체가 생략된다.
 - 페이지네이션 형식: 공통 래퍼 `PageResponse<T>` (`content`, `page`, `size`, `totalElements`, `totalPages`)를 사용한다. 대상: 공간 목록(`GET /spaces`), 관리자 공간 목록(`GET /admin/spaces`), 내 예약 목록(`GET /reservations`), 관리자 예약 목록(`GET /admin/reservations`), 관리자 회원 목록(`GET /admin/members`), 관리자 감사 로그(`GET /admin/audit-logs`), 문의 목록(`GET /inquiries`), 관리자 문의 목록(`GET /admin/inquiries`), 내 알림 목록(`GET /notifications`).
 - 시간: ISO-8601 문자열. 서버 직렬화는 타임존 오프셋 표기가 없는 `LocalDateTime` 형식(`"yyyy-MM-dd'T'HH:mm:ss"`)이며, 서버 내부 기준시계는 KST(`Asia/Seoul`, `Clock`)이다. 클라이언트는 이 문자열을 한국 표준시(KST)로 해석하는 것이 설계 목표이다. *(주의: 현재 프론트 `HoldCountdown.tsx`는 `new Date(holdExpiresAt)`로 브라우저 로컬 시간대로 직접 파싱하고 있어 비-KST 환경에서 오차 가능성이 있으며, 시간 파싱 코드 정정은 별도 프론트 코드 과제로 추적한다)*. 날짜는 `"yyyy-MM-dd"`, 시각은 `"HH:mm:ss"`. 예약 시간은 **30분의 배수**만 허용.
@@ -35,23 +37,90 @@
 | 200 | 조회/처리 성공 | 목록·상세, 결제 확정, 취소 성공 |
 | 201 | 생성 성공 | 예약(HOLD) 생성, 회원가입, 공간 등록, 도어 토큰 발급, 문의 등록 |
 | 204 | 본문 없음 성공 | 로그아웃, 대기 취소 |
-| 400 | 요청 형식 오류 | 필수 필드 누락, 형식 위반, 30분 단위 위반, 가격 단위 위반, 멱등키 누락, 이미지 형식/해상도 위반, 문의 입력값 오류 |
-| 401 | 인증 실패 | 토큰 없음(`AUTHENTICATION_REQUIRED`), 토큰 만료/위조(`INVALID_ACCESS_TOKEN`, `INVALID_REFRESH_TOKEN`), 로그인 자격증명 불일치(`INVALID_CREDENTIALS`) |
-| 403 | 인가 실패 | 역할 불충분(`ACCESS_DENIED`, `FORBIDDEN_ROLE`), 소유권 불일치(`FORBIDDEN_NOT_OWNER`), 정지 계정 로그인/재발급 거절(`ACCOUNT_INACTIVE`) |
+| 400 | 요청 형식 오류 | 필수 필드 누락, 형식 위반, 30분 단위 위반, 가격 단위 위반, 멱등키 누락, 이미지 형식/해상도 위반, 문의 입력값 오류, 인증번호 불일치·사용 불가(`VERIFICATION_CODE_MISMATCH`, `VERIFICATION_CHALLENGE_INVALID`), 인증 증표 사용 불가(`VERIFICATION_GRANT_INVALID`), 비밀번호 확인 불일치(`PASSWORD_CONFIRM_MISMATCH`) |
+| 401 | 인증 실패 | 토큰 없음(`AUTHENTICATION_REQUIRED`), 토큰 만료/위조(`INVALID_ACCESS_TOKEN`, `INVALID_REFRESH_TOKEN`), 로그인 자격증명 불일치(`INVALID_CREDENTIALS`), 탈퇴 계정의 로그인·재발급(`ACCOUNT_WITHDRAWN`) |
+| 403 | 인가 실패 | 역할 불충분(`ACCESS_DENIED`, `FORBIDDEN_ROLE`), 소유권 불일치(`FORBIDDEN_NOT_OWNER`), 정지 계정 로그인/재발급 거절(`ACCOUNT_INACTIVE`), 이메일 인증 최종 잠금(`VERIFICATION_ADMIN_LOCKED`) |
 | 404 | 자원 없음 | 존재하지 않는 spaceId(`SPACE_NOT_FOUND`), reservationId(`RESERVATION_NOT_FOUND`), memberId(`MEMBER_NOT_FOUND`), inquiryId(`INQUIRY_NOT_FOUND`), waitlistEntryId(`WAITLIST_NOT_FOUND`), fileName(`IMAGE_NOT_FOUND`) |
 | 409 | 상태 충돌 | 슬롯 중복(`RESERVATION_SLOT_CONFLICT`), 이미 취소/만료/확정된 예약에 대한 요청(`RESERVATION_STATE_CONFLICT`), `space.version` 불일치(`SPACE_VERSION_MISMATCH`), 공간 운영시간 축소 충돌(`SPACE_OPERATING_HOURS_CONFLICT`), 이메일 중복(`EMAIL_ALREADY_EXISTS`), 다른 충전 주문의 멱등키 재사용(`IDEMPOTENCY_KEY_REUSED`), 이미 신청한 대기(`WAITLIST_DUPLICATE`) |
 | 413 | 페이로드 초과 | 공간 대표 사진 파일 크기 5MB 초과(`IMAGE_SIZE_EXCEEDED`) |
 | 422 | 비즈니스 규칙 위반 | 크레딧 잔액 부족(`INSUFFICIENT_BALANCE`), 연장 불가(`RESERVATION_EXTEND_NOT_ALLOWED`), 비활성 공간(`SPACE_INACTIVE`), 관리자 정지/복구 불가(`TARGET_IS_ADMIN`), 자기 자신 크레딧 지급 불가(`SELF_GRANT_NOT_ALLOWED`), 답변 완료 문의 수정 불가(`INQUIRY_ALREADY_ANSWERED`), 대기 불필요(`WAITLIST_NOT_NEEDED`), 본인 점유와 겹침(`WAITLIST_ALREADY_HOLDING`), 대기 3건 초과(`WAITLIST_LIMIT_EXCEEDED`) |
+| 429 | 요청 제한 | 이메일 인증 임시 차단(`VERIFICATION_TEMPORARILY_BLOCKED`), 인증번호 30초 내 재요청(`VERIFICATION_RESEND_TOO_SOON`). 범용 API 요청 제한은 미구현(V2 목표) |
 | 500 | 서버 오류 | 이미지 디스크 저장 실패(`IMAGE_STORAGE_ERROR`) |
+| 503 | 외부 의존 실패 | 인증 메일 발송 실패(`VERIFICATION_MAIL_FAILED`). V2 1번(dev 병합 전): 보호 요청의 세션 조회 DB 장애(`AUTHENTICATION_SERVICE_UNAVAILABLE`) — [2-5](#2-5-v2-1번-변경--db-로그인-세션-dev-병합-전) |
 
 ## 2. 인증 (Auth)
 
+> 기준: 현재 dev 소스(V1, PR #302 `46526a5` 이후). 정책 근거와 차단 단계의 의미는 [인증 정책](../decisions/authentication-policy.md), 코드 흐름은 [V1 구현 해설](../architecture/auth-v1-implementation.md)을 본다. 아래 "V1 한계"는 현재 동작이며, 해결 방향은 [V2 계획](../plans/auth/v2-plan.md)에 있다.
+
 | API | 메서드/경로 | 인증 | 비고 |
 | --- | --- | --- | --- |
-| 회원가입 | `POST /auth/signup` | 불필요 | `role`은 요청으로 받지 않음, 서버가 항상 USER로 생성. 가입 트랜잭션에서 `SIGNUP_GRANT` 크레딧 지급(`app.credit.signup-grant`). 오류: `VALIDATION_FAILED`(400), `PASSWORD_CONFIRM_MISMATCH`(400), `EMAIL_ALREADY_EXISTS`(409) |
-| 로그인 | `POST /auth/login` | 불필요 | 성공 시 Access Token은 본문, Refresh Token은 HttpOnly 쿠키(Path=`/api/v1/auth`, maxAge=1일)로 반환. 오류: `VALIDATION_FAILED`(400), `INVALID_CREDENTIALS`(401), `ACCOUNT_INACTIVE`(403) |
-| 토큰 재발급 | `POST /auth/refresh` | 불필요(refreshToken 쿠키) | 저장된 Refresh Token DB 검증 후 새 Access Token 본문 반환 (Refresh Token 회전은 미구현). 정지 계정은 재발급 차단. 오류: `INVALID_REFRESH_TOKEN`(401), `ACCOUNT_INACTIVE`(403) |
-| 로그아웃 | `POST /auth/logout` | 불필요(refreshToken 쿠키) | 해당 Refresh Token DB 폐기 후 쿠키 만료(maxAge 0) 응답. 204 No Content |
+| 인증번호 발급 | `POST /auth/verification/issue` | 불필요 | 2-1 참조. 응답 200 `{ challengeId, expiresAt, resendAvailableAt }` |
+| 인증번호 확인 | `POST /auth/verification/check` | 불필요 | 2-2 참조. 응답 200 `{ grant, expiresAt }`, `Cache-Control: no-store` |
+| 회원가입 | `POST /auth/signup` | 불필요 | 2-3 참조. SIGNUP grant 필수. 응답 201 `{ memberId, email, nickname }`. `role`은 요청으로 받지 않음, 서버가 항상 USER로 생성. 가입 트랜잭션에서 `SIGNUP_GRANT` 크레딧 지급(`app.credit.signup-grant`). 가입 후 로그인은 별도 |
+| 비밀번호 재설정 | `POST /auth/password-reset` | 불필요 | 2-4 참조. PASSWORD_RESET grant 필수. 응답 200 `ApiResponse<Void>`(`data` 생략) |
+| 로그인 | `POST /auth/login` | 불필요 | 성공 시 Access Token은 본문 `{ accessToken }`, Refresh Token은 HttpOnly 쿠키(`refreshToken`, Path=`/api/v1/auth`, maxAge=1일, `Secure`·`SameSite`는 `app.auth.cookie.*` 설정값)로 반환. 비밀번호를 먼저 검증한 뒤 상태를 확인한다. 오류: `VALIDATION_FAILED`(400), `INVALID_CREDENTIALS`(401, 회원 없음·로컬 자격 증명 없음·비밀번호 불일치), `ACCOUNT_WITHDRAWN`(401), `ACCOUNT_INACTIVE`(403) |
+| 토큰 재발급 | `POST /auth/refresh` | 불필요(refreshToken 쿠키) | RT 원문의 SHA-256 해시로 DB 행을 찾아 만료·폐기를 확인하고, 회원을 비관적 잠금으로 다시 읽어 상태를 확인한 뒤 새 Access Token만 본문으로 반환. 오류: `INVALID_REFRESH_TOKEN`(401, 쿠키 없음·미등록·만료·폐기), `ACCOUNT_WITHDRAWN`(401), `ACCOUNT_INACTIVE`(403). **V1 한계**: RT 회전 없음 — 새 RT 쿠키를 내려주지 않고, 같은 RT를 만료(발급 후 1일)까지 반복 사용할 수 있다. V2 1번 변경 후 동작은 [2-5](#2-5-v2-1번-변경--db-로그인-세션-dev-병합-전) |
+| 로그아웃 | `POST /auth/logout` | 불필요(refreshToken 쿠키) | 쿠키의 RT를 DB에서 폐기(`revoked_at`)하고 쿠키 만료(maxAge 0) 응답. 쿠키가 없거나 등록되지 않은 토큰이어도 같은 204 No Content. **V1 한계**: 이미 발급된 Access Token은 만료(5분)까지 보호 API에서 유효하다. V2 1번 변경 후 동작은 [2-5](#2-5-v2-1번-변경--db-로그인-세션-dev-병합-전) |
+
+공통 메모 (현재 코드 기준):
+- 위 요청 본문의 형식 오류는 `VALIDATION_FAILED`(400)이며 메시지는 필드 오류 메시지를 `, `로 이어 붙인다. 인증번호 발급·확인 DTO는 `code` 외에 사용자 메시지를 따로 지정하지 않아 Bean Validation 기본 메시지가 나간다.
+- `purpose`에 정의되지 않은 값을 보내는 등 JSON 역직렬화가 실패하면 `GlobalExceptionHandler`에 처리기가 없어 공통 `ApiResponse` 형식이 아닌 Spring 기본 오류 응답이 나간다(이번 문서화에서 실행으로 확인하지 않음).
+- `CustomAuthenticationFilter`의 Access Token 검사 생략 목록에는 signup·login·password-reset·refresh·logout만 있고 `verification/issue`·`verification/check`는 없다. 두 API는 `permitAll`이라 헤더 없이 호출하면 정상 처리되지만, 유효하지 않은 `Authorization: Bearer` 헤더를 붙이면 필터에서 `INVALID_ACCESS_TOKEN`(401)이 먼저 반환된다.
+- 이메일 인증 실패 차단(1차 5분, 2차 1시간, 3차 최종 잠금)과 30초 재발송 간격은 V1의 개별 방어이며, 로그인·refresh 등 범용 요청 제한은 없다.
+
+### 2-1. 인증번호 발급 — `POST /auth/verification/issue`
+
+- **요청**: `email`(필수, 이메일 형식, 254자 이하), `purpose`(필수, `SIGNUP` | `PASSWORD_RESET`)
+- **응답 200** `VerificationIssueResponse`: `challengeId`(Long), `expiresAt`(발급 후 3분), `resendAvailableAt`(발급 후 30초)
+- **처리**: 이메일·목적별 `verification_guard`를 만들거나 비관적 잠금으로 확보 → 최종 잠금·임시 차단·30초 간격 검사 → 발송 시각 기록 → 같은 Guard의 미인증·미무효 challenge 무효화 → 새 8자리 숫자 코드의 HMAC 검증값으로 challenge 저장(`saveAndFlush`) → 메일 발송.
+- **발송 대상**: `SIGNUP`은 항상 발송한다(이미 가입된 이메일인지 여기서 검사하지 않으며, 중복은 회원가입 단계의 `EMAIL_ALREADY_EXISTS`로 거절). `PASSWORD_RESET`은 해당 이메일의 회원과 `local_credential`이 있을 때만 발송하고, 없으면 메일 없이 같은 형태의 200을 반환한다.
+- **오류**: `VALIDATION_FAILED`(400), `VERIFICATION_ADMIN_LOCKED`(403), `VERIFICATION_TEMPORARILY_BLOCKED`(429), `VERIFICATION_RESEND_TOO_SOON`(429), `VERIFICATION_MAIL_FAILED`(503 — `MailException`을 변환하며 트랜잭션이 롤백되어 challenge와 발송 시각이 저장되지 않는다)
+- 메일 설정은 [Gmail SMTP 설정](../operations/gmail-smtp-setup.md)을 따른다.
+
+### 2-2. 인증번호 확인 — `POST /auth/verification/check`
+
+- **요청**: `email`(필수, 이메일 형식, 254자 이하), `purpose`(필수), `challengeId`(필수, 양수), `code`(필수, 정규식 `[0-9]{8}` — 앞자리 0을 보존하는 문자열)
+- **응답 200** `VerificationCheckResponse`: `grant`(32바이트 난수의 Base64URL 문자열, 이 응답에서만 원문 제공), `expiresAt`(grant 발급 후 5분). 응답에 `Cache-Control: no-store`를 붙인다.
+- **처리 순서와 결과**: Guard 잠금 → 차단 중이면 차단 오류 → 해당 Guard의 **가장 최근** challenge만 대상으로 ID 일치·미인증·미무효·미만료 확인 → 코드 비교 → 성공 시 challenge 인증 완료, Guard 실패 상태 초기화, grant 해시 저장.
+- 실패 결과는 서비스가 예외 대신 결과 값으로 반환해 트랜잭션을 커밋한 뒤 Controller가 HTTP 오류로 바꾼다. 따라서 오입력 횟수와 차단 상태는 오류 응답과 함께 저장된다.
+- **오류**:
+  - `VERIFICATION_CHALLENGE_INVALID`(400): challenge 없음, 최신 challenge가 아님, 만료·인증 완료·무효화됨. 오입력 횟수를 늘리지 않는다.
+  - `VERIFICATION_CODE_MISMATCH`(400): 코드 불일치(현재 단계 1~4회째). 오입력 횟수 증가.
+  - `VERIFICATION_TEMPORARILY_BLOCKED`(429): 5회째 오입력으로 1·2차 차단이 시작됐거나 이미 임시 차단 중. 차단을 시작한 challenge는 무효화된다.
+  - `VERIFICATION_ADMIN_LOCKED`(403): 3차 차단(최종 잠금)에 도달했거나 이미 잠김. 이때 해당 이메일의 ACTIVE 회원은 SUSPENDED로 바뀌고 `LOCK_MEMBER_BY_VERIFICATION` 감사 로그(행위자 NULL)가 남는다.
+  - `VALIDATION_FAILED`(400)
+- 서비스 결과에는 `blockedUntil`이 있으나 응답 본문에는 포함하지 않는다.
+
+### 2-3. 회원가입 — `POST /auth/signup`
+
+- **요청**: `email`(필수, 이메일 형식, 254자 이하), `password`(필수), `passwordConfirm`(필수), `nickname`(필수, 2~50자), `grant`(필수, 128자 이하). 비밀번호 강도 규칙은 서버에 없다(`@NotBlank`만).
+- **응답 201** `SignupResponse`: `memberId`, `email`, `nickname`
+- **처리 순서**: `password`·`passwordConfirm` 비교 → SIGNUP grant 검증(같은 이메일·목적 Guard 잠금 후 해시 조회, Guard 귀속·미소비·미무효·미만료 확인) → 이메일 중복 확인 → `member` 저장(`email_verified_at` = 해당 challenge의 인증 시각) → `local_credential` 저장 → grant 소비 → 가입 크레딧 지급. 모두 한 트랜잭션이다.
+- 비밀번호 확인 불일치는 grant를 검증·소비하기 전에 거절하므로 같은 grant로 다시 시도할 수 있다.
+- **오류**: `VALIDATION_FAILED`(400), `PASSWORD_CONFIRM_MISMATCH`(400), `VERIFICATION_GRANT_INVALID`(400 — 없음·다른 이메일/목적·만료·소비됨), `EMAIL_ALREADY_EXISTS`(409, DB UNIQUE 위반도 같은 코드로 변환)
+
+### 2-4. 비밀번호 재설정 — `POST /auth/password-reset`
+
+- **요청**: `email`(필수, 이메일 형식, 254자 이하), `grant`(필수, 128자 이하), `password`(필수), `passwordConfirm`(필수)
+- **응답 200** `ApiResponse<Void>`
+- **처리 순서**: 확인값 비교 → PASSWORD_RESET grant 검증 → 회원 비관적 잠금 조회 → `local_credential` 조회 → 비밀번호 해시·`password_changed_at` 변경 → grant 소비. 한 트랜잭션이다. 회원 상태(ACTIVE 여부)는 이 API에서 검사하지 않는다.
+- **오류**: `VALIDATION_FAILED`(400), `PASSWORD_CONFIRM_MISMATCH`(400), `VERIFICATION_GRANT_INVALID`(400 — grant 문제뿐 아니라 회원 또는 로컬 자격 증명이 없을 때도 같은 코드)
+- **V1 한계**: 기존 Refresh Token과 Access Token을 폐기하지 않는다. 재설정 후 새 비밀번호로 새로 로그인하는 흐름은 동작하지만, 이전 로그인에서 받은 토큰도 각자 만료까지 쓸 수 있다.
+- 이 엔드포인트에는 Swagger `@Operation` 설명이 없다.
+
+### 2-5. V2 1번 변경 — DB 로그인 세션 (dev 병합 전)
+
+> 상태: 구현·회귀 검증·코드 리뷰 완료, **미커밋·dev 미병합·미배포**(2026-10-18, 브랜치 `auth/improvement/v2`). 병합 전까지 위 2-1~2-4와 표의 V1 동작이 dev 기준이다. 구조와 근거는 [V2 구현 해설](../architecture/auth-v2-implementation.md), 진행 상태는 [V2 계획 §0](../plans/auth/v2-plan.md#0-진행-상태-2026-10-18-리뷰-기준)을 본다.
+
+| 대상 | V2 1번 변경 후 계약 |
+| --- | --- |
+| 로그인 | 로그인마다 서버 세션을 만든다. 응답 형식은 같다. AT payload에 `sid`(세션 ID)가 추가되고, AT 만료는 `min(발급 + 5분, 세션 만료)`다. RT 쿠키의 DB 행은 그 세션에 연결되며 만료는 세션 만료(로그인 + 24시간)와 같다 |
+| 보호 요청 | JWT 서명·만료 검증 뒤 `sid`가 없거나 문자열이 아니면, 또는 세션이 없음·폐기·만료이거나 JWT `id`가 세션 소유 회원과 다르거나 회원이 `ACTIVE`가 아니면 `INVALID_ACCESS_TOKEN`(401). 정지·탈퇴 회원의 기존 AT도 이 경로로 401이다(`ACCOUNT_INACTIVE`가 아님). 세션 조회 중 DB 장애는 인증 없이 `AUTHENTICATION_SERVICE_UNAVAILABLE`(503, 공통 `ApiResponse`) |
+| 토큰 재발급 | 기존 검사에 세션 미폐기·미만료 확인이 더해진다(위반 시 `INVALID_REFRESH_TOKEN` 401). 새 AT는 같은 `sid`이고 세션·RT 만료는 연장되지 않는다. **RT 회전은 여전히 없다**(V2 3번 이슈) |
+| 로그아웃 | 쿠키 RT가 속한 세션과 그 세션의 RT를 함께 폐기한다. 이후 그 세션의 기존 AT는 401, RT로 refresh도 401. 같은 회원의 다른 로그인 세션은 유지된다. 쿠키가 없거나 미등록이면 기존처럼 204 |
+| 전환 (V24) | 기존 RT는 마이그레이션에서 삭제되고, `sid` 없는 기존 AT는 거부되므로 배포 후 모든 사용자가 다시 로그인해야 한다 |
+
+아직 구현되지 않은 것: RT 회전·재사용 탐지(3번), 비밀번호 재설정·정지·탈퇴 시 회원의 전체 세션 폐기와 복구 후 폐기 유지(2번 — 현재는 회원 상태 조회로만 막혀 복구하면 이전 세션이 다시 유효), 요청 제한(4번). 로그인·refresh 경로의 DB 장애는 503이 아니라 Spring 기본 오류 응답이다.
 
 ## 3. 회원 (Member)
 
@@ -393,7 +462,8 @@
 | `reservation.status` | `HELD`, `EXPIRED`, `CONFIRMED`, `IN_USE`, `COMPLETED`, `CANCELLED`, `NO_SHOW` |
 | `credit_transaction.type` | `SIGNUP_GRANT`, `ADMIN_GRANT`, `RESERVATION_CHARGE`, `REFUND`, `PENALTY` |
 | `door_access_log.result` | `ALLOW`, `DENY` |
-| `audit_log.action` | `REGISTER_SPACE`, `MODIFY_SPACE`, `SUSPEND_MEMBER`, `REACTIVATE_MEMBER`, `FORCE_CANCEL_RESERVATION`, `GRANT_CREDIT` |
+| `audit_log.action` | `REGISTER_SPACE`, `MODIFY_SPACE`, `SUSPEND_MEMBER`, `REACTIVATE_MEMBER`, `LOCK_MEMBER_BY_VERIFICATION`(이메일 인증 3차 차단에 따른 시스템 정지), `FORCE_CANCEL_RESERVATION`, `GRANT_CREDIT` |
+| `verification_guard.purpose` (요청 `purpose`) | `SIGNUP`, `PASSWORD_RESET` |
 | `audit_log.target_type` | `SPACE`, `MEMBER`, `RESERVATION` |
 | `inquiry.status` | `WAITING`, `ANSWERED` |
 | `waitlist_entry.status` | `WAITING`, `CANCELLED`, `EXPIRED` (`EXPIRED` 전이는 미구현 — 구간이 지난 `WAITING` 행은 "활성" 기준(시작 시각이 미래)에서 빠질 뿐 상태는 그대로다) |
@@ -412,9 +482,10 @@
 2. **멱등성 키 충돌 감지 및 실패 응답 캐싱/TTL 정책**
    - **현재 구현**: `POST /reservations/{id}/pay`에서 성공 응답(200 OK)만 `idempotency_key` 테이블에 저장되며, 실패 시에는 롤백되어 캐시되지 않는다. 또한 동일 키에 대해 다른 요청 본문이 전달되어도 충돌을 감지하는 로직(`IDEMPOTENCY_KEY_CONFLICT`)이 없다.
    - **결정 과제**: 동일 키에 다른 페이로드가 전달되었을 때 409 충돌을 발생시킬 것인지(요청 바디 해시 저장 필요), 실패 응답도 캐시하여 무조건 동일 결과를 재현할 것인지, 만료 기간(TTL) 및 테이블 정리 스케줄러를 도입할 것인지 결정 필요.
-3. **정지 계정의 기존 Access Token 즉시 무효화 및 보호 API 차단**
+3. **정지·로그아웃·비밀번호 재설정·탈퇴 후 기존 인증 수단 즉시 차단 (V2 확정 목표, dev에는 미구현)**
    - **현재 구현**: `CustomAuthenticationFilter`는 JWT 서명과 만료 시각만 검증하며 회원 DB를 재조회하지 않는다. 비즈니스 서비스(`ReservationHoldService`, `DoorAccessVerificationService` 등)에서도 회원 `status == ACTIVE` 여부를 별도 확인하지 않는다. 따라서 회원이 정지되어도 기존 Access Token 만료 전까지는 예약 생성 및 도어 출입 시도가 기술적으로 통과된다(토큰 재발급 요청 시에만 `ACCOUNT_INACTIVE` 403 차단).
-   - **결정 과제**: 정지 즉시 기존 토큰까지 완전 차단하려면 JWT 블랙리스트(Redis 등), 인증 필터 내 매 요청 DB/캐시 회원 상태 조회, 또는 서비스 레이어 진입 시 회원 상태 검증 로직 추가가 필요하며, 이를 별도 코드 과제로 추진할지 결정 필요.
+   - **목표**: 차단 여부는 더 이상 결정 대상이 아니다. [인증 정책](../decisions/authentication-policy.md) §10에 따라 V2에서 Redis 없이 DB 기반 로그인 세션으로 기존 AT·RT를 폐기한다. 세션 식별자·RT 재사용 시 폐기 범위·역할 변경 반영 방식 등 세부는 [V2 계획](../plans/auth/v2-plan.md) §3 결정표에서 정한다. 대상 시나리오는 `V2SecurityRedTest` 11개이며 [인증 보안 테스트](../testing/auth-security-tests.md)를 본다.
+   - **진행(dev 병합 전)**: V2 1번 변경으로 로그아웃한 세션의 기존 AT·RT 차단과 정지·탈퇴 회원의 기존 AT 거부(회원 상태 조회)가 구현됐다([2-5](#2-5-v2-1번-변경--db-로그인-세션-dev-병합-전)). 비밀번호 재설정·정지·탈퇴 시 세션 자체 폐기는 2번 이슈로 남아 있다.
 4. **관리자 예약 목록 검색 조건 필터 지원 (해결 완료)**
    - **구현 현황**: `AdminReservationSearchCondition`(`date`, `spaceId`, `status`) 파라미터 바인딩 및 `ReservationRepository.searchReservations` 동적 JPQL 필터링 구현 완료. `PageResponse<AdminReservationResponse>` 규격 정합화 완료.
 5. **노쇼 환불률**: 현재 확정값은 0%이며 강사 피드백에 따라 재검토 중(`docs/decisions/core-domain-decisions.md` §13). 변경 시 명세서와 크레딧 환급 로직 동기화 필요.
