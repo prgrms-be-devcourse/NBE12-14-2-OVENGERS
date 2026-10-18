@@ -28,9 +28,24 @@
 프로젝트 루트 또는 Actions checkout의 프로젝트 루트에서 실행합니다. 이 스크립트/원본 이미지가 EC2에 있어야 합니다.
 백엔드를 한 번 정상 실행해 Flyway V15 이상을 적용하고, 이미지 저장 디렉터리를 준비하세요. 새 샘플 계정의 비밀번호 해시는 V14의 `local_credential`에 저장하고, V15 정책처럼 이메일 인증 완료(`email_verified_at`)로 만듭니다.
 
+스크립트는 MySQL **8.4 클라이언트**가 필요합니다(`--no-login-paths` 옵션 사용, 팀 기준 MySQL 8.4). Ubuntu 24.04 기본 저장소의 `mysql-client`는 8.0이라 `unknown option '--no-login-paths'`로 실패하므로 MySQL 공식 APT 저장소에서 설치합니다([MySQL APT Repository Quick Guide](https://dev.mysql.com/doc/mysql-apt-repo-quick-guide/en/)).
+서명 키는 Ubuntu 키서버의 갱신본을 씁니다. `repo.mysql.com`의 `RPM-GPG-KEY-mysql-2023`은 2025-10-22에 만료된 사본이라 `EXPKEYSIG` 오류가 납니다. 갱신본도 2027-10-23에 만료되므로 그 전에 같은 명령으로 다시 받습니다.
+
 ```bash
+# MySQL 공식 서명 키(지문 BCA43417C3B485DD128EC6D4B7B3B788A8D3785C) 등록 후 만료일 확인
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xBCA43417C3B485DD128EC6D4B7B3B788A8D3785C' \
+  | sudo gpg --dearmor --yes -o /etc/apt/keyrings/mysql.gpg
+gpg --show-keys /etc/apt/keyrings/mysql.gpg | grep -A1 '^pub'
+
+# MySQL 8.4 LTS 저장소 추가 후 클라이언트 설치
+echo "deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/ubuntu/ $(. /etc/os-release && echo "$VERSION_CODENAME") mysql-8.4-lts" \
+  | sudo tee /etc/apt/sources.list.d/mysql.list
 sudo apt update
 sudo apt install -y mysql-client python3-bcrypt
+hash -r
+mysql --version                               # Ver 8.4.x
+mysql --help | grep -c -- '--no-login-paths'  # 1 이상
 
 # 현재 서비스가 ubuntu로 실행되는 경우. 실제 서비스 사용자에 맞춥니다.
 sudo install -d -o ubuntu -g ubuntu -m 750 /var/slotkey/space-images
@@ -104,12 +119,13 @@ bash data-setting/aws-setup.sh images
 
 DB와 이미지 파일은 하나의 트랜잭션이 아닙니다. 파일을 먼저 설치하고 DB 작업을 실행합니다. DB 오류 시 이미 설치한 이미지는 남으며 재실행할 수 있습니다. 기존 파일이 원본과 다르거나 심볼릭 링크이면 덮어쓰지 않습니다. 비정상 종료로 `.slotkey-aws-install-lock`이 남았다면 실행 프로세스가 없는지 확인 후 해당 설치 잠금 디렉터리만 정리하세요.
 
-이미지는 UUID 형식 `a5100000-0000-4000-8000-000000000001.jpg` ~ `...000039.jpg`로 설치됩니다. 현재 백엔드의 공개 이미지 API를 사용하므로 Vercel 빌드에 사진을 복사하거나 사진 추가 때문에 재배포할 필요가 없습니다. 서비스 사용자가 파일을 읽을 수 있어야 합니다.
+이미지는 UUID 형식 `a5100000-0000-4000-8000-000000000001.jpg` ~ `...000039.jpg`로 설치됩니다. 현재 백엔드의 공개 이미지 API를 사용하므로 프론트 빌드에 사진을 복사하거나 사진 추가 때문에 재배포할 필요가 없습니다. 서비스 사용자가 파일을 읽을 수 있어야 합니다.
 
 ```bash
-curl -i 'https://slotkey.store/api/v1/spaces?page=0&size=3'
+# 운영 확인은 CloudFront 도메인으로 합니다. EC2 안에서는 http://localhost:8080 으로도 확인할 수 있습니다.
+curl -i 'https://d1mf4bnfp77vwt.cloudfront.net/api/v1/spaces?page=0&size=3'
 curl --fail -o /dev/null -w '%{http_code}\n' \
-  'https://slotkey.store/api/v1/space-images/a5100000-0000-4000-8000-000000000001.jpg'
+  'https://d1mf4bnfp77vwt.cloudfront.net/api/v1/space-images/a5100000-0000-4000-8000-000000000001.jpg'
 ```
 
 초기 상태 기준 `status`는 일반 회원 100명·관리자 1명·공간 39개·지역별 13개를 표시합니다. 예약은 자동 생성하지 않습니다.
