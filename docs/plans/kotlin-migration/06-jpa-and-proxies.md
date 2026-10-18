@@ -4,7 +4,19 @@
 
 ## 대상과 위험 지점
 
-운영 코드에 `@Entity` 12개와 [`BaseTimeEntity`](../../../backend/src/main/java/com/ovengers/slotkey/global/common/entity/BaseTimeEntity.java) `@MappedSuperclass` 1개가 있다. 우선 [`Member`](../../../backend/src/main/java/com/ovengers/slotkey/member/entity/Member.java), [`Reservation`](../../../backend/src/main/java/com/ovengers/slotkey/reservation/entity/Reservation.java), [`Space`](../../../backend/src/main/java/com/ovengers/slotkey/space/entity/Space.java), [`RefreshToken`](../../../backend/src/main/java/com/ovengers/slotkey/auth/entity/RefreshToken.java), [`Inquiry`](../../../backend/src/main/java/com/ovengers/slotkey/inquiry/entity/Inquiry.java)를 점검한다. `RefreshToken.member`는 `LAZY`, `Space.version`은 DB `NOT NULL`과 연결된 기본값 0이다. `BaseTimeEntity`와 `AuditLog`는 Auditing을 사용한다.
+2026-10-18 / `16b9ead`의 운영 코드에 **`@Entity` 21개**, [`BaseTimeEntity`](../../../backend/src/main/java/com/ovengers/slotkey/global/common/entity/BaseTimeEntity.java) `@MappedSuperclass` 1개가 있다. 기존 Member·Reservation·Space·RefreshToken·Inquiry 외에도 아래 9개 엔티티가 추가됐다. 엔티티 목록은 착수 시 다시 추출한다. `RefreshToken.member`는 LAZY, `Space.version`은 DB NOT NULL의 기본값 0이며 BaseTimeEntity/AuditLog의 Auditing도 유지한다.
+
+| 추가 엔티티 | 보존할 매핑·상태·검증 |
+| --- | --- |
+| [`ChargeOrder`](../../../backend/src/main/java/com/ovengers/slotkey/credit/entity/ChargeOrder.java) | long 주문액, nullable paymentKey/결제수단/복구 필드, 상태 enum·멱등 키·원장의 주문 UNIQUE 연결. 별도 PG 호출과 DB 확정을 합치지 않는다. |
+| [`LocalCredential`](../../../backend/src/main/java/com/ovengers/slotkey/auth/entity/LocalCredential.java) | Member와 `@MapsId` 공유 PK·LAZY 일대일. 비밀번호는 Member가 아닌 이 엔티티에 있으며 저장 후 memberId·연관 참조를 확인한다. |
+| [`VerificationGuard`](../../../backend/src/main/java/com/ovengers/slotkey/auth/entity/VerificationGuard.java), [`VerificationChallenge`](../../../backend/src/main/java/com/ovengers/slotkey/auth/entity/VerificationChallenge.java), [`VerificationGrant`](../../../backend/src/main/java/com/ovengers/slotkey/auth/entity/VerificationGrant.java) | 이메일·목적별 guard 잠금, 연관관계/LAZY, 만료·소비·무효화 nullable 시각과 일회성 증표 상태를 보존한다. |
+| [`WaitlistEntry`](../../../backend/src/main/java/com/ovengers/slotkey/waitlist/entity/WaitlistEntry.java) | WAITING의 active=1, 취소의 active=null로 활성 항목만 UNIQUE를 적용한다. `@DynamicUpdate`를 유지해 취소 flush가 별도 갱신된 last_notified_at을 덮어쓰지 않게 한다. |
+| [`OutboxEvent`](../../../backend/src/main/java/com/ovengers/slotkey/outbox/OutboxEvent.java) | eventId·topic·partitionKey·payload·상태/시각을 보존한다. 기존 저장 JSON은 [03](03-api-contract.md)에 따라 전환 후에도 처리할 수 있어야 한다. |
+| [`Notification`](../../../backend/src/main/java/com/ovengers/slotkey/notification/entity/Notification.java) | 회원/대기/이벤트 ID와 읽음 nullable 시각을 유지하고 중복 처리 기록·알림 저장의 동반 롤백을 확인한다. |
+| [`SpaceRankingSnapshot`](../../../backend/src/main/java/com/ovengers/slotkey/stats/entity/SpaceRankingSnapshot.java) | 기간/공간과 계산 당시 지역, long 순매출·int 건수/슬롯 수, 계산 시각을 보존한다. 재확정 시 기존 기간 삭제/재삽입은 한 트랜잭션이다. |
+
+JPA 목록만으로 전환 범위를 끝내지 않는다. [`ProcessedEventStore`](../../../backend/src/main/java/com/ovengers/slotkey/notification/consumer/ProcessedEventStore.java)와 [`PgWebhookEventStore`](../../../backend/src/main/java/com/ovengers/slotkey/credit/webhook/PgWebhookEventStore.java)는 JDBC로 별도 테이블을 사용하고, 통계 집계도 NamedParameterJdbcTemplate을 사용한다. 영향 행 수·중복 처리·NULL·숫자 결과 매핑과 JPA/JDBC의 트랜잭션 참여를 함께 확인한다.
 
 ## 설정과 엔티티 변환 방법
 
@@ -12,13 +24,13 @@
 2. 엔티티별로 `@Table`, `@Id`, `@GeneratedValue`, `@Column`, `@Enumerated`, 관계·지연 로딩, 상속 필드를 표로 기록한다. Kotlin에서 애너테이션이 필드에 놓이도록 `@field:` 지정 여부를 확인한다. 실제 매핑은 `EntityManager` 저장·flush·clear·재조회로 검증한다.
 3. JPA 엔티티는 변경 가능한 상태와 영속성 식별자를 갖는다. 자동 `equals/hashCode/toString`이 연관관계를 순회하거나 미영속/영속 객체 동등성을 바꾸지 않도록 `data class`를 기본 선택으로 사용하지 않는다. 필수 필드는 생성 팩터리에서 보장하되 JPA의 무인자 인스턴스화 경로도 테스트한다.
 4. `Space.version = 0`, nullable 시각 필드와 `Member.balance`의 기본값이 신규 생성·DB 재조회에서 유지되는지 확인한다. `RefreshToken.member`는 `entityManager.flush(); entityManager.clear()` 후 프록시 초기화 전/후를 확인해 예기치 않은 즉시 로딩을 찾는다.
-5. [`JpaAuditingConfig`](../../../backend/src/main/java/com/ovengers/slotkey/global/config/JpaAuditingConfig.java)의 주입 `Clock`을 사용해 생성·수정 시각을 확인한다. [`AuditLogService`](../../../backend/src/main/java/com/ovengers/slotkey/audit/service/AuditLogService.java)의 `MANDATORY` 전파와 관리자 변경 실패 시 롤백을 기존 실 DB 테스트로 확인한다. Kotlin 메서드가 final로 남아 AOP를 우회하지 않는지 실제 빈 호출로 검증한다.
-6. 설정 클래스와 [`SpaceImageProperties`](../../../backend/src/main/java/com/ovengers/slotkey/space/image/SpaceImageProperties.java)의 바인딩을 기동 테스트로 확인한다. 생성자 바인딩으로 바꿀 경우 기본 경로와 환경변수 우선순위를 테스트한다.
+5. [`JpaAuditingConfig`](../../../backend/src/main/java/com/ovengers/slotkey/global/config/JpaAuditingConfig.java)의 주입 `Clock`과 감사 로그의 MANDATORY를 확인한다. 인증 grant/guard·SlotReleasedRecorder·ProcessedEventStore도 MANDATORY이며 호출자 없는 호출의 거절과 비즈니스 변경의 동반 롤백을 보존한다. PG 외부 호출·relay는 DB 트랜잭션 밖에 남기고 준비/확정/상태 갱신의 빈 경계를 유지한다. Kotlin final/self-invocation으로 AOP를 우회하지 않는지 실제 Spring 빈과 DB로 검증한다.
+6. `SpaceImageProperties`와 `TossPaymentsProperties`의 경로/URI/Duration·기본값/nullable·환경변수 우선순위를 기동 테스트로 확인한다. 인증 HMAC·SMTP 발신/계정 일치, Fake PG/test 프로필, Kafka와 스케줄러 활성 조건은 [04](04-mixed-build.md)의 기동 표를 따른다.
 
 ## 테스트와 완료 조건
 
-- 각 엔티티 전환 PR에서 `cd backend && ./gradlew test`를 Docker/MySQL 8.4 환경으로 실행한다. 저장·재조회, LAZY 로딩, Auditing, 상태 전이와 롤백을 해당 도메인 테스트로 확인한다.
-- `./gradlew bootJar`와 테스트 프로필의 Flyway V1~V10 적용을 확인한다. 엔티티 문법 변경만으로 Flyway 파일을 수정하지 않는다. 실제 스키마 계약이 바뀌면 다음 번호의 마이그레이션을 추가한다.
+- 각 전환 PR에서 Docker/MySQL 8.4로 관련 테스트와 필터 없는 `cd backend && ./gradlew clean build`를 실행한다. [01](01-test-baseline.md)의 인증·PG·Outbox/알림·대기·통계 테스트를 해당 변경에 맞게 재사용하고 저장/재조회·LAZY·Auditing·nullable/공유 PK·동적 UPDATE·롤백을 확인한다.
+- `bootJar`와 테스트 프로필의 **Flyway V1~V23 전체 적용**을 확인한다. 착수 커밋의 이후 migration도 포함하며 언어 전환만으로 기존 SQL/checksum을 수정하지 않는다. 실제 스키마 변경은 별도 결정/다음 버전 SQL로 다룬다.
 - 프록시·트랜잭션의 최종 판정은 단위 Mockito 테스트가 아니라 Spring 빈과 실 DB를 거친 통합 테스트에서 한다.
 
 공식 근거: [Spring Boot 3.3 Kotlin 지원](https://docs.spring.io/spring-boot/3.3/reference/features/kotlin.html), [Kotlin JPA 무인자 생성자](https://kotlinlang.org/docs/no-arg-plugin.html), [Kotlin 2.3.20 JPA 변경](https://kotlinlang.org/docs/whatsnew2320.html#improved-jpa-support-in-the-kotlin-plugin-jpa-plugin).
