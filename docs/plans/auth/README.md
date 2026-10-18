@@ -18,7 +18,7 @@ SlotKey의 이메일 기반 가입과 복구 절차를 명확히 하고, 로그�
 | V1·V2·V3는 각각 무엇을 완성하는가? | [로드맵](roadmap.md) |
 | 인증번호를 몇 번 틀리면 어떤 조치가 발생하는가? | [인증 정책](../../decisions/authentication-policy.md) |
 | 가입과 비밀번호 재설정이 실제로 어떤 코드를 거치는가? | [V1 구현 해설](../../architecture/auth-v1-implementation.md) |
-| V2 로그인 세션은 어떻게 구현됐는가? | [V2 구현 해설](../../architecture/auth-v2-implementation.md) (1번 이슈, 미커밋 작업 트리 기준) |
+| V2 로그인 세션은 어떻게 구현됐는가? | [V2 구현 해설](../../architecture/auth-v2-implementation.md) (1번 이슈, 로컬 커밋 `e671c47` 기준, 미병합) |
 | 왜 테스트 11개가 실패하며, 무엇이 통과 조건인가? | [보안 테스트](../../testing/auth-security-tests.md) |
 | V2를 어떤 순서로 개발하고 무엇을 먼저 결정해야 하는가? | [V2 계획](v2-plan.md) |
 | Redis로 무엇을 옮기며 장애·유실에 어떻게 대응할 것인가? | [V3 설계 초안](v3-redis-design.md) |

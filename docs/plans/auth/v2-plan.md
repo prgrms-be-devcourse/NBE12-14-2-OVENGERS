@@ -1,18 +1,19 @@
 # V2: DB 기반 인증 보안 고도화 계획
 
-> 상태: 계획 2026-10-15 작성. 2026-10-18 기준 **1번 이슈 구현·회귀 검증·코드 리뷰 완료, 미커밋·미배포**(아래 §0). 2번 이후 미착수이며 V2 전체는 완료되지 않았다. V2 전체 보안 요구 충족을 뜻하지 않는다.  
+> 상태: 계획 2026-10-15 작성. 2026-10-18 기준 **1번 이슈 구현·회귀 검증·코드 리뷰 완료 — 구현 커밋 `e671c47`, 로컬 커밋 완료, 미Push·미병합·미배포**(아래 §0). **2번 이슈 구현·회귀 검증·코드 리뷰 완료 — 커밋 `02c3557`, 로컬 커밋 완료, 미Push·미병합·미배포**. 3번 이후 미착수이며 V2 전체는 완료되지 않았다. V2 전체 보안 요구 충족을 뜻하지 않는다.
 > 출발점: V1 PR #302, 5c60fa4  
 > 원칙: Redis 없이 DB로 보안 요구사항을 먼저 충족한다.  
 > 관련 문서: [정책](../../decisions/authentication-policy.md), [보안 테스트](../../testing/auth-security-tests.md)
 
 ## 0. 진행 상태 (2026-10-18 리뷰 기준)
 
-> 검토 대상은 브랜치 `auth/improvement/v2`의 **미커밋 작업 트리**다. 기준 HEAD `16b9ead32e4608d1cc41ec70a62612b526a34c55`에는 구현이 들어 있지 않다. 구현 구조는 [V2 구현 해설](../../architecture/auth-v2-implementation.md)을 본다.
+> 구현 기준은 브랜치 `auth/improvement/v2`의 구현 커밋 `e671c475be90c90804712a1866e708bc7d145432`(로컬 커밋 완료, 미Push·미병합·미배포)이다. 리뷰는 커밋 전 작업 트리(기준 `16b9ead`)에서 진행했고, 커밋 직전 추가된 변경(`TransactionException` 처리와 테스트 1개)은 커밋 후 별도로 확인했다. 구현 구조는 [V2 구현 해설](../../architecture/auth-v2-implementation.md)을 본다.
 
 | 이슈 | 상태 |
 | --- | --- |
-| 1. DB 로그인 세션·현재 세션 로그아웃 | **구현·회귀 검증·코드 리뷰 완료, 미커밋·미배포.** V24의 실제 환경 적용 이력은 미확인(아래 "배포 전 확인") |
-| 2번 이후 | 착수 전 |
+| 1. DB 로그인 세션·현재 세션 로그아웃 | **구현·회귀 검증·코드 리뷰 완료.** 구현 커밋 `e671c47`, 로컬 커밋 완료, 미Push·미병합·미배포. V24의 실제 환경 적용 이력은 미확인(아래 "배포 전 확인") |
+| 2. 계정 사건별 전체 세션 폐기 | **2번 이슈 구현·회귀 검증·코드 리뷰 완료, 커밋 `02c3557`(로컬, 미Push·미병합·미배포).** 아래 "2번 이슈 리뷰" |
+| 3번 이후 | 착수 전 |
 
 **1차 리뷰 지적의 처리 (2차 리뷰에서 코드로 확인)**
 
@@ -21,7 +22,7 @@
 | V24가 기존 RT 행이 있으면 NOT NULL 전환에 실패 | 해결. 먼저 `DELETE FROM refresh_token`(전환 전 V1 RT만 대상, 한 번만 실행) 후 `auth_session_id NOT NULL` + FK. V23에 RT 행을 넣고 V24를 적용하는 업그레이드 테스트와 빈 DB 전체 마이그레이션 테스트 추가 |
 | refresh·JWT의 시스템 시간대 사용 | 해결. RT·세션·JWT 발급·JWT 파서가 모두 주입 `Clock` 사용. 고정 `Clock`으로 UTC·Asia/Seoul 두 시간대와 세션 종료 90초 전 상한을 검증 |
 | JWT 회원 ID와 세션 소유 회원 미대조 | 해결. 세션 조회 조건에 `member.id = JWT id` 추가, 불일치 401 테스트 |
-| DB 장애 시 공통 형식이 아닌 응답 | 해결. 세션 조회 예외 → 인증 미설정, 공통 `ApiResponse` 503 `AUTHENTICATION_SERVICE_UNAVAILABLE`, 로그는 예외 클래스 이름만 |
+| DB 장애 시 공통 형식이 아닌 응답 | 해결. 세션 조회 중 `DataAccessException`·`PersistenceException`·`TransactionException`(트랜잭션 시작 실패 포함) → 인증 미설정, 공통 `ApiResponse` 503 `AUTHENTICATION_SERVICE_UNAVAILABLE`, 로그는 예외 클래스 이름만. `TransactionException`은 커밋 직전 추가됐다 |
 | `sid` 없는 AT 발급 경로 | 해결(운영 코드). `JwtProvider.genAccessToken(Member)` 제거. `JwtUtil.createToken` 3인자 정적 메서드는 테스트용으로 남아 있으나 운영 호출부는 없음 |
 
 **조건부 승인 후 마무리 (3차 확인, 2026-10-18)**
@@ -44,16 +45,58 @@
 | 아티팩트로 확인(최종) | Codex가 남긴 임시 디렉터리의 JUnit XML 126개를 직접 집계: tests 995, failures 0, errors 0, skipped 10, 통과 985. 실행 2026-10-18 15:37:25~15:43:38 KST. 변경된 소스의 마지막 수정 시각(15:36:51)이 실행 시작보다 앞서 현재 작업 트리와 일치하는 것으로 판단(파일 시각 기준이며 빌드 입력의 해시 확인은 아님) |
 | 아티팩트로 확인(수정 전 첫 전체 실행) | 같은 방식 집계: 995 / 통과 936 / 실패 49 / 건너뜀 10, 15:27:54~15:34:11 KST. 실패 분포 `AdminStatsControllerIntegrationTest` 35, `ReservationSearchSecurityIntegrationTest` 9, `StatsControllerIntegrationTest` 5 — `sid` 없는 토큰의 401과 `auth_session` FK로 인한 회원 삭제 실패 |
 | 1차 리뷰 때 보고된 987/871/116/10 | 해당 실행의 아티팩트를 찾지 못해 여전히 미확인. 49개 실패 실행과 다른 실행이다 |
-| 건너뜀 10개 | 모두 `V2SecurityRedTest`의 `@Disabled`: 비밀번호 재설정 3개·정지 1개·정지 후 복구 1개·탈퇴 1개(2번 이슈), RT 재사용·Rotation·동시 사용 3개(3번), 반복 로그인 실패 429 1개(4번) |
+| 건너뜀 10개 (1번 시점) | 모두 `V2SecurityRedTest`의 `@Disabled`: 비밀번호 재설정 3개·정지 1개·정지 후 복구 1개·탈퇴 1개(2번 이슈에서 해제), RT 재사용·Rotation·동시 사용 3개(3번), 반복 로그인 실패 429 1개(4번) |
 | 아티팩트로 확인(UTC 선택 실행) | 5개 클래스 XML: tests 68, failures 0, errors 0, skipped 0. 실행 16:01:12~16:01:36 KST로 마지막 테스트 수정(15:59:19) 이후. `JwtProviderTest` 출력 `AUTH_TEST_JVM_ZONE_ID=UTC`. 대상 `AuthControllerTest` 24, `AdminStatsControllerIntegrationTest` 36, `StatsControllerIntegrationTest` 6, `RefreshTokenServiceTest` 1, `JwtProviderTest` 1 |
 | 최종 전체 실행과 마지막 수정의 관계 | 전체 실행(15:37~15:43) 이후 테스트 4개가 바뀌었다. 그중 3개는 UTC 선택 실행에 포함됐고, `AdminSpaceSecurityIntegrationTest`는 이름만 바뀌어(기대값 동일) 바뀐 뒤 다시 실행되지 않았다. `AuthSessionMigrationIntegrationTest`는 UTC 실행에 포함되지 않았다 |
+| 마지막 보완 이후 (`AuthControllerTest` 선택 실행) | 25개 통과, 실패 0(`build/test-results` XML, 16:10:16 KST). 소스 수정(16:09:54) 이후·커밋(16:12) 이전 실행이며, 새 테스트 "세션 조회 트랜잭션을 시작할 수 없으면 … 503"이 포함됐다 |
+| 실행 시점 구분 | 995개 전체 실행과 UTC 68개 선택 실행은 마지막 예외 처리 보완(`TransactionException`) **이전** 코드 기준이다. 보완 이후에는 `AuthControllerTest` 25개 선택 실행만 통과했다(2026-10-18 16:10 KST, 커밋 직전 작업 트리). 보완 이후 전체 실행은 없다. |
 | 리뷰어의 재실행 | 하지 않았다 |
 
 원시 결과는 `/tmp` 아래에 있어 영구 증거가 아니다. 보관이 필요하면 커밋 후 CI(`backend-ci.yml`)에서 `build/test-results/test`와 HTML 보고서를 Actions artifact로 업로드하고 그 실행 링크를 기록하는 방식을 제안한다.
 
 **배포 영향(코드 검토로 확인, 실제 적용은 미검증)**: 기존 AT는 `sid`가 없어 거부되고 기존 RT는 V24가 삭제하므로 모든 사용자가 다시 로그인해야 한다. 구버전 서버는 `auth_session_id` 없이 RT를 저장하므로 V24 적용 DB에서 로그인할 수 없고 `sid`를 검사하지 않으므로, 구·신 서버 혼합 운영과 앱만 되돌리는 롤백은 불가하다. 개발·운영 DB 적용과 실제 환경 동작은 확인하지 않았다.
 
-**회원 상태 차단과 세션 폐기의 구분**: 정지·탈퇴 후 기존 AT 거부는 보호 요청의 회원 상태 조회 결과다. 세션은 폐기되지 않으므로 복구하면 이전 세션이 다시 유효해진다. 비밀번호 재설정도 세션을 폐기하지 않는다. 이는 2번 이슈 범위다.
+**회원 상태 차단과 영구 세션 폐기의 구분**: 보호 요청은 1번부터 회원 상태(`ACTIVE`)를 조회해 정지·탈퇴 회원의 AT를 거부한다. 2번은 여기에 더해 탈퇴·관리자 정지·인증 최종 잠금 자동 정지·비밀번호 재설정 시 회원의 모든 세션과 RT의 `revoked_at`을 기록한다. 복구는 상태만 `ACTIVE`로 되돌리고 폐기 기록을 지우지 않으므로 옛 AT·RT는 계속 거부되고 새 로그인만 성공한다.
+
+### 2번 이슈 리뷰 (2026-10-18, 미커밋 작업 트리)
+
+**코드로 확인한 동작**
+
+| 사건 | 연결 위치 | 같은 트랜잭션에서 함께 처리되는 것 |
+| --- | --- | --- |
+| 탈퇴 | `MemberWithdrawalService.withdraw` | 회원 잠금 → `WITHDRAWN` → 세션·RT 폐기 → 출입 토큰 폐기 (이전의 RT만 폐기를 대체) |
+| 관리자 정지 | `AdminMemberService.changeStatus`(대상 상태 `SUSPENDED`일 때만) | 회원 잠금 → 상태 변경 → 세션·RT 폐기 → 감사 로그. 감사 저장 실패 시 폐기도 롤백 |
+| 인증 최종 잠금 자동 정지 | `VerificationCheckService.suspendMemberIfNeeded` | Guard 잠금 → 회원 잠금 → `SUSPENDED` → 세션·RT 폐기 → 감사 로그. 서비스가 결과 값을 반환해 커밋한 뒤 Controller가 403을 만들므로 오류 응답과 무관하게 커밋 |
+| 비밀번호 재설정 | `PasswordResetService.reset` | Guard 잠금 → 회원 잠금 → 비밀번호 변경 → grant 소비 → 세션·RT 폐기. 어느 단계가 실패해도 함께 롤백 |
+| 복구 | `AdminMemberService.restore` | 상태만 `ACTIVE`. 폐기 기록은 그대로 |
+
+- 폐기는 `AuthSessionService.revokeAllForMember`가 `auth_session`과 `refresh_token`을 회원 ID 조건의 bulk update로 처리한다(이미 폐기된 행은 유지, 다른 회원 행은 대상 아님). 두 쿼리는 `flushAutomatically`라 앞선 회원 상태·비밀번호 변경이 먼저 반영되고, `clear`하지 않으므로 같은 트랜잭션의 관리 중인 회원 엔티티가 분리되지 않는다. 이 트랜잭션들은 세션·RT 엔티티를 미리 읽지 않아 오래된 영속 상태를 쓰는 경로가 없다.
+- 회원 상태·비밀번호를 바꾸는 운영 코드 경로는 위 네 곳(+복구)뿐임을 호출부 검색으로 확인했다.
+- 잠금 순서: 상태·자격 증명 변경 경로는 (Guard →) 회원 → 세션 → RT 순이고, 로그인은 회원 잠금 후 세션·RT를 만든다. 로그아웃은 회원을 잠그지 않고 세션 → RT 순으로 갱신한다. 정적 검토에서 순환 대기 경로는 찾지 못했다(부하 상태의 교착 검증은 아님).
+
+**경합 분석**
+
+- 재설정·정지 ↔ 로그인: 로그인도 회원을 비관적 잠금으로 읽으므로 직렬화된다. 로그인이 먼저면 새 세션도 뒤이은 폐기 대상이고, 폐기가 먼저면 새 비밀번호·변경된 상태로 판정된다.
+- 정지·탈퇴 ↔ refresh: refresh는 회원 잠금 후 회원을 다시 읽으므로 정지·탈퇴 커밋 뒤에는 403/401로 거부된다.
+- 재설정 ↔ refresh: refresh는 RT·세션을 잠금 없이 읽은 뒤 회원 잠금을 기다린다. 재설정이 그 사이에 커밋하면 회원은 `ACTIVE`라 refresh가 200과 새 AT를 줄 수 있지만, 그 AT의 `sid`는 이미 폐기된 세션이라 다음 보호 요청에서 401이다. RT 회전이 없어 새 RT도 생기지 않으므로 사용 가능한 토큰은 남지 않는다. 3번(RT 회전)에서는 회원 잠금 후 세션·RT 상태를 다시 확인해야 한다(아래 이월 사항).
+
+**테스트로 확인한 것(아티팩트 기준)**
+
+- `V2SecurityRedTest`에서 `@Disabled` 6개를 해제했다(10 → 4). 보고의 "4개 활성화"는 사실과 다르다(남은 `@Disabled`가 4개다). 전체 테스트 수 995 → 999의 증가분 4는 1번 마무리의 `AuthControllerTest` 1개와 2번의 새 테스트 3개다. 2번 새 테스트: 인증 최종 잠금 오류 응답 후 정지·폐기 커밋과 복구 후 옛 토큰 거부, 재설정과 refresh 경합(이상 `V2SecurityRedTest`), 세션 폐기 실패 시 비밀번호·grant 소비 롤백(`PasswordResetIntegrationTest`). 그 밖에 `AdminMemberServiceIntegrationTest`의 기존 테스트에 감사 저장 실패 시 세션·RT 폐기도 롤백되는지 확인하는 단언이 추가됐다.
+- 해제된 테스트는 여러 세션의 AT·RT 거부, 다른 회원 세션 유지, 복구·재설정 후 새 로그인 성공까지 확인한다. 비트랜잭션 테스트라 커밋 이후 동작을 본다.
+- 바뀐 기존 기대는 V1 동작 고정 기대(재설정 후 기존 AT 200 → 401) 1건이며 확정 정책과 일치한다. 삭제·새 `@Disabled`·인증 우회 Mock은 없다.
+- 경합 테스트는 두 요청을 동시에 시작할 뿐 "refresh가 RT를 읽은 뒤 회원 잠금을 기다리는" 순서를 강제하지 않는다. 대신 refresh가 200이면 발급된 AT가 401인지까지 확인하고, 옛 AT·RT 거부와 새 로그인 성공을 검증한다. DB 폐기 컬럼을 직접 조회하지는 않는다.
+
+**테스트 결과 (2번, 리뷰어가 XML 직접 집계, 재실행 없음)**
+
+| 실행 | 시각 (KST) | 전체 | 통과 | 실패 | 오류 | 건너뜀 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 관련 6개 클래스 선택 실행 | 16:44:20~16:44:56 | 37 | 33 | 0 | 0 | 4 |
+| 전체 실행 (126개 스위트) | 16:45:20~16:51:52 | 999 | 995 | 0 | 0 | 4 |
+
+마지막 소스 수정(16:43:39)이 두 실행보다 앞선다(파일 시각 기준). 남은 `@Disabled` 4개: RT 재사용 불가·RT Rotation 후 계속 갱신·동일 RT 동시 사용 1회 성공(3번 이슈), 반복 로그인 실패 429(4번 이슈). 클래스별 실행 시간 상위: `AuthSessionMigrationIntegrationTest` 16.9초, `V2SecurityRedTest` 3.9초, `AuthControllerTest` 3.7초, `SpaceReservationLockIntegrationTest` 2.6초, `ChargeOrderConfirmIntegrationTest` 2.1초(XML 스위트 시간 합 약 56초, 전체 벽시계 약 6분 30초 — 차이는 컨텍스트·컨테이너 기동으로 보이며 XML에는 기록되지 않는다).
+
+**3번으로 이월**: refresh가 회원 잠금 뒤 세션·RT 상태를 다시 확인하지 않는다. 지금은 발급 AT가 즉시 무효라 결함이 아니지만, RT 회전을 넣으면 폐기된 세션에서 새 RT가 발급될 수 있으므로 3번에서 잠금 후 재확인(또는 세션 행 잠금)을 함께 설계한다.
 
 ## 1. 해결할 문제
 

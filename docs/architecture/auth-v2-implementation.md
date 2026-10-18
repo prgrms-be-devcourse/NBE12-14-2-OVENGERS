@@ -1,9 +1,9 @@
 # SlotKey V2 인증 구현 해설 — 1번 이슈: DB 로그인 세션
 
 > 검토 시점: 2026-10-18 (KST)
-> 검토 대상: 브랜치 `auth/improvement/v2`의 **미커밋 작업 트리**. 기준 HEAD `16b9ead32e4608d1cc41ec70a62612b526a34c55`에는 이 구현이 들어 있지 않다. 커밋되면 이 문서의 기준을 그 커밋으로 바꾼다.
-> 상태: 1번 이슈 구현·회귀 검증·코드 리뷰 완료, 미커밋·미배포(2026-10-18). 근거와 남은 배포 전 확인은 [V2 계획 §0](../plans/auth/v2-plan.md#0-진행-상태-2026-10-18-리뷰-기준).
-> 범위: V2 1번 이슈(로그인별 DB 세션, 현재 세션 로그아웃)만 다룬다. 2번(정지·재설정·탈퇴의 세션 영구 폐기), 3번(RT Rotation·재사용 탐지), 4번(요청 제한)은 아직 구현되지 않았다.
+> 구현 기준: 브랜치 `auth/improvement/v2`의 커밋 `e671c475be90c90804712a1866e708bc7d145432`(로컬 커밋 완료, 미Push·미병합·미배포). 부모 커밋은 dev의 `16b9ead`다.
+> 상태: 1번 이슈 구현·회귀 검증·코드 리뷰 완료, 로컬 커밋 `e671c47`, 미Push·미병합·미배포(2026-10-18). 2번 이슈 구현·회귀 검증·코드 리뷰 완료, 로컬 커밋 `02c3557`, 미Push·미병합·미배포. 근거와 남은 배포 전 확인은 [V2 계획 §0](../plans/auth/v2-plan.md#0-진행-상태-2026-10-18-리뷰-기준).
+> 범위: V2 1번 이슈(로그인별 DB 세션, 현재 세션 로그아웃, 커밋 `e671c47`)와 2번 이슈(계정 사건별 전체 세션 폐기, 커밋 `02c3557` — §5)를 다룬다. 3번(RT Rotation·재사용 탐지), 4번(요청 제한)은 아직 구현되지 않았다.
 > 관련 문서: [V2 계획](../plans/auth/v2-plan.md) · [인증 정책](../decisions/authentication-policy.md) · [인증 보안 테스트](../testing/auth-security-tests.md) · V1 기준점은 [V1 구현 해설](auth-v1-implementation.md)
 
 ## 1. 구조 한눈에 보기
@@ -39,7 +39,7 @@ V24는 먼저 `DELETE FROM refresh_token`으로 **전환 전 V1 RT 기록을 삭
 | 보호 요청 | JWT 검증 후 `sid`가 문자열이 아니면 401. `AuthSessionRepository.isUsable`(select 1회, 쓰기·잠금 없음)로 세션 존재·미폐기·`expires_at > now`·`member.id = JWT id`·`member.status = ACTIVE` 확인 | `CustomAuthenticationFilter`, `AuthSessionService.validate` |
 | refresh | RT 해시 조회(세션 fetch) → RT 만료·폐기, 세션 활성 확인 → 회원 비관적 잠금 후 상태 확인 → 같은 `sid`로 새 AT. 세션·RT 만료는 바꾸지 않는다. **RT는 교체하지 않는다**(3번 이슈) | `RefreshTokenService.validateRefreshToken`, `AuthService.refresh` |
 | 로그아웃 | 쿠키 RT의 세션을 폐기하고 그 세션의 RT를 bulk update로 폐기. 한 트랜잭션. 같은 회원의 다른 세션은 유지 | `RefreshTokenService.revokeRefreshToken` |
-| DB 장애 | 세션 조회 중 `DataAccessException`·`PersistenceException`이면 인증을 설정하지 않고 공통 `ApiResponse` 503. 로그에는 예외 클래스 이름만 남긴다 | `AuthSessionService.validate`, `ErrorCode.AUTHENTICATION_SERVICE_UNAVAILABLE` |
+| DB 장애 | 세션 조회 중 `DataAccessException`·`PersistenceException`·`TransactionException`(트랜잭션 시작 실패 `CannotCreateTransactionException` 등)이면 인증을 설정하지 않고 공통 `ApiResponse` 503. 일반 인증 실패(세션 없음·폐기·만료 등)는 예외가 아니라 조회 결과로 판정되어 401이다. 로그에는 예외 클래스 이름만 남긴다 | `AuthSessionService.validate`, `ErrorCode.AUTHENTICATION_SERVICE_UNAVAILABLE` |
 
 ## 4. 시간 처리
 
@@ -47,7 +47,19 @@ V24는 먼저 `DELETE FROM refresh_token`으로 **전환 전 V1 RT 기록을 삭
 
 ## 5. 회원 상태 차단과 세션 폐기의 구분
 
-정지·탈퇴 회원의 기존 AT가 거부되는 것은 **보호 요청마다 회원 상태를 조회하기 때문**이다. 세션 자체를 폐기하지 않으므로 정지 후 복구하면 정지 전 세션의 AT·RT가 다시 유효해진다. 비밀번호 재설정도 기존 세션을 폐기하지 않는다. 이 영구 폐기와 복구 후 폐기 유지는 2번 이슈이며 `V2SecurityRedTest`의 해당 시나리오는 아직 `@Disabled`다.
+두 장치가 따로 있다.
+
+- **회원 상태 조회 (1번)**: 보호 요청마다 회원이 `ACTIVE`인지 확인하므로 정지·탈퇴 중에는 기존 AT가 401이다. 이것만으로는 복구하면 옛 세션이 다시 유효해진다.
+- **영구 세션 폐기 (2번, 커밋 `02c3557`)**: 아래 사건에서 `AuthSessionService.revokeAllForMember`가 회원의 모든 `auth_session`과 `refresh_token`에 `revoked_at`을 bulk update로 기록한다. 복구는 상태만 바꾸고 폐기 기록을 지우지 않으므로 옛 AT·RT는 계속 거부되고 새 로그인만 성공한다.
+
+| 사건 | 호출 위치 | 트랜잭션 |
+| --- | --- | --- |
+| 탈퇴 | `MemberWithdrawalService.withdraw` | 회원 잠금·상태 변경·출입 토큰 폐기와 함께 |
+| 관리자 정지 | `AdminMemberService.changeStatus` (`SUSPENDED`일 때) | 상태 변경·감사 로그와 함께(감사 실패 시 롤백) |
+| 인증 최종 잠금 자동 정지 | `VerificationCheckService.suspendMemberIfNeeded` | 결과 값 반환으로 커밋된 뒤 Controller가 403 응답 |
+| 비밀번호 재설정 | `PasswordResetService.reset` | 비밀번호 변경·grant 소비와 함께(어느 단계 실패든 롤백) |
+
+refresh는 RT·세션을 잠금 없이 읽은 뒤 회원을 잠그므로, 재설정과 경합하면 이미 폐기된 세션의 `sid`로 AT를 발급할 수 있다. 그 AT는 다음 요청에서 401이고 RT 회전이 없어 새 RT도 없다. RT 회전(3번)에서는 잠금 후 재확인이 필요하다. 근거와 테스트 결과는 [V2 계획 §0](../plans/auth/v2-plan.md#0-진행-상태-2026-10-18-리뷰-기준).
 
 ## 6. 전환·배포 영향 (코드로 확인한 범위)
 

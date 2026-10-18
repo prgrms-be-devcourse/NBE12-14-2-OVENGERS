@@ -5,7 +5,7 @@
 > **2026-09-17 갱신 (docs/api)**: 실제 컨트롤러 코드 기준으로 동기화 — Base URL `/api/v1`, 취소 API `POST .../cancel`, 요청/응답 필드, 관리자 예약 목록 필터 미지원, 미구현 API 표시. **프론트는 이 문서를 기준으로 한다.** (claude.ai 프로젝트 문서 `claude/api-명세서.md`는 구버전 — 참고 금지)
 > **2026-09-24 갱신 (대단위 1)**: 컨트롤러·DTO·`SecurityConfig`·`ErrorCode` 전수 조사 기반 정합성 동기화 — 실제 응답 DTO 필드, 엔드포인트별 페이지네이션 반환 형태(`PageResponse` vs Spring `Page`), 오프셋 없는 ISO-8601 LocalDateTime(KST), 멱등성 캐시 동작, 실존 `ErrorCode` 반영 및 미구현/결정 필요 항목(`termsVersion`, 동일 멱등키 충돌 검사, 정지 계정 즉시 차단) 분리 명시.
 
-> **2026-10-18 갱신 (V2 1번, dev 병합 전)**: 브랜치 `auth/improvement/v2`의 미커밋 변경(DB 로그인 세션·세션 단위 로그아웃·`AUTHENTICATION_SERVICE_UNAVAILABLE` 503)을 §2-5에 따로 적었다. 병합 전까지 §2의 다른 표와 공통 사항은 dev(V1) 동작이다.
+> **2026-10-18 갱신 (V2 1번, dev 병합 전)**: 브랜치 `auth/improvement/v2`의 구현 커밋 `e671c47`(로컬 커밋 완료, 미Push·미병합·미배포)에 있는 변경(DB 로그인 세션·세션 단위 로그아웃·`AUTHENTICATION_SERVICE_UNAVAILABLE` 503)을 §2-5에 따로 적었다. 병합 전까지 §2의 다른 표와 공통 사항은 dev(V1) 동작이다.
 > **2026-10-18 갱신 (V1 인증)**: PR #302(`46526a5`)로 구현된 이메일 인증번호 발급·확인, grant 기반 회원가입·비밀번호 재설정, `VERIFICATION_*` 에러 코드를 Controller·DTO·서비스·`ErrorCode` 기준으로 §2에 반영했다. V2 목표(세션·즉시 폐기·RT Rotation·요청 제한)는 구현 전이며 [인증 고도화 로드맵](../plans/auth/roadmap.md)을 따른다. 정책 설명은 [인증 정책](../decisions/authentication-policy.md)에 둔다.
 > **2026-10-16 갱신 (베스트 공간 랭킹)**: 관리자 통계 API(§14: 공간·지역 랭킹, 상태별 건수)를 구현 기준으로 확정했고, 공간 등록·수정의 `location`을 판교·강남·하남으로 제한했다. 결정 기록은 [decisions/space-ranking.md](../decisions/space-ranking.md).
 > **2026-10-16 갱신 (5단계)**: 예약 대기 API(§12), 내 알림 조회 API(§13), `WAITLIST_*` 에러 코드 5개, 새 테이블(`waitlist_entry`, `processed_event`, `notification`)을 반영했다. 슬롯이 풀리면 Outbox → Kafka → 컨슈머가 대기자에게 알림을 저장한다(알림은 힌트이며 예약은 선착순, 자리를 보장하지 않는다). 결정 기록은 [decisions/waitlist.md](../decisions/waitlist.md), [decisions/outbox-kafka.md](../decisions/outbox-kafka.md)를 본다.
@@ -105,22 +105,23 @@
 - **응답 200** `ApiResponse<Void>`
 - **처리 순서**: 확인값 비교 → PASSWORD_RESET grant 검증 → 회원 비관적 잠금 조회 → `local_credential` 조회 → 비밀번호 해시·`password_changed_at` 변경 → grant 소비. 한 트랜잭션이다. 회원 상태(ACTIVE 여부)는 이 API에서 검사하지 않는다.
 - **오류**: `VALIDATION_FAILED`(400), `PASSWORD_CONFIRM_MISMATCH`(400), `VERIFICATION_GRANT_INVALID`(400 — grant 문제뿐 아니라 회원 또는 로컬 자격 증명이 없을 때도 같은 코드)
-- **V1 한계**: 기존 Refresh Token과 Access Token을 폐기하지 않는다. 재설정 후 새 비밀번호로 새로 로그인하는 흐름은 동작하지만, 이전 로그인에서 받은 토큰도 각자 만료까지 쓸 수 있다.
+- **V1 한계**(V2 2번 커밋 `02c3557`에서 해소 — [2-5](#2-5-v2-1번-변경--db-로그인-세션-dev-병합-전)): 기존 Refresh Token과 Access Token을 폐기하지 않는다. 재설정 후 새 비밀번호로 새로 로그인하는 흐름은 동작하지만, 이전 로그인에서 받은 토큰도 각자 만료까지 쓸 수 있다.
 - 이 엔드포인트에는 Swagger `@Operation` 설명이 없다.
 
 ### 2-5. V2 1번 변경 — DB 로그인 세션 (dev 병합 전)
 
-> 상태: 구현·회귀 검증·코드 리뷰 완료, **미커밋·dev 미병합·미배포**(2026-10-18, 브랜치 `auth/improvement/v2`). 병합 전까지 위 2-1~2-4와 표의 V1 동작이 dev 기준이다. 구조와 근거는 [V2 구현 해설](../architecture/auth-v2-implementation.md), 진행 상태는 [V2 계획 §0](../plans/auth/v2-plan.md#0-진행-상태-2026-10-18-리뷰-기준)을 본다.
+> 상태: 구현·회귀 검증·코드 리뷰 완료, **로컬 커밋 완료, 미Push·미병합·미배포**(2026-10-18, 브랜치 `auth/improvement/v2`, 커밋 `e671c47`). 병합 전까지 위 2-1~2-4와 표의 V1 동작이 dev 기준이다. 구조와 근거는 [V2 구현 해설](../architecture/auth-v2-implementation.md), 진행 상태는 [V2 계획 §0](../plans/auth/v2-plan.md#0-진행-상태-2026-10-18-리뷰-기준)을 본다.
 
 | 대상 | V2 1번 변경 후 계약 |
 | --- | --- |
 | 로그인 | 로그인마다 서버 세션을 만든다. 응답 형식은 같다. AT payload에 `sid`(세션 ID)가 추가되고, AT 만료는 `min(발급 + 5분, 세션 만료)`다. RT 쿠키의 DB 행은 그 세션에 연결되며 만료는 세션 만료(로그인 + 24시간)와 같다 |
-| 보호 요청 | JWT 서명·만료 검증 뒤 `sid`가 없거나 문자열이 아니면, 또는 세션이 없음·폐기·만료이거나 JWT `id`가 세션 소유 회원과 다르거나 회원이 `ACTIVE`가 아니면 `INVALID_ACCESS_TOKEN`(401). 정지·탈퇴 회원의 기존 AT도 이 경로로 401이다(`ACCOUNT_INACTIVE`가 아님). 세션 조회 중 DB 장애는 인증 없이 `AUTHENTICATION_SERVICE_UNAVAILABLE`(503, 공통 `ApiResponse`) |
+| 보호 요청 | JWT 서명·만료 검증 뒤 `sid`가 없거나 문자열이 아니면, 또는 세션이 없음·폐기·만료이거나 JWT `id`가 세션 소유 회원과 다르거나 회원이 `ACTIVE`가 아니면 `INVALID_ACCESS_TOKEN`(401). 정지·탈퇴 회원의 기존 AT도 이 경로로 401이다(`ACCOUNT_INACTIVE`가 아님). 세션 조회 중 DB 장애(트랜잭션 시작 실패 포함)는 인증 없이 `AUTHENTICATION_SERVICE_UNAVAILABLE`(503, 공통 `ApiResponse`) |
 | 토큰 재발급 | 기존 검사에 세션 미폐기·미만료 확인이 더해진다(위반 시 `INVALID_REFRESH_TOKEN` 401). 새 AT는 같은 `sid`이고 세션·RT 만료는 연장되지 않는다. **RT 회전은 여전히 없다**(V2 3번 이슈) |
+| 계정 사건 (V2 2번, 커밋 `02c3557`) | 탈퇴(`POST /auth/withdraw`), 관리자 정지(`PATCH /admin/members/{id}/suspend`), 인증 최종 잠금 자동 정지(`POST /auth/verification/check`의 `VERIFICATION_ADMIN_LOCKED`), 비밀번호 재설정(`POST /auth/password-reset`)이 성공하면 그 회원의 모든 세션과 RT를 폐기한다. 이후 옛 AT는 401, 옛 RT로 refresh도 401이다. 관리자 복구(`PATCH /admin/members/{id}/restore`)는 폐기된 세션을 되살리지 않으며 새 로그인만 성공한다. 응답 형식·상태 코드는 바뀌지 않는다 |
 | 로그아웃 | 쿠키 RT가 속한 세션과 그 세션의 RT를 함께 폐기한다. 이후 그 세션의 기존 AT는 401, RT로 refresh도 401. 같은 회원의 다른 로그인 세션은 유지된다. 쿠키가 없거나 미등록이면 기존처럼 204 |
 | 전환 (V24) | 기존 RT는 마이그레이션에서 삭제되고, `sid` 없는 기존 AT는 거부되므로 배포 후 모든 사용자가 다시 로그인해야 한다 |
 
-아직 구현되지 않은 것: RT 회전·재사용 탐지(3번), 비밀번호 재설정·정지·탈퇴 시 회원의 전체 세션 폐기와 복구 후 폐기 유지(2번 — 현재는 회원 상태 조회로만 막혀 복구하면 이전 세션이 다시 유효), 요청 제한(4번). 로그인·refresh 경로의 DB 장애는 503이 아니라 Spring 기본 오류 응답이다.
+아직 구현되지 않은 것: RT 회전·재사용 탐지(3번), 요청 제한(4번). 위 "계정 사건" 행은 1번 커밋 이후의 2번 커밋 변경이다. 로그인·refresh 경로의 DB 장애는 503이 아니라 Spring 기본 오류 응답이다.
 
 ## 3. 회원 (Member)
 
@@ -485,7 +486,7 @@
 3. **정지·로그아웃·비밀번호 재설정·탈퇴 후 기존 인증 수단 즉시 차단 (V2 확정 목표, dev에는 미구현)**
    - **현재 구현**: `CustomAuthenticationFilter`는 JWT 서명과 만료 시각만 검증하며 회원 DB를 재조회하지 않는다. 비즈니스 서비스(`ReservationHoldService`, `DoorAccessVerificationService` 등)에서도 회원 `status == ACTIVE` 여부를 별도 확인하지 않는다. 따라서 회원이 정지되어도 기존 Access Token 만료 전까지는 예약 생성 및 도어 출입 시도가 기술적으로 통과된다(토큰 재발급 요청 시에만 `ACCOUNT_INACTIVE` 403 차단).
    - **목표**: 차단 여부는 더 이상 결정 대상이 아니다. [인증 정책](../decisions/authentication-policy.md) §10에 따라 V2에서 Redis 없이 DB 기반 로그인 세션으로 기존 AT·RT를 폐기한다. 세션 식별자·RT 재사용 시 폐기 범위·역할 변경 반영 방식 등 세부는 [V2 계획](../plans/auth/v2-plan.md) §3 결정표에서 정한다. 대상 시나리오는 `V2SecurityRedTest` 11개이며 [인증 보안 테스트](../testing/auth-security-tests.md)를 본다.
-   - **진행(dev 병합 전)**: V2 1번 변경으로 로그아웃한 세션의 기존 AT·RT 차단과 정지·탈퇴 회원의 기존 AT 거부(회원 상태 조회)가 구현됐다([2-5](#2-5-v2-1번-변경--db-로그인-세션-dev-병합-전)). 비밀번호 재설정·정지·탈퇴 시 세션 자체 폐기는 2번 이슈로 남아 있다.
+   - **진행(dev 병합 전)**: V2 1번 변경으로 로그아웃한 세션의 기존 AT·RT 차단과 정지·탈퇴 회원의 기존 AT 거부(회원 상태 조회)가 구현됐다([2-5](#2-5-v2-1번-변경--db-로그인-세션-dev-병합-전)). 비밀번호 재설정·정지·탈퇴·인증 최종 잠금 시 회원 전체 세션 폐기와 복구 후 폐기 유지는 2번 커밋(`02c3557`)으로 구현됐다. RT 회전과 요청 제한은 남아 있다.
 4. **관리자 예약 목록 검색 조건 필터 지원 (해결 완료)**
    - **구현 현황**: `AdminReservationSearchCondition`(`date`, `spaceId`, `status`) 파라미터 바인딩 및 `ReservationRepository.searchReservations` 동적 JPQL 필터링 구현 완료. `PageResponse<AdminReservationResponse>` 규격 정합화 완료.
 5. **노쇼 환불률**: 현재 확정값은 0%이며 강사 피드백에 따라 재검토 중(`docs/decisions/core-domain-decisions.md` §13). 변경 시 명세서와 크레딧 환급 로직 동기화 필요.
