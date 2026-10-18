@@ -2,7 +2,8 @@
 
 > 기준: 2026-10-15 / PR #302 / `5c60fa444dfc427016954fdacc44d3dfd293c004`  
 > 이 문서는 V1의 구현 스냅샷이다. V2·V3 구현 완료를 설명하지 않는다.  
-> 관련 문서: [정책](../decisions/authentication-policy.md), [테스트](../testing/auth-security-tests.md)
+> 관련 문서: [정책](../decisions/authentication-policy.md), [테스트](../testing/auth-security-tests.md)  
+> V1 기준점으로 보존하는 문서다. V2 구현 내용은 이 문서를 덮어쓰지 않고 별도 문서로 작성한다. 기준점 이후 변경(2026-10-18 확인): PR #302 병합 `46526a5`, Gmail SMTP 전환 #318.
 
 ## 1. 전체 구조
 
@@ -164,6 +165,8 @@ V2에서 공통 인증 검증을 추가해도 본인 예약 여부, 관리자 �
 과거 환경에서 다른 번호의 인증 migration을 이미 실행했다면 Flyway 이력과 실제 DB를 먼저 확인해야 한다. 운영 DB에 적용된 migration을 문서 정리 목적으로 다시 번호 변경하지 않는다.
 
 프로젝트는 Java 21 기반이며 통합 테스트에 MySQL Testcontainers를 사용한다. 테스트 실행 환경의 Docker 지원과 DB 초기화를 확인한다. 로컬 메일은 별도의 SMTP 테스트 서버가 필요한 구성이다. 실제 운영 메일 제공자·발신 도메인·재시도·모니터링은 완료된 것으로 기록하지 않는다.
+
+> 기준점 이후 변경: #318에서 로컬·운영 모두 Gmail SMTP를 사용하도록 바뀌었고 Mailpit 등 테스트 메일 서버는 쓰지 않는다. 자동 테스트는 메일 발송을 Mock한다. 현재 설정 절차는 [Gmail SMTP 설정](../operations/gmail-smtp-setup.md)을 따른다.
 
 ## 13. 코드 근거
 
