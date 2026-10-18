@@ -6,6 +6,7 @@ import { createChargeOrder } from '@/api/creditApi';
 import Button from '@/components/common/Button';
 import ErrorMessage from '@/components/common/ErrorMessage';
 import { ROUTES } from '@/constants/routePaths';
+import { TOSS_PAYMENT_TERMS } from '@/constants/tossPaymentTerms';
 import { useAction } from '@/hooks/useApi';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -58,7 +59,6 @@ export default function ChargePage() {
       const session = await setupChargeWidgets({
         clientKey,
         amount: created.amount,
-        onAgreementChange: setAgreed,
       });
       sessionRef.current = session;
       setWidgetReady(true);
@@ -141,7 +141,24 @@ export default function ChargePage() {
           {order && (
             <div className={styles.widgetArea}>
               <div id="payment-method" aria-label="결제수단" />
-              <div id="agreement" aria-label="결제 약관" />
+              <div className={styles.agreement}>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={agreed}
+                    disabled={!widgetReady}
+                    onChange={(event) => setAgreed(event.target.checked)}
+                  />
+                  <span>{TOSS_PAYMENT_TERMS.title}</span>
+                </label>
+                <ul>
+                  {TOSS_PAYMENT_TERMS.items.map((term) => (
+                    <li key={term.url}>
+                      <a href={term.url} target="_blank" rel="noopener noreferrer">{term.title} 보기</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
         </section>

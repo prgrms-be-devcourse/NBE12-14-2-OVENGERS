@@ -304,7 +304,7 @@ stateDiagram-v2
 ```
 
 - 알림은 힌트이고 자리를 보장하지 않는다. 순번을 약속하려면 직접 예약 경로를 막아야 해 예약 동시성 경로를 건드리므로 자동 선점권은 3차로 미뤘다.
-- 같은 이벤트가 중복 전달되어도 알림은 한 번만 생긴다(`UNIQUE(consumer, event_id)` + `UNIQUE(event_id, waitlist_entry_id)`). Kafka는 로컬 compose 프로필(`kafka`)과 `SLOTKEY_KAFKA_ENABLED=true`에서만 켜지고, 기본값(꺼짐)에서는 알림이 생성되지 않는다.
+- 같은 이벤트가 중복 전달되어도 알림은 한 번만 생긴다(`UNIQUE(consumer, event_id)` + `UNIQUE(event_id, waitlist_entry_id)`). Kafka는 compose 프로필(`kafka`)로 띄우고 `SLOTKEY_KAFKA_ENABLED=true`일 때만 relay·컨슈머가 켜지며, 기본값(꺼짐)에서는 알림이 생성되지 않는다. 로컬과 운영 서버(2026-10-17부터 c7i-flex.large) 모두 같은 compose 정의로 Kafka를 띄운다.
 - 상세: [예약 대기](docs/decisions/waitlist.md), [Outbox·Kafka](docs/decisions/outbox-kafka.md)
 
 ### 예약 상태 전이
@@ -576,7 +576,7 @@ bash data-setting/setup.sh setup
 ```
 - **관리자 계정**: `admin000@sample.com` / `00000000`
 - **일반 회원 계정**: `user001@sample.com` ~ `user100@sample.com` / `00000000` (샘플 계정당 1,000,000 크레딧 및 `SIGNUP_GRANT` 원장 보유)
-- ※ 참고: 신규 회원가입 시 기본 지급되는 크레딧은 `50,000` 크레딧(`application.yml`의 `app.credit.signup-grant`)이며, 개발 샘플 계정에는 테스트 편의를 위해 `1,000,000` 크레딧이 초기 적재되어 있습니다.
+- ※ 참고: 신규 회원가입 시 기본 지급되는 크레딧은 `300,000` 크레딧(`application.yml`의 `app.credit.signup-grant`)이며, 개발 샘플 계정에는 테스트 편의를 위해 `1,000,000` 크레딧이 초기 적재되어 있습니다.
 
 샘플 데이터 적재가 완료되면 백엔드 서버를 다시 기동하여 실행 상태를 유지합니다:
 ```bash

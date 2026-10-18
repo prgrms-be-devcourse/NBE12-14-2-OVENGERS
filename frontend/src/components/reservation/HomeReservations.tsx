@@ -54,7 +54,7 @@ function MemberReservations() {
   return <section className={styles.summary} aria-labelledby="home-reservations-title">
     <div className={styles.heading}>
       <h2 id="home-reservations-title">진행 중인 예약</h2>
-      <Link href={ROUTES.reservations}>내 예약 전체 보기 <Chevron /></Link>
+      <Link href={ROUTES.reservations}>예약 내역 전체 보기 <Chevron /></Link>
     </div>
     {error ? <div className={styles.message} role="alert">
       <span>예약 정보를 불러오지 못했습니다.</span>

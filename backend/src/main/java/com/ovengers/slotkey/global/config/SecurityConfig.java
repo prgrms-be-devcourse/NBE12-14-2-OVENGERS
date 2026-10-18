@@ -73,6 +73,11 @@ public class SecurityConfig {
                                                         "/api/v1/space-images/**")
                                         .permitAll()
 
+                        // 베스트 공간 랭킹: 순매출이 빠진 확정 집계라 비로그인 방문자에게도 연다(api-spec §14-2).
+                        // 관리자 랭킹(/api/v1/admin/stats/**)은 아래 ADMIN 규칙을 그대로 따른다.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/stats/**")
+                        .permitAll()
+
                         // 관리자 권한 필요
                         .requestMatchers("/api/v1/admin/**")
                         .hasRole("ADMIN")

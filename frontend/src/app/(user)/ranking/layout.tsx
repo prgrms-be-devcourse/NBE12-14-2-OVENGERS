@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
-import RequireAuth from '@/components/auth/RequireAuth';
 
-/** 베스트 랭킹은 로그인한 회원에게 보여 줍니다. 최종 권한 판단은 서버가 합니다. */
+/** 인기 오피스는 비로그인 방문자도 볼 수 있습니다(api-spec §14-2). */
 export default function RankingLayout({ children }: { children: ReactNode }) {
-  return <RequireAuth>{children}</RequireAuth>;
+  return children;
 }

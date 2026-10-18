@@ -109,7 +109,7 @@ SELECT IF(COUNT(*) > 0 AND SUM(success=0)=0,
   COALESCE(MAX(CAST(version AS UNSIGNED)),0),0) FROM flyway_schema_history;
 SQL
 )"
-[[ "$LATEST" =~ ^[0-9]+$ && "$LATEST" -ge 12 ]] || fail '백엔드를 실행해 Flyway V12 이상을 먼저 적용하세요.'
+[[ "$LATEST" =~ ^[0-9]+$ && "$LATEST" -ge 15 ]] || fail '백엔드를 실행해 Flyway V15 이상을 먼저 적용하세요.'
 
 status() {
   local exists
@@ -154,4 +154,4 @@ ROUTINE="slotkey_aws_sample_$$_${RANDOM}"
 } > "$SQL_TEMP"
 mysql_run < "$SQL_TEMP"
 status
-echo '완료. 기존 회원·비밀번호·잔액·예약 및 공간 가격/영업시간은 보존됩니다.'
+echo '완료. 기존 회원·비밀번호·잔액·예약과 공간 수용인원·영업시간·상태는 보존되고, 샘플 공간 이름·사진·요금은 기준값으로 갱신됩니다(요금이 바뀐 공간만 version +1).'

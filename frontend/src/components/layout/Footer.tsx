@@ -11,10 +11,10 @@ export default function Footer() {
           <p>몰입할 공간, 필요한 만큼.<br />오피스 탐색부터 예약과 출입까지.</p>
         </div>
         <nav aria-label="서비스 안내"><h2>서비스</h2>
-          <Link href="/spaces">오피스 찾기</Link><Link href="/door">모의 출입</Link><Link href="/#story">Slot Key 이야기</Link>
+          <Link href="/spaces">오피스 찾기</Link><Link href="/door">출입하기</Link><Link href="/#story">Slot Key 이야기</Link>
         </nav>
         <nav aria-label="이용 지원"><h2>이용 지원</h2>
-          <Link href="/reservations">내 예약</Link><Link href="/inquiries">내 문의</Link><Link href="/inquiries/new">문의하기</Link>
+          <Link href="/reservations">예약 내역</Link><Link href="/inquiries">내 문의</Link><Link href="/inquiries/new">문의하기</Link>
         </nav>
         <nav aria-label="약관 및 이용 규정"><h2>약관 및 이용 규정</h2>
           {BOOKING_TERMS.map(term => <Link key={term.id} href={`/terms#${term.id}`}>{term.title}</Link>)}

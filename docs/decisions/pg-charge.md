@@ -365,7 +365,7 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 - 마이그레이션 번호: 이 브랜치의 수신 기록 테이블은 `V23__create_pg_webhook_event_table.sql`이다. `origin/feat/space-ranking`의 `V22__create_space_ranking_snapshot.sql`이 먼저 origin에 push되어 있어 V23을 쓴다(사용자 결정 2026-10-17). **이 브랜치는 `feat/space-ranking`이 `dev`에 먼저 머지된 뒤에 머지해야 한다.** 순서가 바뀌면 V22가 비어 있는 상태로 V23이 먼저 적용되고, 이후 V22가 들어올 때 Flyway의 순서 검사(`outOfOrder` 기본 false)에 걸려 앱 시작이 실패할 수 있다. `dev` 머지는 곧 EC2 배포이므로 머지 순서를 PR 본문에 적는다.
 - `PENDING` 주문의 웹훅: 공식 문서상 `PAYMENT_STATUS_CHANGED`는 `DONE`·`ABORTED`·`CANCELED`·`PARTIAL_CANCELED`뿐 아니라 `EXPIRED`(결제창 30분 또는 인증 후 승인 API 미호출 10분 경과)에도 전송된다. 따라서 인증 후 승인 요청 없이 이탈한 `PENDING` 주문에도 웹훅이 오며, 이번 단계에서는 `ORDER_PENDING`으로 기록만 하고 주문을 정리하지 않는다(오래된 `PENDING` 정리는 4단계부터 후속 백로그).
 - 웹훅 처리로 확정되는 시점은 수신 뒤 최대 약 10초(처리 주기)다. 처리 실패 행은 다시 처리하지 않으므로, 이 경우 `CONFIRMING` 주문의 확정은 4단계 복구 스케줄러(1분 주기)에 의존한다.
-- 실제 토스 샌드박스에서 웹훅을 받아 처리하는 수동 검증(ngrok 등)은 하지 않았다. 자동 테스트는 공식 문서 예시 형태의 본문과 `FakePgClient`로만 검증했다.
+- 실제 토스 샌드박스에서 웹훅을 받아 처리하는 수동 검증(ngrok 등)은 하지 않았다. 자동 테스트는 공식 문서 예시 형태의 본문과 `FakePgClient`로만 검증했다. 이유: 지금 쓰는 키는 토스 공식 문서의 공용 테스트 키(`test_gck_docs_…`)라 개발자센터에 우리 웹훅 URL을 등록할 수 없다. 웹훅 URL 등록은 회원가입한 내 테스트 상점에서만 된다([API 키](https://docs.tosspayments.com/reference/using-api/api-keys), 2026-10-18 확인).
 
 **재검토 조건**
 - 토스가 `PAYMENT_STATUS_CHANGED`에 서명을 추가하거나 `transmission_id`의 재전송 시 동일성을 문서화하면 검증·중복 판정을 다시 본다.
@@ -373,13 +373,14 @@ PG 오류 분류는 토스페이먼츠 공식 [API 에러 코드](https://docs.t
 - `ORDER_PENDING` 결과 중 PG 상태가 `DONE`인 주문이 실제로 관측되면(설계상 생기면 안 되는 경우) `PENDING → PAID` 허용 여부를 사용자 결정으로 다시 본다.
 - `PG_LOOKUP_ERROR`·`COMPLETE_ERROR`가 자주 쌓이면 웹훅 행 재시도(횟수 제한 포함)를 검토한다.
 - 4단계 복구와 웹훅 처리의 대조 규칙이 달라지면 공용 대조 컴포넌트로 합친다.
+- 내 테스트 키(이메일 회원가입만으로 발급, 사업자 등록 불필요)로 바꾸면 개발자센터에 웹훅 URL을 등록해 실제 수신과 처리를 검증한다.
 
 ### 6단계 — 프론트 충전 화면과 예약 복귀 흐름
 
 **상태: 완료 (2026-10-14)**
 
 - 금액 선택 → 서버 충전 주문 생성 → 주문서형 SDK로 결제수단·약관 렌더링 → 결제 요청 순서로 진행한다. 성공·실패 URL 페이지에서는 서버 승인 API만 호출하고, 결제 금액은 서버가 반환한 값만 사용한다.
-- 주문서형 SDK 흐름은 `widgets()` → 서버 충전 주문 생성 응답 금액으로 `setAmount({ currency: 'KRW', value: amount })` → `renderPaymentMethods({ selector: '#payment-method', variantKey: 'DEFAULT' })`와 `renderAgreement({ selector: '#agreement', variantKey: 'AGREEMENT' })` → 결제 버튼에서 `requestPayment({ orderId, orderName, successUrl, failUrl, customerEmail, customerName })` 순서로 구현한다. 결제수단과 필수 약관 동의가 준비되기 전에는 결제 버튼을 활성화하지 않는다. *(사용자 결정(2026-10-11)으로 주문서형 확정, 2026-10-14 문서 복원)*
+- 주문서형 SDK 흐름은 `widgets()` → 서버 충전 주문 생성 응답 금액으로 `setAmount({ currency: 'KRW', value: amount })` → `renderPaymentMethods({ selector: '#payment-method', variantKey: 'DEFAULT' })`와 `renderAgreement({ selector: '#agreement', variantKey: 'AGREEMENT' })` → 결제 버튼에서 `requestPayment({ orderId, orderName, successUrl, failUrl, customerEmail, customerName })` 순서로 구현한다. 결제수단과 필수 약관 동의가 준비되기 전에는 결제 버튼을 활성화하지 않는다. *(사용자 결정(2026-10-11)으로 주문서형 확정, 2026-10-14 문서 복원)* *(2026-10-18 변경: `renderAgreement`를 쓰지 않는다. 토스 약관 위젯은 상점 설정 `defaultAgreementChecked: true`(약관 위젯 설정 API `GET /v1/payment-widget/agreement-widgets` 응답에서 확인)로 체크된 채 그려지고 SDK에는 이를 바꾸는 API가 없어서, 사용자가 직접 동의하지 않아도 결제 버튼이 켜졌다. 지금 쓰는 키는 토스 문서용 공용 테스트 키라 어드민 설정도 바꿀 수 없다. 대신 충전 화면에 초기 미체크 체크박스 "[필수] 결제 서비스 이용 약관, 개인정보 처리 동의"와 토스 약관 원문 링크 3개(같은 응답의 `pages.tosspayments.com/terms/user`, `/terms/privacy/consent1`, `/terms/privacy/consent2`)를 두고, 사용자가 직접 체크해야 결제 버튼이 켜진다. 약관 위젯 없이 `requestPayment()`를 호출해도 오류 없이 결제창이 열리는 것을 테스트 키로 확인했다. 한계: 토스가 약관 항목·URL을 바꾸면 우리 상수(`frontend/src/constants/tossPaymentTerms.ts`)를 직접 고쳐야 한다. 재검토 조건: 상점 전용 키로 바꿔 어드민에서 기본 미동의로 설정할 수 있게 되면 위젯으로 되돌린다.)*
 - 예약 결제 확정에서 422 `INSUFFICIENT_BALANCE`를 받으면 "크레딧이 부족합니다. 충전하시겠어요?" 알림창을 표시하고 `[결제하기]`, `[취소]` 버튼을 제공한다.
 - 알림창에 HOLD 남은 시간을 보여 준다. HOLD가 만료되면 다시 예약하라고 안내하며 선점 시간을 연장하지 않는다.
 - 충전 금액 기본값은 부족분을 100원 단위로 올린 값으로 하되 최소 1,000원으로 한다. 허용 여부의 최종 검증은 서버가 수행한다.

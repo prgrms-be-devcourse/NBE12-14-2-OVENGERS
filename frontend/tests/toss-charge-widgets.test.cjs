@@ -23,18 +23,13 @@ function load(relative, mocks = {}) {
   return loadedModule.exports;
 }
 
-test('setupChargeWidgets follows the official checkout-style SDK sequence', async () => {
+test('setupChargeWidgets renders payment methods only; terms consent is our own unchecked checkbox', async () => {
   const calls = [];
-  let agreementListener;
   const paymentMethods = { destroy: async () => { calls.push(['destroyPaymentMethods']); } };
-  const agreement = {
-    on: (event, listener) => { calls.push(['agreementOn', event]); agreementListener = listener; },
-    destroy: async () => { calls.push(['destroyAgreement']); },
-  };
   const widgets = {
     setAmount: async (amount) => { calls.push(['setAmount', amount]); },
     renderPaymentMethods: async (params) => { calls.push(['renderPaymentMethods', params]); return paymentMethods; },
-    renderAgreement: async (params) => { calls.push(['renderAgreement', params]); return agreement; },
+    renderAgreement: async (params) => { calls.push(['renderAgreement', params]); },
     requestPayment: async (params) => { calls.push(['requestPayment', params]); },
   };
   const sdk = { widgets: (params) => { calls.push(['widgets', params]); return widgets; } };
@@ -45,17 +40,8 @@ test('setupChargeWidgets follows the official checkout-style SDK sequence', asyn
   const { setupChargeWidgets } = load('payments/tossChargeWidgets.ts', {
     '@tosspayments/tosspayments-sdk': tossModule,
   });
-  const agreementStates = [];
 
-  const session = await setupChargeWidgets({
-    clientKey: 'test_gck_client',
-    amount: 1_000,
-    onAgreementChange: (agreed) => agreementStates.push(agreed),
-  });
-  // 위젯은 기본 동의 상태로 그려지므로 이벤트가 없어도 최초에 동의로 알린다.
-  assert.deepEqual(agreementStates, [true]);
-  agreementListener({ agreedRequiredTerms: false, agreements: [] });
-  agreementListener({ agreedRequiredTerms: true, agreements: [] });
+  const session = await setupChargeWidgets({ clientKey: 'test_gck_client', amount: 1_000 });
   await session.requestPayment({
     orderId: 'chg_order',
     orderName: 'Slot Key 크레딧 1,000원 충전',
@@ -66,13 +52,12 @@ test('setupChargeWidgets follows the official checkout-style SDK sequence', asyn
   });
   await session.destroy();
 
+  // 토스 약관 위젯은 상점 설정(defaultAgreementChecked)으로 체크된 채 그려지므로 렌더링하지 않는다.
   assert.deepEqual(calls, [
     ['load', 'test_gck_client'],
     ['widgets', { customerKey: '@@ANONYMOUS' }],
     ['setAmount', { currency: 'KRW', value: 1_000 }],
     ['renderPaymentMethods', { selector: '#payment-method', variantKey: 'DEFAULT' }],
-    ['renderAgreement', { selector: '#agreement', variantKey: 'AGREEMENT' }],
-    ['agreementOn', 'agreementStatusChange'],
     ['requestPayment', {
       orderId: 'chg_order',
       orderName: 'Slot Key 크레딧 1,000원 충전',
@@ -82,34 +67,17 @@ test('setupChargeWidgets follows the official checkout-style SDK sequence', asyn
       customerName: 'member',
     }],
     ['destroyPaymentMethods'],
-    ['destroyAgreement'],
   ]);
-  assert.deepEqual(agreementStates, [true, false, true]);
 });
-test('setupChargeWidgets removes payment methods when agreement rendering fails', async () => {
-  let destroyed = 0;
-  const widgets = {
-    setAmount: async () => {},
-    renderPaymentMethods: async () => ({ destroy: async () => { destroyed += 1; } }),
-    renderAgreement: async () => { throw new Error('agreement failed'); },
-  };
-  const tossModule = {
-    ANONYMOUS: '@@ANONYMOUS',
-    loadTossPayments: async () => ({ widgets: () => widgets }),
-  };
-  const { setupChargeWidgets } = load('payments/tossChargeWidgets.ts', {
-    '@tosspayments/tosspayments-sdk': tossModule,
-  });
 
-  await assert.rejects(
-    setupChargeWidgets({
-      clientKey: 'test_gck_client',
-      amount: 1_000,
-      onAgreementChange: () => {},
-    }),
-    /agreement failed/,
-  );
-  assert.equal(destroyed, 1);
+test('TOSS_PAYMENT_TERMS 는 토스 필수 약관 3개를 토스 공식 약관 페이지로 연결한다', () => {
+  const { TOSS_PAYMENT_TERMS } = load('constants/tossPaymentTerms.ts');
+  assert.equal(TOSS_PAYMENT_TERMS.title, '[필수] 결제 서비스 이용 약관, 개인정보 처리 동의');
+  assert.deepEqual(TOSS_PAYMENT_TERMS.items.map((item) => [item.title, item.url]), [
+    ['서비스 이용약관', 'https://pages.tosspayments.com/terms/user'],
+    ['개인(신용)정보 수집 및 이용 동의', 'https://pages.tosspayments.com/terms/privacy/consent1'],
+    ['개인(신용)정보 제3자 제공 동의', 'https://pages.tosspayments.com/terms/privacy/consent2'],
+  ]);
 });
 
 test('setupChargeWidgets rejects non-client keys before loading the SDK', async () => {
@@ -134,7 +102,6 @@ test('setupChargeWidgets rejects non-client keys before loading the SDK', async 
       setupChargeWidgets({
         clientKey,
         amount: 1_000,
-        onAgreementChange: () => {},
       }),
       /클라이언트 키 형식이 아닙니다/,
     );

@@ -1,6 +1,6 @@
 # Outbox + Kafka — 이벤트 전달
 
-> 상태: 10/21 범위 구현·문서화 완료 (2~5단계). 작성: 2026-10-06. 열린 질문 결정 반영: 2026-10-06. 10/21 범위 결정 반영: 2026-10-15. relay(3단계)·컨슈머(4단계)·최종 정리(5단계) 반영: 2026-10-16.
+> 상태: 10/21 범위 구현·문서화 완료 (2~5단계). 작성: 2026-10-06. 열린 질문 결정 반영: 2026-10-06. 10/21 범위 결정 반영: 2026-10-15. relay(3단계)·컨슈머(4단계)·최종 정리(5단계) 반영: 2026-10-16. 운영 서버 Kafka 적용 반영: 2026-10-18.
 
 ## 한 줄 요약
 
@@ -10,7 +10,7 @@
 
 - "자리가 났다", "충전됐다" 같은 사실을 다른 기능(대기열, 알림, 감사)에 전달해야 한다.
 - DB 변경은 성공했는데 이벤트 발행이 실패하면(또는 반대) 두 곳이 어긋난다 (이중 쓰기 문제).
-- 제약: 마감 2026-10-21, 인스턴스 1개, 팀 EC2에는 Kafka를 올리지 않는다(Gradle 테스트가 OOM으로 죽은 이력). 기존 예약·취소 경로의 잠금 순서(Member/Space 데드락 이력)를 바꾸지 않아야 한다.
+- 제약: 마감 2026-10-21, 인스턴스 1개, 팀 EC2에는 Kafka를 올리지 않는다(Gradle 테스트가 OOM으로 죽은 이력). *(2026-10-17 변경: 운영 서버를 c7i-flex.large로 옮기며 운영에서도 Kafka를 켰다 — 아래 "지켜야 할 규칙")* 기존 예약·취소 경로의 잠금 순서(Member/Space 데드락 이력)를 바꾸지 않아야 한다.
 
 ## 2. 선택과 이유
 
@@ -53,17 +53,17 @@
 - **`outbox_event`에는 FK를 걸지 않는다.** 이 코드베이스는 FK 검사의 공유 잠금(S) 때문에 Member/Space 잠금 순서 데드락을 겪었고 주석에 해법이 남아 있다 (`ReservationHoldService`, `AdminReservationService.forceCancel`). 독립 테이블이면 새 잠금 경로가 생기지 않는다.
 - relay는 `ReservationCompletionScheduler`의 `processEach` 패턴(건별 트랜잭션, 한 건 실패해도 계속)을 따른다.
 - 컨슈머는 `processed_event`의 `UNIQUE(consumer, event_id)`로 중복을 걸러낸다(컨슈머 이름이 키에 들어가 같은 토픽을 다른 컨슈머가 읽어도 서로 막지 않는다).
-- Kafka는 로컬 docker compose(KRaft 단일 노드)로만 실행한다. 팀 EC2는 Gradle 테스트가 OOM으로 죽은 이력이 있어 얹지 않는다.
+- Kafka는 docker compose(KRaft 단일 노드, 프로필 `kafka`)로 실행하고, 로컬과 운영 서버 모두 같은 compose 정의를 쓴다. *(2026-10-17 변경: 처음에는 "로컬 전용"이었다. 당시 팀 EC2(t3.micro)는 Gradle 테스트가 OOM으로 죽은 이력이 있어 Kafka를 얹지 않았다. 운영 백엔드를 c7i-flex.large 한 대로 옮기면서 같은 서버에 compose로 Kafka를 띄우고 `SLOTKEY_KAFKA_ENABLED=true`로 relay·컨슈머를 켰다. 브로커 힙 512MB 제한과 재시작 정책은 서버의 compose override에만 있고 레포에는 없다.)*
 
 ### 10/21 범위 (2026-10-15)
 
-이번 구현 범위(1·2단계 생략, 폴링 Outbox → Kafka, `SlotReleased` 1종, 멱등 컨슈머, 테스트 방식)는 [plans/waitlist-outbox](../plans/waitlist-outbox/00-waitlist-outbox-plan.md)에 둔다. 발행 지점 3곳, FK 금지, 토픽 분리, 파티션 키 `spaceId`, 로컬 compose 결정은 이 문서 그대로 유지한다.
+이번 구현 범위(1·2단계 생략, 폴링 Outbox → Kafka, `SlotReleased` 1종, 멱등 컨슈머, 테스트 방식)는 [plans/waitlist-outbox](../plans/waitlist-outbox/00-waitlist-outbox-plan.md)에 둔다. 발행 지점 3곳, FK 금지, 토픽 분리, 파티션 키 `spaceId`, compose 결정은 이 문서 그대로 유지한다(운영 적용은 위 "지켜야 할 규칙"의 2026-10-17 변경).
 
 ### 결정 (2026-10-06)
 
 - **토픽은 이벤트 종류별로 나눈다.** 지금 이벤트는 하나라 토픽은 `slot-released` 하나로 시작하고, 이벤트가 늘면 토픽을 추가한다. 하나의 토픽에 타입 필드를 두는 방식은 쓰지 않는다.
 - **파티션 키는 `spaceId`다.** 같은 공간의 이벤트는 같은 파티션에서 순서가 보장된다.
-- **로컬 환경:** `backend/docker-compose.yml`에 Kafka(KRaft 단일 노드)를 별도 compose 프로필로 추가한다. 프로필을 켜지 않으면 기존 MySQL만 뜬다. 저사양 EC2에는 올리지 않는다.
+- **로컬 환경:** `backend/docker-compose.yml`에 Kafka(KRaft 단일 노드)를 별도 compose 프로필로 추가한다. 프로필을 켜지 않으면 기존 MySQL만 뜬다. 저사양 EC2에는 올리지 않는다. *(2026-10-17 변경: 운영 서버를 c7i-flex.large로 바꾼 뒤 운영에서도 이 프로필로 Kafka를 띄운다.)*
 
 ### relay 결정 (2026-10-15, 3단계)
 
@@ -73,7 +73,7 @@
 - **Kafka 전송은 트랜잭션 밖에서 한다.** relay 자체는 트랜잭션을 열지 않고, `markPublished`/`increaseAttempts` 두 UPDATE가 각각 자기 트랜잭션이다. 전송 중 DB 잠금을 쥐지 않는다.
 - **타임아웃 불변식:** `slotkey.kafka.send-timeout-ms`(전송 대기, 6000) **>** `delivery-timeout-ms`(5000) **>** `request-timeout-ms`(3000). 값은 `application.yml`의 `slotkey.kafka` 한 곳에서만 정의하고(`max-block-ms`=3000 포함) 프로듀서 설정(`spring.kafka.producer.properties`)이 이를 참조한다. 전송 대기가 delivery.timeout보다 짧으면 대기 타임아웃으로 "실패" 처리된 레코드가 프로듀서 버퍼에 남아 브로커 복구 뒤 뒤늦게 전달되고, 다음 relay 라운드의 재전송과 겹쳐 같은 이벤트가 토픽에 두 번 들어간다. **첫 수동 E2E에서 전송 대기 5초 < delivery.timeout 8초일 때 같은 `eventId`가 두 번 들어간 것을 실제로 관찰**했고, 값을 정렬한 뒤 재현되지 않았다. 기본값이 부등식을 지키는지는 단위 테스트(`KafkaTimeoutDefaultsTest`)가 확인한다.
 - **중복 전달은 at-least-once의 정상 범위다.** 불변식을 지켜도 전송 성공 후 `markPublished` 직전 장애 등으로 같은 이벤트가 두 번 나갈 수 있다. 막으려고 하지 않고 컨슈머 멱등 처리(`processed_event`, 4단계)로 흡수한다. 전송은 성공했는데 `markPublished`가 실패하는 경우도 같다 — 행이 `PENDING`으로 남고 `attempts`가 오른 채 다음 라운드에 다시 발행된다(로그 메시지로 "전송 실패"와 구분하며, `OutboxRelayTest`가 이 분기를 고정한다).
-- **기본은 꺼짐.** `slotkey.kafka.enabled=false`(환경변수 `SLOTKEY_KAFKA_ENABLED`)이면 `OutboxRelay`와 `KafkaOutboxPublisher` 빈이 생성되지 않는다. 브로커가 없는 팀 EC2 배포가 기동에 실패하지 않게 하기 위해서다. 브로커 주소는 `KAFKA_BOOTSTRAP_SERVERS`(기본 `localhost:9092`).
+- **기본은 꺼짐.** `slotkey.kafka.enabled=false`(환경변수 `SLOTKEY_KAFKA_ENABLED`)이면 `OutboxRelay`와 `KafkaOutboxPublisher` 빈이 생성되지 않는다. 브로커가 없는 환경(당시 팀 EC2, CI)이 기동에 실패하지 않게 하기 위해서다. 코드 기본값은 그대로 꺼짐이고, 운영 서버는 2026-10-17부터 환경변수로 켠다. 브로커 주소는 `KAFKA_BOOTSTRAP_SERVERS`(기본 `localhost:9092`).
 
 ### 컨슈머 결정 (2026-10-16, 4단계)
 
@@ -121,7 +121,7 @@
 | 전달이 최소 1회라 유실이 없다 | 중복 전달이 정상 범위다 | 컨슈머 멱등(`processed_event` + `UNIQUE(event_id, waitlist_entry_id)` 이중 방어) |
 | relay가 잠금 없이 폴링해 취소 경로와 락 대기가 없다 | 인스턴스 2개 이상이면 같은 행을 둘이 발행한다. 1초 폴링 지연이 있다 | 인스턴스 1개 가정을 명시하고, 다중화하면 분산 락이나 CDC로 바꾼다 |
 | 계속 실패하는 행도 복구 시 이어서 발행된다 | 영구 실패 행이 `batch-size`건 이상 쌓이면 뒤의 새 이벤트가 막힌다(head-of-line) | 현재 payload가 4필드 고정이라 가능성은 낮다. `attempts` 임계 관측 시 FAILED/DLT·백오프를 도입한다 |
-| Kafka를 끄면 EC2가 브로커 없이도 기동한다 | 꺼진 환경에서는 알림이 생성되지 않는다 | 기본 꺼짐(`slotkey.kafka.enabled=false`), 켜는 환경은 로컬 compose만 |
+| Kafka를 끄면 EC2가 브로커 없이도 기동한다 | 꺼진 환경에서는 알림이 생성되지 않는다 | 기본 꺼짐(`slotkey.kafka.enabled=false`), 켜는 환경은 로컬 compose와 운영 서버(2026-10-17부터 환경변수로 켬) |
 | 알림 대상을 지금의 DB로 다시 고른다 | 후보 N명에 질의 약 3N+1회 | 현재 규모에서는 수용, 대기자가 수십 명 이상이면 한 질의로 합친다 |
 | 재시도 후 건너뛰어 컨슈머가 막히지 않는다 | 건너뛴 이벤트는 로그에만 남고 복구 수단이 없다 | DLT는 3차. 실제 브로커에서 재시도 소진 로그를 확인했다(아래 검증 결과) |
 
@@ -168,7 +168,7 @@
 - **FAILED 미도입의 한계(head-of-line 막힘):** 계속 실패하는 행이 `PENDING`에 남아 매 라운드 재시도되고, relay는 id 순으로 한 번에 N건(`batch-size`, 기본 50)만 읽는다. 영구 실패 행이 N건 이상 쌓이면 그 뒤의 새 이벤트가 읽히지 않아 발행되지 못한다. 현재 페이로드가 4필드 고정이라 가능성은 낮지만 구조상 존재한다.
   - 재검토 조건: `attempts`가 임계치 이상인 `PENDING` 행이 관측될 때.
   - 후속안: FAILED 상태(또는 DLT) 도입, 또는 `attempts` 기반 백오프(실패 횟수가 많은 행의 재시도 간격을 늘리거나 배치에서 후순위로 미룸). 3차 범위.
-- **단일 스케줄러 스레드 점유:** 스케줄러 풀이 기본 1개라 `ReservationCompletionScheduler`, `ChargeOrderRecoveryScheduler`와 같은 스레드를 쓴다. relay는 한 라운드에 `batch-size`건을 순차 전송하므로 브로커 장애 시 한 라운드가 최대 `batch-size × (max-block-ms + send-timeout-ms)`(기본 50 × 9초 = 450초 = 7.5분)까지 걸려 같은 스케줄러의 다른 작업(예약 완료·홀드 만료 정리, 충전 복구)을 지연시킬 수 있다. 기본값(꺼짐)이라 현재 배포에는 영향이 없다. 재검토 조건: Kafka를 켠 환경에서 브로커 장애 중 스케줄러 지연이 관측될 때.
+- **단일 스케줄러 스레드 점유:** 스케줄러 풀이 기본 1개라 `ReservationCompletionScheduler`, `ChargeOrderRecoveryScheduler`와 같은 스레드를 쓴다. relay는 한 라운드에 `batch-size`건을 순차 전송하므로 브로커 장애 시 한 라운드가 최대 `batch-size × (max-block-ms + send-timeout-ms)`(기본 50 × 9초 = 450초 = 7.5분)까지 걸려 같은 스케줄러의 다른 작업(예약 완료·홀드 만료 정리, 충전 복구)을 지연시킬 수 있다. 2026-10-17부터 운영 서버에서 Kafka를 켰으므로 운영에도 해당한다(브로커가 앱과 같은 서버의 컨테이너라 서버 자체가 죽으면 앱도 함께 멈추지만, 브로커 컨테이너만 죽은 경우에 이 지연이 생긴다). 재검토 조건: 운영에서 브로커 장애 중 스케줄러 지연이 관측될 때.
   - shutdown 중 인터럽트가 걸려도 relay는 남은 배치를 계속 처리하므로, 그 건들이 전송 실패로 계산되어 `attempts`가 오를 수 있다.
 - 브로커 장애 중에는 매 라운드 실패 로그가 건마다 남는다(로그 소음). 백오프가 없다.
 - 인스턴스 2개 이상이면 같은 행을 둘이 발행해 중복 전송된다(PK 조건부 UPDATE는 DB 반영만 한 번으로 만든다). 다중 인스턴스는 범위 밖이다.

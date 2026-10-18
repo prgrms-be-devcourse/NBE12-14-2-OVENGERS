@@ -46,7 +46,7 @@ function NotificationResults({ page, onPage }: { page: number; onPage: (page: nu
     {!data?.content.length ? <EmptyState title="아직 받은 알림이 없습니다" description="대기 중인 시간에 빈자리가 나면 여기서 확인할 수 있어요." /> :
       <ul className={styles.list}>{data.content.map((notification) => <li className={styles.item} key={notification.id}>
         <div className={styles.meta}>{!notification.read && <span className={styles.unread}>안 읽음</span>}<time dateTime={notification.createdAt}>{formatDateTime(notification.createdAt)}</time></div>
-        <p>{notification.message}</p><Link className="btn small" href={ROUTES.waitlist}>내 대기 보기</Link>
+        <p>{notification.message}</p><Link className="btn small" href={ROUTES.waitlist}>빈자리 알림 보기</Link>
       </li>)}</ul>}
     <Pagination page={data?.page} totalPages={data?.totalPages} totalElements={data?.totalElements} onChange={onPage} />
   </>;

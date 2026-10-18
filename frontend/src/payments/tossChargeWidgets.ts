@@ -2,10 +2,7 @@ import {
   ANONYMOUS,
   loadTossPayments,
 } from '@tosspayments/tosspayments-sdk';
-import type {
-  WidgetAgreementWidget,
-  WidgetPaymentMethodWidget,
-} from '@tosspayments/tosspayments-sdk';
+import type { WidgetPaymentMethodWidget } from '@tosspayments/tosspayments-sdk';
 
 export interface ChargePaymentRequest {
   orderId: string;
@@ -35,11 +32,9 @@ export function getTossClientKeyError(
 export async function setupChargeWidgets({
   clientKey,
   amount,
-  onAgreementChange,
 }: {
   clientKey: string;
   amount: number;
-  onAgreementChange: (agreed: boolean) => void;
 }): Promise<ChargeWidgetsSession> {
   const clientKeyError = getTossClientKeyError(clientKey);
   if (clientKeyError) throw new Error(clientKeyError);
@@ -53,23 +48,8 @@ export async function setupChargeWidgets({
       selector: '#payment-method',
       variantKey: 'DEFAULT',
     });
-  let agreement: WidgetAgreementWidget;
-  try {
-    agreement = await widgets.renderAgreement({
-      selector: '#agreement',
-      variantKey: 'AGREEMENT',
-    });
-  } catch (error) {
-    await paymentMethods.destroy();
-    throw error;
-  }
-  agreement.on('agreementStatusChange', ({ agreedRequiredTerms }) => {
-    onAgreementChange(agreedRequiredTerms);
-  });
-  // 토스 약관 위젯은 기본으로 전체 동의 상태로 그려지지만 사용자가 바꿀 때만 이벤트를 보낸다.
-  // 최초 상태를 알려 주지 않으면 이미 체크돼 있어도 결제 버튼이 비활성으로 남는다.
-  // 동의 여부는 requestPayment 에서 토스가 한 번 더 검증한다.
-  onAgreementChange(true);
+  // 약관 위젯(renderAgreement)은 쓰지 않는다. 상점 설정으로 체크된 채 그려져 사용자가 직접 동의할 수 없기 때문이다.
+  // 필수 약관 동의는 충전 화면의 체크박스(TOSS_PAYMENT_TERMS)로 받는다.
 
   return {
     requestPayment: async (request) => {
@@ -77,7 +57,6 @@ export async function setupChargeWidgets({
     },
     destroy: async () => {
       await paymentMethods.destroy();
-      await agreement.destroy();
     },
   };
 }

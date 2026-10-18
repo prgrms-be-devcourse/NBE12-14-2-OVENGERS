@@ -33,7 +33,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** 일반 회원용 랭킹 API(api-spec §14-2). 순매출은 내려주지 않고 정렬 기준도 건수·슬롯 수만 허용한다. 기준 시각은 2026-10-16(금) 10:00 KST. */
+/** 공개 랭킹 API(api-spec §14-2). 비로그인 방문자도 볼 수 있으며 순매출은 내려주지 않고 정렬 기준도 건수·슬롯 수만 허용한다. 기준 시각은 2026-10-16(금) 10:00 KST. */
 @AutoConfigureMockMvc
 @Transactional
 @Import(SettableClockConfig.class)
@@ -64,13 +64,28 @@ class StatsControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("미인증 요청은 401 AUTHENTICATION_REQUIRED이다")
-    void unauthenticated() throws Exception {
+    @DisplayName("비로그인 방문자도 공간·지역 랭킹을 볼 수 있고 순매출은 내려가지 않는다")
+    void guestCanSeeRankingWithoutRevenue() throws Exception {
+        Long a = saveSpace("판교 A룸", "판교");
+        snap(a, "판교", 99_000, 2, 4);
+
         mockMvc.perform(get(SPACE_RANKING).param("period", "DAILY").param("date", "2026-10-14"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].spaceId").value(a))
+                .andExpect(jsonPath("$.data.items[0].netRevenue").doesNotExist());
         mockMvc.perform(get(LOCATION_RANKING).param("period", "DAILY").param("date", "2026-10-14"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].location").value("판교"))
+                .andExpect(jsonPath("$.data.items[0].netRevenue").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("비로그인 방문자도 NET_REVENUE 정렬은 400 VALIDATION_FAILED이다")
+    void guestNetRevenueMetricRejected() throws Exception {
+        mockMvc.perform(get(SPACE_RANKING).param("period", "DAILY").param("date", "2026-10-14")
+                        .param("metric", "NET_REVENUE"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
     @Test

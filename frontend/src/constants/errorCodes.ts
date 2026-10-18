@@ -159,7 +159,7 @@ const MESSAGES: Record<ErrorCode, string> = {
 MEMBER_WITHDRAWN: '탈퇴한 회원의 상태를 변경하거나 크레딧을 지급할 수 없습니다.',
 CURRENT_PASSWORD_MISMATCH: '현재 비밀번호가 일치하지 않습니다.',
 WITHDRAWAL_ACTIVE_RESERVATION:
-  '진행 중이거나 예정된 예약이 있습니다. 내 예약에서 확인해주세요.',
+  '진행 중이거나 예정된 예약이 있습니다. 예약 내역에서 확인해주세요.',
   PASSWORD_CONFIRM_MISMATCH: '비밀번호가 일치하지 않습니다.',
   VERIFICATION_CODE_MISMATCH: '인증번호가 일치하지 않습니다.',
   VERIFICATION_CHALLENGE_INVALID: '인증번호가 만료되었거나 사용할 수 없습니다. 다시 요청해 주세요.',

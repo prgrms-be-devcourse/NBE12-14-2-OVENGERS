@@ -10,7 +10,6 @@ import com.ovengers.slotkey.stats.entity.RankingPeriodType;
 import com.ovengers.slotkey.stats.service.SpaceRankingQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -22,11 +21,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 
 /**
- * 일반 회원용 랭킹 API. 로그인한 회원이면 누구나 볼 수 있고(SecurityConfig 기본 규칙), 같은 확정 스냅샷을 쓰되
+ * 공개 랭킹 API. 비로그인 방문자도 볼 수 있고(SecurityConfig GET /api/v1/stats/** permitAll), 같은 확정 스냅샷을 쓰되
  * 순매출은 내려주지 않으며 NET_REVENUE 정렬도 거절한다(정렬 순서로 매출 순위가 드러나지 않게). 명세: api-spec §14-2.
  */
 @Tag(name = "통계", description = "베스트 공간 랭킹(매일 00:01 확정값) 조회 API. 순매출은 제외")
-@SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/api/v1/stats")
 public class StatsController {
@@ -37,7 +35,7 @@ public class StatsController {
         this.queryService = queryService;
     }
 
-    @Operation(summary = "공간별 베스트 랭킹(회원용)",
+    @Operation(summary = "공간별 베스트 랭킹(공개)",
             description = "정렬 기준은 RESERVATION_COUNT(기본) 또는 SLOT_COUNT. 응답에 순매출이 없다.")
     @GetMapping("/space-ranking")
     public ResponseEntity<ApiResponse<PublicSpaceRankingResponse>> getSpaceRanking(
@@ -57,7 +55,7 @@ public class StatsController {
                 queryService.getSpaceRanking(period, date, publicMetric(metric), location, limit))));
     }
 
-    @Operation(summary = "지역별 베스트 랭킹(회원용)", description = "공간 랭킹과 같은 규칙. 응답에 순매출이 없다.")
+    @Operation(summary = "지역별 베스트 랭킹(공개)", description = "공간 랭킹과 같은 규칙. 응답에 순매출이 없다.")
     @GetMapping("/location-ranking")
     public ResponseEntity<ApiResponse<PublicLocationRankingResponse>> getLocationRanking(
             @RequestParam(required = false) RankingPeriodType period,

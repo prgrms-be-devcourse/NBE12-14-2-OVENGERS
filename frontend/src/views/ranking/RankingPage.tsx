@@ -21,7 +21,7 @@ import styles from '../../components/admin/SpaceRankingSection.module.css';
 type View = 'SPACE' | 'LOCATION';
 type Ranking = PublicSpaceRanking | PublicLocationRanking;
 
-/** 회원용 베스트 랭킹(api-spec §14-2). 관리자 랭킹과 같은 확정값이며 순매출은 보여 주지 않는다. */
+/** 공개 베스트 랭킹(api-spec §14-2, 비로그인도 조회). 관리자 랭킹과 같은 확정값이며 순매출은 보여 주지 않는다. */
 export default function RankingPage() {
   const [view, setView] = useState<View>('SPACE');
   const [period, setPeriod] = useState<RankingPeriod>('DAILY');
@@ -43,7 +43,7 @@ export default function RankingPage() {
 
   return <section className={styles.ranking} style={{ marginTop: 0 }} aria-label="베스트 공간 랭킹">
     <div className={styles.heading}>
-      <h1>베스트 랭킹</h1>
+      <h1>인기 오피스</h1>
       <p>어떤 오피스가 가장 많이 예약됐는지 확인해 보세요. 끝난 기간의 확정값입니다.</p>
     </div>
     <div className={styles.filters}>

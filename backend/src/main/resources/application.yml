@@ -65,7 +65,7 @@ app:
     hash-secret: ${VERIFICATION_HASH_SECRET}
     mail-from: ${VERIFICATION_MAIL_FROM}
   credit:
-    signup-grant: 50000
+    signup-grant: 300000
 
   pg:
     toss:

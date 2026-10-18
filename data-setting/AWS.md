@@ -7,18 +7,18 @@
 
 | 명령 | 동작 |
 | --- | --- |
-| `setup` | 없는 AWS 회원·관리자·공간 추가, 등록된 공간 이름·이미지 경로 갱신 |
-| `update` | 등록된 AWS 공간 이름·이미지 경로 갱신. 없는 회원/공간은 추가하지 않음 |
+| `setup` | 없는 AWS 회원·관리자·공간 추가, 등록된 공간 이름·이미지 경로·요금 갱신 |
+| `update` | 등록된 AWS 공간 이름·이미지 경로·요금 갱신. 없는 회원/공간은 추가하지 않음 |
 | `status` | AWS 등록 데이터와 지역별 공간 수 조회. DB/파일 변경 없음 |
 | `images` | EC2 이미지 39장 설치·확인. DB 연결 없음 |
 
-- 일반 회원: `aws001@amazon.com` ~ `aws100@amazon.com`, USER/ACTIVE, 초기 100,000 크레딧 및 동일 금액 SIGNUP_GRANT 원장.
+- 일반 회원: `aws001@amazon.com` ~ `aws100@amazon.com`, USER/ACTIVE, 초기 1,000,000 크레딧 및 동일 금액 SIGNUP_GRANT 원장(2026-10-18 이전에 만든 계정은 100,000 그대로).
 - 관리자: `admin000@amazon.com`, ADMIN/ACTIVE, 초기 잔액 0.
-- 판교·하남·강남 각 13개 공간, 08:00~23:00, 30분당 2,000~6,500원, 수용인원 2~12명.
+- 판교·하남·강남 각 13개 공간(이름은 `[지역] 오피스명`, 예: `[판교] 차콜 포커스룸`), 08:00~23:00, 30분당 5,500~26,400원(수용인원 기준가 2인 5,000·4인 8,000·6인 12,000·8인 15,000·12인 22,000원 × 지역 가중치 판교 1.1·하남 1.0·강남 1.2, [결정 기록](../docs/decisions/sample-pricing.md)), 수용인원 2~12명.
 - 새 계정의 공통 비밀번호는 실행 시 직접 정합니다. 기존 계정의 비밀번호·역할·상태·닉네임·잔액·원장·예약은 바뀌지 않습니다.
-- 기존 공간의 가격·수용인원·영업시간·상태·가격 version은 보존합니다. 표시 수정은 가격 version을 증가시키지 않습니다.
-- 공간 이름·이미지 매핑의 기준은 `sql/aws_setup.sql`입니다. 기준을 수정한 뒤 `update`로 적용합니다. 가격/잔액 등의 수정은 관리자 기능을 사용하세요.
-- `update`는 관리자 화면에서 바꾼 샘플 공간 이름/사진도 SQL 기준으로 되돌립니다. 예전 업로드 파일의 자동 정리나 감사 로그 생성은 하지 않습니다.
+- 기존 공간의 수용인원·영업시간·상태는 보존합니다. 요금은 기준값으로 맞추며, 요금이 실제로 바뀐 공간만 가격 version을 1 올립니다(결제 대기 중인 예약은 결제 시 409로 거절). 이름·사진 수정은 version을 올리지 않습니다.
+- 공간 이름·이미지·요금의 기준은 `sql/aws_setup.sql`입니다. 기준을 수정한 뒤 `update`로 적용합니다. 잔액 수정은 관리자 기능을 사용하세요.
+- `update`는 관리자 화면에서 바꾼 샘플 공간 이름/사진/요금도 SQL 기준으로 되돌립니다. 예전 업로드 파일의 자동 정리나 감사 로그 생성은 하지 않습니다.
 - AWS 관리자 키는 `aws-admin-000`입니다. 이전 SQL로 만든 `admin-000` 키는 연결된 이메일이 AWS 관리자와 일치할 때만 이동합니다. 로컬 샘플은 유지합니다.
 - 등록되지 않은 이메일/신규 공간명 충돌, 등록 대상 행 누락, 등록 회원 이메일 변경은 오류로 중단합니다. DB 변경은 롤백합니다.
 - 삭제·reset 명령은 제공하지 않습니다. `clean.sql`을 RDS에 직접 실행하지 마세요. 해당 SQL은 AWS/로컬 등록 범위를 구분하지 않습니다.
@@ -26,11 +26,26 @@
 ## EC2에서 최초 실행
 
 프로젝트 루트 또는 Actions checkout의 프로젝트 루트에서 실행합니다. 이 스크립트/원본 이미지가 EC2에 있어야 합니다.
-백엔드를 한 번 정상 실행해 Flyway V12 이상을 적용하고, 이미지 저장 디렉터리를 준비하세요.
+백엔드를 한 번 정상 실행해 Flyway V15 이상을 적용하고, 이미지 저장 디렉터리를 준비하세요. 새 샘플 계정의 비밀번호 해시는 V14의 `local_credential`에 저장하고, V15 정책처럼 이메일 인증 완료(`email_verified_at`)로 만듭니다.
+
+스크립트는 MySQL **8.4 클라이언트**가 필요합니다(`--no-login-paths` 옵션 사용, 팀 기준 MySQL 8.4). Ubuntu 24.04 기본 저장소의 `mysql-client`는 8.0이라 `unknown option '--no-login-paths'`로 실패하므로 MySQL 공식 APT 저장소에서 설치합니다([MySQL APT Repository Quick Guide](https://dev.mysql.com/doc/mysql-apt-repo-quick-guide/en/)).
+서명 키는 Ubuntu 키서버의 갱신본을 씁니다. `repo.mysql.com`의 `RPM-GPG-KEY-mysql-2023`은 2025-10-22에 만료된 사본이라 `EXPKEYSIG` 오류가 납니다. 갱신본도 2027-10-23에 만료되므로 그 전에 같은 명령으로 다시 받습니다.
 
 ```bash
+# MySQL 공식 서명 키(지문 BCA43417C3B485DD128EC6D4B7B3B788A8D3785C) 등록 후 만료일 확인
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xBCA43417C3B485DD128EC6D4B7B3B788A8D3785C' \
+  | sudo gpg --dearmor --yes -o /etc/apt/keyrings/mysql.gpg
+gpg --show-keys /etc/apt/keyrings/mysql.gpg | grep -A1 '^pub'
+
+# MySQL 8.4 LTS 저장소 추가 후 클라이언트 설치
+echo "deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/ubuntu/ $(. /etc/os-release && echo "$VERSION_CODENAME") mysql-8.4-lts" \
+  | sudo tee /etc/apt/sources.list.d/mysql.list
 sudo apt update
 sudo apt install -y mysql-client python3-bcrypt
+hash -r
+mysql --version                               # Ver 8.4.x
+mysql --help | grep -c -- '--no-login-paths'  # 1 이상
 
 # 현재 서비스가 ubuntu로 실행되는 경우. 실제 서비스 사용자에 맞춥니다.
 sudo install -d -o ubuntu -g ubuntu -m 750 /var/slotkey/space-images
@@ -104,12 +119,13 @@ bash data-setting/aws-setup.sh images
 
 DB와 이미지 파일은 하나의 트랜잭션이 아닙니다. 파일을 먼저 설치하고 DB 작업을 실행합니다. DB 오류 시 이미 설치한 이미지는 남으며 재실행할 수 있습니다. 기존 파일이 원본과 다르거나 심볼릭 링크이면 덮어쓰지 않습니다. 비정상 종료로 `.slotkey-aws-install-lock`이 남았다면 실행 프로세스가 없는지 확인 후 해당 설치 잠금 디렉터리만 정리하세요.
 
-이미지는 UUID 형식 `a5100000-0000-4000-8000-000000000001.jpg` ~ `...000039.jpg`로 설치됩니다. 현재 백엔드의 공개 이미지 API를 사용하므로 Vercel 빌드에 사진을 복사하거나 사진 추가 때문에 재배포할 필요가 없습니다. 서비스 사용자가 파일을 읽을 수 있어야 합니다.
+이미지는 UUID 형식 `a5100000-0000-4000-8000-000000000001.jpg` ~ `...000039.jpg`로 설치됩니다. 현재 백엔드의 공개 이미지 API를 사용하므로 프론트 빌드에 사진을 복사하거나 사진 추가 때문에 재배포할 필요가 없습니다. 서비스 사용자가 파일을 읽을 수 있어야 합니다.
 
 ```bash
-curl -i 'https://slotkey.store/api/v1/spaces?page=0&size=3'
+# 운영 확인은 CloudFront 도메인으로 합니다. EC2 안에서는 http://localhost:8080 으로도 확인할 수 있습니다.
+curl -i 'https://d1mf4bnfp77vwt.cloudfront.net/api/v1/spaces?page=0&size=3'
 curl --fail -o /dev/null -w '%{http_code}\n' \
-  'https://slotkey.store/api/v1/space-images/a5100000-0000-4000-8000-000000000001.jpg'
+  'https://d1mf4bnfp77vwt.cloudfront.net/api/v1/space-images/a5100000-0000-4000-8000-000000000001.jpg'
 ```
 
 초기 상태 기준 `status`는 일반 회원 100명·관리자 1명·공간 39개·지역별 13개를 표시합니다. 예약은 자동 생성하지 않습니다.
