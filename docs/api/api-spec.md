@@ -116,12 +116,13 @@
 | --- | --- |
 | 로그인 | 로그인마다 서버 세션을 만든다. 응답 형식은 같다. AT payload에 `sid`(세션 ID)가 추가되고, AT 만료는 `min(발급 + 5분, 세션 만료)`다. RT 쿠키의 DB 행은 그 세션에 연결되며 만료는 세션 만료(로그인 + 24시간)와 같다 |
 | 보호 요청 | JWT 서명·만료 검증 뒤 `sid`가 없거나 문자열이 아니면, 또는 세션이 없음·폐기·만료이거나 JWT `id`가 세션 소유 회원과 다르거나 회원이 `ACTIVE`가 아니면 `INVALID_ACCESS_TOKEN`(401). 정지·탈퇴 회원의 기존 AT도 이 경로로 401이다(`ACCOUNT_INACTIVE`가 아님). 세션 조회 중 DB 장애(트랜잭션 시작 실패 포함)는 인증 없이 `AUTHENTICATION_SERVICE_UNAVAILABLE`(503, 공통 `ApiResponse`) |
-| 토큰 재발급 | 기존 검사에 세션 미폐기·미만료 확인이 더해진다(위반 시 `INVALID_REFRESH_TOKEN` 401). 새 AT는 같은 `sid`이고 세션·RT 만료는 연장되지 않는다. **RT 회전은 여전히 없다**(V2 3번 이슈) |
+| 토큰 재발급 | 기존 검사에 세션 미폐기·미만료 확인이 더해진다(위반 시 `INVALID_REFRESH_TOKEN` 401). 새 AT는 같은 `sid`이고 세션·RT 만료는 연장되지 않는다. 1·2번 기준 동작에서 3번 구현 커밋 `a29dfc9`의 RT 회전 동작으로 변경됐다(V2 3번 이슈) |
+| 토큰 재발급 (3번, 로컬 커밋 `a29dfc9`) | 성공할 때마다 새 AT(본문 `{ accessToken }`, 형식 동일)와 새 RT 쿠키(`Set-Cookie: refreshToken`, 기존 속성, `Max-Age` = 남은 세션 수명)를 준다. 구 RT는 한 번만 쓸 수 있다. 이미 사용한 RT를 다시 보내면 401 `INVALID_REFRESH_TOKEN`과 함께 **그 로그인 세션과 세션의 모든 RT가 폐기**된다(같은 회원의 다른 세션은 유지). 같은 RT 동시 제출은 하나만 교체되고 나머지가 재사용으로 판정되어 결국 그 세션이 폐기된다. grace 기간은 없다. 로그인 응답의 RT 쿠키 `Max-Age`도 남은 세션 수명(로그인 직후 약 86400)이다 |
 | 계정 사건 (V2 2번, 커밋 `02c3557`) | 탈퇴(`POST /auth/withdraw`), 관리자 정지(`PATCH /admin/members/{id}/suspend`), 인증 최종 잠금 자동 정지(`POST /auth/verification/check`의 `VERIFICATION_ADMIN_LOCKED`), 비밀번호 재설정(`POST /auth/password-reset`)이 성공하면 그 회원의 모든 세션과 RT를 폐기한다. 이후 옛 AT는 401, 옛 RT로 refresh도 401이다. 관리자 복구(`PATCH /admin/members/{id}/restore`)는 폐기된 세션을 되살리지 않으며 새 로그인만 성공한다. 응답 형식·상태 코드는 바뀌지 않는다 |
 | 로그아웃 | 쿠키 RT가 속한 세션과 그 세션의 RT를 함께 폐기한다. 이후 그 세션의 기존 AT는 401, RT로 refresh도 401. 같은 회원의 다른 로그인 세션은 유지된다. 쿠키가 없거나 미등록이면 기존처럼 204 |
 | 전환 (V24) | 기존 RT는 마이그레이션에서 삭제되고, `sid` 없는 기존 AT는 거부되므로 배포 후 모든 사용자가 다시 로그인해야 한다 |
 
-아직 구현되지 않은 것: RT 회전·재사용 탐지(3번), 요청 제한(4번). 위 "계정 사건" 행은 1번 커밋 이후의 2번 커밋 변경이다. 로그인·refresh 경로의 DB 장애는 503이 아니라 Spring 기본 오류 응답이다.
+아직 구현되지 않은 것: 요청 제한(4번). RT 회전·재사용 탐지(3번)는 로컬 커밋 `a29dfc9`에 포함됐으며 미Push·미병합·미배포다. 위 "계정 사건" 행은 1번 커밋 이후의 2번 커밋 변경이다. 로그인·refresh 경로의 DB 장애는 503이 아니라 Spring 기본 오류 응답이다.
 
 ## 3. 회원 (Member)
 
@@ -486,7 +487,7 @@
 3. **정지·로그아웃·비밀번호 재설정·탈퇴 후 기존 인증 수단 즉시 차단 (V2 확정 목표, dev에는 미구현)**
    - **현재 구현**: `CustomAuthenticationFilter`는 JWT 서명과 만료 시각만 검증하며 회원 DB를 재조회하지 않는다. 비즈니스 서비스(`ReservationHoldService`, `DoorAccessVerificationService` 등)에서도 회원 `status == ACTIVE` 여부를 별도 확인하지 않는다. 따라서 회원이 정지되어도 기존 Access Token 만료 전까지는 예약 생성 및 도어 출입 시도가 기술적으로 통과된다(토큰 재발급 요청 시에만 `ACCOUNT_INACTIVE` 403 차단).
    - **목표**: 차단 여부는 더 이상 결정 대상이 아니다. [인증 정책](../decisions/authentication-policy.md) §10에 따라 V2에서 Redis 없이 DB 기반 로그인 세션으로 기존 AT·RT를 폐기한다. 세션 식별자·RT 재사용 시 폐기 범위·역할 변경 반영 방식 등 세부는 [V2 계획](../plans/auth/v2-plan.md) §3 결정표에서 정한다. 대상 시나리오는 `V2SecurityRedTest` 11개이며 [인증 보안 테스트](../testing/auth-security-tests.md)를 본다.
-   - **진행(dev 병합 전)**: V2 1번 변경으로 로그아웃한 세션의 기존 AT·RT 차단과 정지·탈퇴 회원의 기존 AT 거부(회원 상태 조회)가 구현됐다([2-5](#2-5-v2-1번-변경--db-로그인-세션-dev-병합-전)). 비밀번호 재설정·정지·탈퇴·인증 최종 잠금 시 회원 전체 세션 폐기와 복구 후 폐기 유지는 2번 커밋(`02c3557`)으로 구현됐다. RT 회전과 요청 제한은 남아 있다.
+   - **진행(dev 병합 전)**: V2 1번 변경으로 로그아웃한 세션의 기존 AT·RT 차단과 정지·탈퇴 회원의 기존 AT 거부(회원 상태 조회)가 구현됐다([2-5](#2-5-v2-1번-변경--db-로그인-세션-dev-병합-전)). 비밀번호 재설정·정지·탈퇴·인증 최종 잠금 시 회원 전체 세션 폐기와 복구 후 폐기 유지는 2번 커밋(`02c3557`)으로 구현됐다. RT 회전(3번)은 로컬 커밋(`a29dfc9`), 요청 제한은 남아 있다.
 4. **관리자 예약 목록 검색 조건 필터 지원 (해결 완료)**
    - **구현 현황**: `AdminReservationSearchCondition`(`date`, `spaceId`, `status`) 파라미터 바인딩 및 `ReservationRepository.searchReservations` 동적 JPQL 필터링 구현 완료. `PageResponse<AdminReservationResponse>` 규격 정합화 완료.
 5. **노쇼 환불률**: 현재 확정값은 0%이며 강사 피드백에 따라 재검토 중(`docs/decisions/core-domain-decisions.md` §13). 변경 시 명세서와 크레딧 환급 로직 동기화 필요.
