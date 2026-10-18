@@ -18,6 +18,21 @@ HASH = "$2b$12$kRiVg0sZNHrmMtl9Q7eIguuqTOc0vQY51A/REFpC5sUmr7zyRzM8u"
 CONTAINER = None
 
 
+# 30분 요금 = 수용인원 기준가 × 지역 가중치 (docs/decisions/sample-pricing.md)
+BASE_PRICE = {2: 5000, 4: 8000, 6: 12000, 8: 15000, 12: 22000}
+REGION_RATE = {"판교": 11, "하남": 10, "강남": 12}
+
+
+def expected_prices(rows):
+    """'지역\t수용인원\t요금' 행들에서 기준표와 다른 행을 돌려준다."""
+    wrong = []
+    for line in rows.splitlines():
+        location, capacity, price = line.split("\t")
+        if int(price) != BASE_PRICE[int(capacity)] * REGION_RATE[location] // 10:
+            wrong.append(line)
+    return wrong
+
+
 class PasswordTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -215,7 +230,9 @@ PRIMARY KEY(kind,seed_key), UNIQUE KEY uq_sample_row(kind,row_id)) ENGINE=InnoDB
     def test_create_and_rerun_no_duplicate(self):
         self.seed()
         self.seed()
-        self.assertEqual(self.sql("SELECT COUNT(*) FROM member; SELECT COUNT(*) FROM spaces; SELECT COUNT(*),SUM(amount) FROM credit_transaction;"), "101\n39\n100\t10000000")
+        self.assertEqual(self.sql("SELECT COUNT(*) FROM member; SELECT COUNT(*) FROM spaces; SELECT COUNT(*),SUM(amount) FROM credit_transaction;"), "101\n39\n100\t100000000")
+        self.assertEqual(self.sql("SELECT DISTINCT balance FROM member WHERE role='USER';"), "1000000")
+        self.assertEqual(expected_prices(self.sql("SELECT location,capacity,price_per_slot FROM spaces;")), [])
         # V14 이후 비밀번호 해시는 local_credential에 있다. V15 정책처럼 샘플 회원은 이메일 인증 완료로 둔다.
         self.assertEqual(self.sql("SELECT COUNT(*) FROM local_credential c JOIN member m ON m.id=c.member_id WHERE c.password_hash='" + HASH + "';"), "101")
         self.assertEqual(self.sql("SELECT COUNT(*) FROM member WHERE email_verified_at IS NOT NULL;"), "101")
@@ -237,7 +254,8 @@ UPDATE spaces SET name='표시수정',image_path='/old.jpg',price_per_slot=9000,
         self.seed(create=False)
         self.seed()
         self.assertEqual(self.sql("SELECT * FROM member; SELECT * FROM local_credential; SELECT * FROM credit_transaction; SELECT * FROM reservation; SELECT * FROM reservation_slot;"), before)
-        self.assertEqual(self.sql("SELECT price_per_slot,capacity,opening_time,closing_time,status,version FROM spaces WHERE id=1;"), "9000\t20\t09:00:00\t22:00:00\tINACTIVE\t7")
+        # 요금만 기준값(판교 2인 5,500원)으로 돌아오고 version은 한 번만 오른다. 나머지 운영 값은 보존한다.
+        self.assertEqual(self.sql("SELECT price_per_slot,capacity,opening_time,closing_time,status,version FROM spaces WHERE id=1;"), "5500\t20\t09:00:00\t22:00:00\tINACTIVE\t8")
         self.assertEqual(self.sql("SELECT name, image_path LIKE '/api/v1/space-images/%' FROM spaces WHERE id=1;"), "[판교] 차콜 포커스룸\t1")
 
     def test_update_empty_and_setup_missing(self):

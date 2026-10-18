@@ -21,7 +21,7 @@ public record MemberResponse(
         @Schema(description = "현재 회원 역할", example = "USER")
         MemberRole role,
 
-        @Schema(description = "현재 보유 크레딧", example = "50000")
+        @Schema(description = "현재 보유 크레딧", example = "300000")
         int balance,
 
         @Schema(description = "가입 시각", example = "2026-09-23T09:00:00")

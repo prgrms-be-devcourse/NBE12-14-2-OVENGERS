@@ -15,6 +15,21 @@ HASH = "$2b$12$kRiVg0sZNHrmMtl9Q7eIguuqTOc0vQY51A/REFpC5sUmr7zyRzM8u"
 CONTAINER = None
 
 
+# 30분 요금 = 수용인원 기준가 × 지역 가중치 (docs/decisions/sample-pricing.md)
+BASE_PRICE = {2: 5000, 4: 8000, 6: 12000, 8: 15000, 12: 22000}
+REGION_RATE = {"판교": 11, "하남": 10, "강남": 12}
+
+
+def expected_prices(rows):
+    """'지역\t수용인원\t요금' 행들에서 기준표와 다른 행을 돌려준다."""
+    wrong = []
+    for line in rows.splitlines():
+        location, capacity, price = line.split("\t")
+        if int(price) != BASE_PRICE[int(capacity)] * REGION_RATE[location] // 10:
+            wrong.append(line)
+    return wrong
+
+
 @unittest.skipUnless(CONTAINER, "--mysql-container로 별도 검증 컨테이너를 지정하세요")
 class LocalSetupTest(unittest.TestCase):
     def setUp(self):
@@ -55,6 +70,15 @@ PRIMARY KEY(kind,seed_key), UNIQUE KEY uq_sample_row(kind,row_id)) ENGINE=InnoDB
         self.assertEqual(self.sql("SELECT s.name FROM spaces s JOIN slotkey_sample_registry r ON r.kind='SPACE' AND r.row_id=s.id WHERE r.seed_key='pangyo-01';"),
                          "[판교] 차콜 포커스룸")
         self.assertEqual(self.sql("SELECT COUNT(*) FROM spaces WHERE name NOT REGEXP '^\\\\[(판교|하남|강남)\\\\] ';"), "0")
+        self.assertEqual(expected_prices(self.sql("SELECT location,capacity,price_per_slot FROM spaces;")), [])
+        self.assertEqual(self.sql("SELECT DISTINCT balance FROM member WHERE role='USER';"), "1000000")
+
+    def test_old_price_is_updated_once_with_version_bump(self):
+        self.run_routine("setup")
+        self.sql("UPDATE spaces SET price_per_slot=2000, version=3 WHERE id=1;")
+        self.run_routine("setup")
+        self.run_routine("setup")
+        self.assertEqual(self.sql("SELECT price_per_slot, version FROM spaces WHERE id=1;"), "5500\t4")
 
     def test_old_names_are_renamed_on_rerun(self):
         self.run_routine("setup")
