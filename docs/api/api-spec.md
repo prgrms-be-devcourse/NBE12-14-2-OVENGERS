@@ -477,7 +477,7 @@
 
 ### 14-2. 일반 회원용 랭킹 (`/stats`)
 
-> 2026-10-17 추가. 로그인한 회원(USER·ADMIN)이면 누구나 호출할 수 있다. 미인증은 401 `AUTHENTICATION_REQUIRED`. 같은 확정 스냅샷을 쓰지만 **순매출은 내려주지 않는다.**
+> 2026-10-17 추가. 2026-10-18 변경: **비로그인 방문자도 호출할 수 있다**(`GET /api/v1/stats/**` permitAll). 로그인 전 메인 화면의 "인기 오피스" 메뉴에서 바로 보이게 하기 위함이며, 순매출이 빠진 확정 집계라 공개해도 매출 정보가 드러나지 않는다. 같은 확정 스냅샷을 쓰지만 **순매출은 내려주지 않는다.**
 
 - `GET /stats/space-ranking?period=&date=&metric=&location=&limit=`, `GET /stats/location-ranking?period=&date=&metric=&limit=`: 파라미터·기간 상태(`CONFIRMED`/`PENDING`/`UNAVAILABLE`)·동점 규칙·`previousRank`는 §14의 관리자 랭킹과 같다. 차이는 다음과 같다.
   - `metric`은 `RESERVATION_COUNT`(기본) 또는 `SLOT_COUNT`만 허용한다. `NET_REVENUE`는 정렬 순서로 매출 순위가 드러나므로 400 `VALIDATION_FAILED`다.
