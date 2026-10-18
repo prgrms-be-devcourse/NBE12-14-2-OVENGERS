@@ -1,7 +1,7 @@
 package com.ovengers.slotkey.member.service;
 
 import com.ovengers.slotkey.access.repository.DoorAccessTokenRepository;
-import com.ovengers.slotkey.auth.repository.RefreshTokenRepository;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.credit.service.CreditExpirationService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
@@ -29,7 +29,7 @@ public class MemberWithdrawalService {
     private final MemberRepository memberRepository;
     private final ReservationRepository reservationRepository;
     private final CreditExpirationService creditExpirationService;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final AuthSessionService authSessionService;
     private final DoorAccessTokenRepository doorAccessTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
@@ -91,7 +91,7 @@ public class MemberWithdrawalService {
 
         member.withdraw(now);
 
-        refreshTokenRepository.revokeAllByMemberId(memberId, now);
+        authSessionService.revokeAllForMember(memberId, now);
 
         doorAccessTokenRepository.revokeAllByMemberId(
                 memberId,

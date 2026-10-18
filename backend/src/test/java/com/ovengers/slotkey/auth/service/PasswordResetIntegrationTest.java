@@ -4,6 +4,7 @@ import com.ovengers.slotkey.auth.entity.LocalCredential;
 import com.ovengers.slotkey.auth.entity.VerificationPurpose;
 import com.ovengers.slotkey.auth.mail.VerificationMailSender;
 import com.ovengers.slotkey.auth.repository.LocalCredentialRepository;
+import com.ovengers.slotkey.auth.repository.AuthSessionRepository;
 import com.ovengers.slotkey.auth.repository.VerificationGrantRepository;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.member.entity.Member;
@@ -12,11 +13,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.UUID;
+import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.any;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -50,6 +55,9 @@ class PasswordResetIntegrationTest {
 
     @Autowired
     private VerificationGrantRepository grantRepository;
+
+    @SpyBean
+    private AuthSessionRepository authSessionRepository;
 
     @Autowired
     private VerificationSecretHasher secretHasher;
@@ -127,6 +135,32 @@ class PasswordResetIntegrationTest {
 
         assertThat(authService.login(email, "New1234!").accessToken())
                 .isNotBlank();
+    }
+
+    @Test
+    void 세션_폐기_실패시_비밀번호와_증표_소비도_함께_롤백된다() {
+        String email = newEmail();
+        Member member = createMember(email, "Old1234!");
+        String oldRefreshToken = authService.login(email, "Old1234!").refreshToken();
+        String grant = issueGrant(email, VerificationPurpose.PASSWORD_RESET);
+
+        doThrow(new IllegalStateException("session revoke failed"))
+                .when(authSessionRepository)
+                .revokeAllByMemberId(org.mockito.ArgumentMatchers.eq(member.getId()),
+                        any(LocalDateTime.class));
+
+        assertThatThrownBy(() -> passwordResetService.reset(
+                email, grant, "New1234!", "New1234!"
+        )).isInstanceOf(IllegalStateException.class)
+                .hasMessage("session revoke failed");
+
+        assertThat(grantRepository.findByGrantHash(secretHasher.hashGrant(grant))
+                .orElseThrow().getConsumedAt()).isNull();
+        assertThat(passwordEncoder.matches(
+                "Old1234!",
+                localCredentialRepository.findById(member.getId()).orElseThrow().getPasswordHash()
+        )).isTrue();
+        assertThat(authService.refresh(oldRefreshToken)).isNotBlank();
     }
 
     private Member createMember(String email, String rawPassword) {

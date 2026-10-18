@@ -30,6 +30,8 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
+import java.time.Clock;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -54,10 +56,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * V2 보안 기준 레드 테스트.
+ * V2 보안 회귀 테스트.
  *
- * 현재 V1 구현에서는 의도적으로 실패한다.
- * V2의 세션 조회, 토큰 폐기, rotation, 요청 제한 구현 후 통과해야 한다.
+ * 완료된 V2 범위는 활성 상태로 검증하고, RT Rotation 및 요청 제한 테스트는
+ * 해당 이슈 구현 전까지 비활성 상태로 유지한다.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -92,6 +94,12 @@ class V2SecurityRedTest {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private Clock clock;
+
     @MockBean
     private VerificationMailSender mailSender;
 
@@ -111,7 +119,6 @@ class V2SecurityRedTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    @Disabled("V2 구현 전까지 CI에서 비활성화")
     @Test
     @DisplayName("V2: 비밀번호 재설정이 성공하면 기존 Access Token은 즉시 폐기된다")
     void password_reset_invalidates_existing_access_token() throws Exception {
@@ -152,20 +159,39 @@ class V2SecurityRedTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    @Disabled("V2 구현 전까지 CI에서 비활성화")
     @Test
-    @DisplayName("V2: 회원이 정지되면 기존 Access Token도 즉시 폐기된다")
+    @DisplayName("V2: 관리자가 회원을 정지하면 기존 AT와 RT 세션이 영구 폐기된다")
     void suspended_member_cannot_use_existing_access_token() throws Exception {
         String email = newEmail("suspended");
-        MvcResult login = login(email);
-        String accessToken = accessToken(login);
+        MvcResult firstLogin = login(email);
+        MvcResult secondLogin = loginExisting(email, PASSWORD);
+        String firstAccessToken = accessToken(firstLogin);
+        String secondAccessToken = accessToken(secondLogin);
+        Cookie firstRefreshToken = refreshCookie(firstLogin);
+        Cookie secondRefreshToken = refreshCookie(secondLogin);
 
         Member member = memberRepository.findByEmail(email).orElseThrow();
-        member.updateStatus(MemberStatus.SUSPENDED);
-        memberRepository.saveAndFlush(member);
+        Member admin = createAdminWithCredential();
+        String adminAccessToken = accessToken(loginExisting(admin.getEmail(), PASSWORD));
+
+        mvc.perform(patch("/api/v1/admin/members/{memberId}/suspend", member.getId())
+                        .header("Authorization", "Bearer " + adminAccessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "reason", "V2 세션 폐기 검증"
+                        ))))
+                .andExpect(status().isOk());
 
         mvc.perform(get("/api/v1/members/me")
-                        .header("Authorization", "Bearer " + accessToken))
+                        .header("Authorization", "Bearer " + firstAccessToken))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + secondAccessToken))
+                .andExpect(status().isUnauthorized());
+
+        mvc.perform(post("/api/v1/auth/refresh").cookie(firstRefreshToken))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/auth/refresh").cookie(secondRefreshToken))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -224,7 +250,6 @@ class V2SecurityRedTest {
         assertThat(rt3.getValue()).isNotBlank().isNotEqualTo(rt2.getValue());
     }
 
-    @Disabled("V2 구현 전까지 CI에서 비활성화")
     @Test
     @DisplayName("V2: 비밀번호 재설정 후 기존 Refresh Token은 폐기된다")
     void password_reset_invalidates_existing_refresh_token() throws Exception {
@@ -240,12 +265,15 @@ class V2SecurityRedTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    @Disabled("V2 구현 전까지 CI에서 비활성화")
     @Test
     @DisplayName("V2: 비밀번호 재설정은 여러 로그인 세션의 AT와 RT를 모두 폐기한다")
     void password_reset_invalidates_all_existing_sessions() throws Exception {
         String email = newEmail("password-reset-sessions");
+        String otherEmail = newEmail("unaffected-member");
         createMemberWithCredential(email, PASSWORD);
+        MvcResult otherMemberLogin = login(otherEmail);
+        String otherMemberAccessToken = accessToken(otherMemberLogin);
+        Cookie otherMemberRefreshToken = refreshCookie(otherMemberLogin);
 
         MvcResult firstLogin = loginExisting(email, PASSWORD);
         MvcResult secondLogin = loginExisting(email, PASSWORD);
@@ -274,9 +302,22 @@ class V2SecurityRedTest {
         assertThat(List.of(at1Status, at2Status, rt1Status, rt2Status))
                 .as("비밀번호 재설정 후 모든 기존 세션은 401이어야 한다")
                 .containsOnly(401);
+
+        MvcResult freshLogin = loginExisting(email, NEW_PASSWORD);
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + accessToken(freshLogin)))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .cookie(refreshCookie(freshLogin)))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + otherMemberAccessToken))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/auth/refresh").cookie(otherMemberRefreshToken))
+                .andExpect(status().isOk());
     }
 
-    @Disabled("V2 구현 전까지 CI에서 비활성화")
     @Test
     @DisplayName("V2: 회원 정지 후 복구해도 정지 전 AT와 RT는 다시 살아나지 않는다")
     void member_restore_does_not_revive_old_session() throws Exception {
@@ -316,18 +357,29 @@ class V2SecurityRedTest {
         assertThat(List.of(oldAccessStatus, oldRefreshStatus))
                 .as("회원 정지·복구 후 정지 전 세션은 모두 401이어야 한다")
                 .containsOnly(401);
+
+        MvcResult freshLogin = loginExisting(email, PASSWORD);
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + accessToken(freshLogin)))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .cookie(refreshCookie(freshLogin)))
+                .andExpect(status().isOk());
     }
 
-    @Disabled("V2 구현 전까지 CI에서 비활성화")
     @Test
-    @DisplayName("V2: 회원탈퇴 후 기존 Access Token은 보호 API에서 거부된다")
+    @DisplayName("V2: 회원탈퇴 후 기존 모든 로그인 세션의 AT와 RT가 거부된다")
     void withdrawal_invalidates_existing_access_token() throws Exception {
         String email = newEmail("withdrawal");
-        MvcResult login = login(email);
-        String accessToken = accessToken(login);
+        MvcResult firstLogin = login(email);
+        MvcResult secondLogin = loginExisting(email, PASSWORD);
+        String firstAccessToken = accessToken(firstLogin);
+        String secondAccessToken = accessToken(secondLogin);
+        Cookie firstRefreshToken = refreshCookie(firstLogin);
+        Cookie secondRefreshToken = refreshCookie(secondLogin);
 
         mvc.perform(post("/api/v1/auth/withdraw")
-                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Authorization", "Bearer " + firstAccessToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "currentPassword", PASSWORD
@@ -335,8 +387,184 @@ class V2SecurityRedTest {
                 .andExpect(status().isNoContent());
 
         mvc.perform(get("/api/v1/members/me")
-                        .header("Authorization", "Bearer " + accessToken))
+                        .header("Authorization", "Bearer " + firstAccessToken))
                 .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + secondAccessToken))
+                .andExpect(status().isUnauthorized());
+
+        mvc.perform(post("/api/v1/auth/refresh").cookie(firstRefreshToken))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/auth/refresh").cookie(secondRefreshToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("V2: 인증 최종 잠금의 오류 응답 후 정지·세션 폐기는 커밋되고 복구 후에도 옛 토큰은 거부된다")
+    void final_verification_lock_commits_and_permanently_revokes_sessions() throws Exception {
+        String email = newEmail("verification-final-lock");
+        MvcResult userLogin = login(email);
+        String oldAccessToken = accessToken(userLogin);
+        Cookie oldRefreshToken = refreshCookie(userLogin);
+        Member member = memberRepository.findByEmail(email).orElseThrow();
+
+        Member admin = createAdminWithCredential();
+        String adminAccessToken = accessToken(loginExisting(admin.getEmail(), PASSWORD));
+        VerificationPurpose purpose = VerificationPurpose.PASSWORD_RESET;
+
+        for (int stage = 1; stage <= 3; stage++) {
+            IssuedChallenge issued = issueChallengeFromApi(email, purpose);
+            String wrongCode = issued.deliveredCode().equals("00000000")
+                    ? "00000001"
+                    : "00000000";
+
+            for (int attempt = 1; attempt <= 5; attempt++) {
+                var response = mvc.perform(post("/api/v1/auth/verification/check")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(Map.of(
+                                        "email", email,
+                                        "purpose", purpose.name(),
+                                        "challengeId", issued.challengeId(),
+                                        "code", wrongCode
+                                ))))
+                        .andReturn().getResponse();
+
+                if (attempt < 5) {
+                    assertThat(response.getStatus()).isEqualTo(400);
+                    assertThat(objectMapper.readTree(response.getContentAsString())
+                            .path("code").asText())
+                            .isEqualTo("VERIFICATION_CODE_MISMATCH");
+                } else if (stage < 3) {
+                    assertThat(response.getStatus()).isEqualTo(429);
+                    assertThat(objectMapper.readTree(response.getContentAsString())
+                            .path("code").asText())
+                            .isEqualTo("VERIFICATION_TEMPORARILY_BLOCKED");
+                } else {
+                    assertThat(response.getStatus()).isEqualTo(403);
+                    assertThat(objectMapper.readTree(response.getContentAsString())
+                            .path("code").asText())
+                            .isEqualTo("VERIFICATION_ADMIN_LOCKED");
+                }
+            }
+
+            if (stage < 3) {
+                releaseVerificationBlock(email, purpose);
+            }
+        }
+
+        assertThat(memberRepository.findById(member.getId()).orElseThrow().getStatus())
+                .isEqualTo(MemberStatus.SUSPENDED);
+
+        mvc.perform(patch("/api/v1/admin/members/{memberId}/restore", member.getId())
+                        .header("Authorization", "Bearer " + adminAccessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "reason", "V2 인증 잠금 복구 검증"
+                        ))))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + oldAccessToken))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/auth/refresh").cookie(oldRefreshToken))
+                .andExpect(status().isUnauthorized());
+
+        MvcResult freshLogin = loginExisting(email, PASSWORD);
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + accessToken(freshLogin)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("V2: 비밀번호 재설정과 이미 시작된 refresh가 경합해도 옛 세션은 재사용할 수 없다")
+    void password_reset_racing_refresh_cannot_leave_old_session_usable() throws Exception {
+        String email = newEmail("reset-refresh-race");
+        MvcResult login = login(email);
+        String oldAccessToken = accessToken(login);
+        Cookie oldRefreshToken = refreshCookie(login);
+        String grant = issueGrant(email, VerificationPurpose.PASSWORD_RESET);
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<ConcurrentResponse> resetFuture = null;
+        Future<ConcurrentResponse> refreshFuture = null;
+        try {
+            resetFuture = executor.submit(() -> concurrentRequest(
+                    ready,
+                    start,
+                    () -> mvc.perform(post("/api/v1/auth/password-reset")
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(Map.of(
+                                            "email", email,
+                                            "grant", grant,
+                                            "password", NEW_PASSWORD,
+                                            "passwordConfirm", NEW_PASSWORD
+                                    ))))
+                            .andReturn()
+            ));
+            refreshFuture = executor.submit(() -> concurrentRequest(
+                    ready,
+                    start,
+                    () -> mvc.perform(post("/api/v1/auth/refresh")
+                                    .cookie(oldRefreshToken))
+                            .andReturn()
+            ));
+
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            ConcurrentResponse resetResult = resetFuture.get(10, TimeUnit.SECONDS);
+            ConcurrentResponse refreshResult = refreshFuture.get(10, TimeUnit.SECONDS);
+            assertThat(resetResult.failure()).isNull();
+            assertThat(refreshResult.failure()).isNull();
+            assertThat(resetResult.status()).isEqualTo(200);
+            assertThat(refreshResult.status()).isIn(200, 401);
+
+            mvc.perform(get("/api/v1/members/me")
+                            .header("Authorization", "Bearer " + oldAccessToken))
+                    .andExpect(status().isUnauthorized());
+            mvc.perform(post("/api/v1/auth/refresh").cookie(oldRefreshToken))
+                    .andExpect(status().isUnauthorized());
+
+            if (refreshResult.status() == 200) {
+                assertThat(refreshResult.accessToken()).isNotBlank();
+                mvc.perform(get("/api/v1/members/me")
+                                .header("Authorization", "Bearer " + refreshResult.accessToken()))
+                        .andExpect(status().isUnauthorized());
+            }
+
+            MvcResult freshLogin = loginExisting(email, NEW_PASSWORD);
+            mvc.perform(get("/api/v1/members/me")
+                            .header("Authorization", "Bearer " + accessToken(freshLogin)))
+                    .andExpect(status().isOk());
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    private ConcurrentResponse concurrentRequest(
+            CountDownLatch ready,
+            CountDownLatch start,
+            java.util.concurrent.Callable<MvcResult> request
+    ) {
+        ready.countDown();
+        try {
+            if (!start.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("동시 계정 사건 요청 시작 대기 시간 초과");
+            }
+            MvcResult result = request.call();
+            String accessToken = result.getResponse().getStatus() == 200
+                    && result.getResponse().getContentType() != null
+                    ? objectMapper.readTree(result.getResponse().getContentAsString())
+                            .path("data").path("accessToken").asText(null)
+                    : null;
+            return new ConcurrentResponse(result.getResponse().getStatus(), accessToken, null);
+        } catch (Throwable failure) {
+            return new ConcurrentResponse(-1, null, failure);
+        }
     }
 
     @Disabled("V2 구현 전까지 CI에서 비활성화")
@@ -485,6 +713,39 @@ class V2SecurityRedTest {
         ).grant();
     }
 
+    private IssuedChallenge issueChallengeFromApi(
+            String email,
+            VerificationPurpose purpose
+    ) throws Exception {
+        AtomicReference<String> deliveredCode = new AtomicReference<>();
+        doAnswer(invocation -> {
+            deliveredCode.set(invocation.getArgument(2, String.class));
+            return null;
+        }).when(mailSender).sendCode(eq(email), eq(purpose), anyString());
+
+        MvcResult response = mvc.perform(post("/api/v1/auth/verification/issue")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "email", email,
+                                "purpose", purpose.name()
+                        ))))
+                .andExpect(status().isOk())
+                .andReturn();
+        long challengeId = objectMapper.readTree(response.getResponse().getContentAsString())
+                .path("data").path("challengeId").asLong();
+        assertThat(deliveredCode.get()).isNotBlank();
+        return new IssuedChallenge(challengeId, deliveredCode.get());
+    }
+
+    private void releaseVerificationBlock(String email, VerificationPurpose purpose) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        jdbcTemplate.update("""
+                UPDATE verification_guard
+                SET blocked_until = ?, last_sent_at = ?
+                WHERE email = ? AND purpose = ?
+                """, now.minusSeconds(1), now.minusSeconds(31), email, purpose.name());
+    }
+
     private String newEmail(String prefix) {
         return "v2-" + prefix + "-" + UUID.randomUUID() + "@example.com";
     }
@@ -502,4 +763,8 @@ class V2SecurityRedTest {
             return new RefreshAttempt(-1, null, failure);
         }
     }
+
+    private record IssuedChallenge(long challengeId, String deliveredCode) {}
+
+    private record ConcurrentResponse(int status, String accessToken, Throwable failure) {}
 }

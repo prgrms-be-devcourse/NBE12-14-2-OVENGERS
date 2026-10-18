@@ -7,6 +7,7 @@ import com.ovengers.slotkey.audit.repository.AuditLogRepository;
 import com.ovengers.slotkey.audit.service.AuditLogService;
 import com.ovengers.slotkey.credit.service.CreditGrantService;
 import com.ovengers.slotkey.auth.service.VerificationGuardService;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.member.dto.response.AdminMemberResponse;
@@ -56,6 +57,9 @@ class AdminMemberServiceTest {
     @Mock
     private VerificationGuardService verificationGuardService;
 
+    @Mock
+    private AuthSessionService authSessionService;
+
     private Clock clock;
     private AdminMemberService adminMemberService;
 
@@ -72,7 +76,8 @@ class AdminMemberServiceTest {
                 auditLogService,
                 creditGrantService,
                 clock,
-                verificationGuardService
+                verificationGuardService,
+                authSessionService
         );
     }
 
@@ -211,6 +216,10 @@ class AdminMemberServiceTest {
 
         // then
         verify(member).updateStatus(MemberStatus.SUSPENDED);
+        verify(authSessionService).revokeAllForMember(
+                memberId,
+                LocalDateTime.of(2026, 9, 18, 13, 0)
+        );
 
         verify(auditLogService)
                 .log(

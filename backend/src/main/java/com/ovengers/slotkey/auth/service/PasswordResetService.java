@@ -25,6 +25,7 @@ public class PasswordResetService {
     private final LocalCredentialRepository localCredentialRepository;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
+    private final AuthSessionService authSessionService;
 
     @Transactional
     public void reset(
@@ -56,5 +57,6 @@ public class PasswordResetService {
         LocalDateTime now = LocalDateTime.now(clock);
         credential.changePassword(passwordEncoder.encode(password), now);
         grant.consume(now);
+        authSessionService.revokeAllForMember(member.getId(), now);
     }
 }

@@ -32,6 +32,7 @@ public class VerificationCheckService {
     private final Clock clock;
     private final MemberRepository memberRepository;
     private final AuditLogService auditLogService;
+    private final AuthSessionService authSessionService;
 
     @Transactional
     public VerificationCheckResult verify(
@@ -111,6 +112,7 @@ public class VerificationCheckService {
 
         MemberStatus beforeStatus = member.getStatus();
         member.updateStatus(MemberStatus.SUSPENDED);
+        authSessionService.revokeAllForMember(member.getId(), LocalDateTime.now(clock));
         auditLogService.log(
                 null,
                 AuditAction.LOCK_MEMBER_BY_VERIFICATION,

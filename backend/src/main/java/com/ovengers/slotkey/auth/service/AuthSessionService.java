@@ -2,6 +2,7 @@ package com.ovengers.slotkey.auth.service;
 
 import com.ovengers.slotkey.auth.entity.AuthSession;
 import com.ovengers.slotkey.auth.repository.AuthSessionRepository;
+import com.ovengers.slotkey.auth.repository.RefreshTokenRepository;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.entity.MemberStatus;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class AuthSessionService {
     private static final Logger log = LoggerFactory.getLogger(AuthSessionService.class);
 
     private final AuthSessionRepository authSessionRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
     private final Clock clock;
 
     @Transactional
@@ -53,6 +55,12 @@ public class AuthSessionService {
     @Transactional
     public void revoke(AuthSession session, LocalDateTime now) {
         session.revoke(now);
+    }
+
+    @Transactional
+    public void revokeAllForMember(Long memberId, LocalDateTime now) {
+        authSessionRepository.revokeAllByMemberId(memberId, now);
+        refreshTokenRepository.revokeAllByMemberId(memberId, now);
     }
 
     public enum ValidationResult {

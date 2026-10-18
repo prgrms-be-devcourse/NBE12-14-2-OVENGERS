@@ -6,6 +6,7 @@ import com.ovengers.slotkey.audit.entity.AuditTargetType;
 import com.ovengers.slotkey.audit.repository.AuditLogRepository;
 import com.ovengers.slotkey.audit.service.AuditLogService;
 import com.ovengers.slotkey.auth.service.VerificationGuardService;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.credit.service.CreditGrantService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
@@ -35,6 +36,7 @@ public class AdminMemberService {
     private final CreditGrantService creditGrantService;
     private final Clock clock;
     private final VerificationGuardService verificationGuardService;
+    private final AuthSessionService authSessionService;
 
     @Transactional(readOnly = true)
     public Page<AdminMemberResponse> getMembers(MemberStatus status, String keyword, Pageable pageable) {
@@ -126,6 +128,10 @@ public class AdminMemberService {
         member.updateStatus(targetStatus);
 
         LocalDateTime changedAt = LocalDateTime.now(clock);
+
+        if (targetStatus == MemberStatus.SUSPENDED) {
+            authSessionService.revokeAllForMember(memberId, changedAt);
+        }
 
         // 감사 로그 기록
         auditLogService.log(
