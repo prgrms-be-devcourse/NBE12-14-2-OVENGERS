@@ -2,7 +2,9 @@
 package com.ovengers.slotkey.member.controller;
 
 import com.ovengers.slotkey.audit.entity.AuditAction;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.credit.entity.CreditTransactionType;
+import com.ovengers.slotkey.global.config.ClockConfig;
 import com.ovengers.slotkey.global.config.SecurityConfig;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
@@ -15,6 +17,7 @@ import com.ovengers.slotkey.member.entity.MemberRole;
 import com.ovengers.slotkey.member.entity.MemberStatus;
 import com.ovengers.slotkey.member.service.AdminMemberService;
 import com.ovengers.slotkey.reservation.entity.ReservationStatus;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -29,13 +32,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -46,12 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(AdminMemberController.class)
 @ActiveProfiles("test")
-@Import({
-        SecurityConfig.class,
-        JwtProvider.class,
-        MemberAuthorizationService.class,
-        GlobalExceptionHandler.class
-})
+@Import({SecurityConfig.class, ClockConfig.class, JwtProvider.class, MemberAuthorizationService.class, GlobalExceptionHandler.class})
 @DisplayName("관리자 회원 상세 컨트롤러 테스트")
 class AdminMemberDetailControllerTest {
 
@@ -60,6 +58,15 @@ class AdminMemberDetailControllerTest {
 
     @MockBean
     private AdminMemberService adminMemberService;
+
+    @MockBean
+    private AuthSessionService authSessionService;
+
+    @BeforeEach
+    void allowTestSession() {
+        given(authSessionService.validate(anyString(), anyLong()))
+                .willReturn(AuthSessionService.ValidationResult.VALID);
+    }
 
     @Value("${custom.jwt.secret-key}")
     private String secretKey;
@@ -75,7 +82,8 @@ class AdminMemberDetailControllerTest {
                 Map.of(
                         "id", id,
                         "email", email,
-                        "role", role.name()
+                        "role", role.name(),
+                        "sid", "test-session"
                 )
         );
     }
