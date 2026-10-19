@@ -26,6 +26,21 @@ function load(relative, mocks = {}) {
   return loadedModule.exports;
 }
 const search = load('utils/spaceSearch.ts');
+const ErrorMessage = load('components/common/ErrorMessage.tsx').default;
+test('restricted account errors provide an email contact without requiring login', () => {
+  for (const code of ['ACCOUNT_INACTIVE', 'MEMBER_SUSPENDED', 'MEMBER_NOT_ACTIVE', 'VERIFICATION_ADMIN_LOCKED']) {
+    const html = renderToStaticMarkup(React.createElement(ErrorMessage, { error: { code, status: 403 } }));
+    assert.match(html, /href="mailto:anton061311@gmail\.com"/);
+    assert.match(html, />anton061311@gmail\.com<\/a>/);
+    assert.match(html, /role="alert"/);
+  }
+});
+test('ordinary authentication failures do not get classified as account restrictions', () => {
+  for (const error of [{ code: 'INVALID_ACCESS_TOKEN', status: 401 }, { code: 'INVALID_CREDENTIALS' }, { status: 401 }, 'NETWORK_ERROR', null]) {
+    const html = renderToStaticMarkup(React.createElement(ErrorMessage, { error }));
+    assert.doesNotMatch(html, /mailto:/);
+  }
+});
 const filters = (patch = {}) => ({ ...search.EMPTY_SPACE_FILTERS, ...patch });
 test('empty filters are valid; zero price and trimmed keyword survive serialization', () => {
   assert.equal(search.validateSpaceSearch(filters()), null);
