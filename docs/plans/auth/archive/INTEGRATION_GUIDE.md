@@ -1,5 +1,26 @@
 # 인증 문서 묶음 반영 안내
 
+> **보관 문서 — 과거 반영 안내이며 현재 작업 지침이 아님**
+> 2026-10-15에 인증 문서 묶음을 저장소에 넣기 위해 작성된 안내다. 2026-10-18 문서 정리에서 아래 "반영 현황"대로 처리했으며, 남은 항목도 이 문서가 아니라 최신 사용자 지시·현재 코드·[인증 문서 지도](../README.md)를 기준으로 진행한다.
+> 본문의 경로는 작성 당시 `docs/` 기준 표기다. §3 표의 링크만 이 보관 위치에서 열리도록 상대 경로를 고쳤고, 나머지 본문은 원문 그대로 둔다.
+
+## 반영 현황 (2026-10-18 정리 기준)
+
+| 안내 | 상태 | 비고 |
+| --- | --- | --- |
+| §1 문서 7개 추가 | 반영 | `docs/plans/auth/`(README·roadmap·v2-plan·v3-redis-design), `docs/decisions/authentication-policy.md`, `docs/architecture/auth-v1-implementation.md`, `docs/testing/auth-security-tests.md` |
+| §2 상대 링크·코드 경로·기준 커밋 확인 | 반영 | 링크 검증. PR #302는 이후 dev에 `46526a5`로 병합됨을 각 문서에 덧붙임 |
+| §3 docs/README 문서 지도 | 반영(형태 변경) | 질문표 대신 인증 고도화 시작점을 `plans/auth/README.md`로 변경. 질문별 안내는 인증 문서 지도에 있음 |
+| §4 decisions/README 상태표 | 반영 | 상태 표현 "V1 적용 / V2·V3 방향 포함 / 세부 미결정 항목 존재" 사용 |
+| §5 기존 Redis 문서 정리 | 반영(방식 변경) | "통합·대체" 후 삭제 대신 `archive/redis-initial-plan/`에 원문 보존하고 보관 표시 추가. 현재 기준은 roadmap·v3-redis-design |
+| §5 기존 경로 안내문 | 미수행 | 저장소 안 참조는 모두 새 경로로 수정. 외부 공유 여부는 확인되지 않아 안내문을 남기지 않음 |
+| §6 공통 API 명세 보완 | 반영(2차 정리) | `api/api-spec.md` §2에 현재 코드 기준으로 반영. 회원탈퇴(`POST /auth/withdraw`)는 아직 명세에 없음 |
+| §7 ERD·아키텍처 보완 | 반영(2차 정리) | `architecture/erd.md`에 V14–V16 반영. 미래 AuthSession은 넣지 않음 |
+| §8 test-results.md 갱신 | 반영(2차 정리) | PR head `5c60fa4`의 과거 CI 기록으로 §0에 추가하고 현재 `@Disabled` 설정과 구분. 현재 HEAD 결과는 미확인으로 표시 |
+| §9 운영 보완 | 일부 반영 | SMTP는 [`operations/gmail-smtp-setup.md`](../../../operations/gmail-smtp-setup.md)를 단일 기준으로 둠(로컬·운영 Gmail SMTP, Mailpit 없음). troubleshooting 항목은 미수행 |
+
+---
+
 작성일: 2026-10-15. 이 묶음은 사용자가 제안한 docs 분류 구조에 추가할 인증 문서 7개다. 기존 프로젝트 문서 전체를 대체하지 않는다.
 
 ## 1. 포함 파일
@@ -30,11 +51,11 @@
 
 | 질문 | 문서 |
 | --- | --- |
-| 인증 고도화 작업을 처음 읽는가? | [인증 문서 지도](plans/auth/README.md) |
-| 인증번호·가입·복구 정책은? | [인증 정책](decisions/authentication-policy.md) |
-| 인증 코드 흐름과 설계 이유는? | [V1 구현 해설](architecture/auth-v1-implementation.md) |
-| 의도적으로 실패하는 11개 테스트는? | [보안 테스트](testing/auth-security-tests.md) |
-| 다음 단계에서 무엇을 구현하는가? | [로드맵](plans/auth/roadmap.md) |
+| 인증 고도화 작업을 처음 읽는가? | [인증 문서 지도](../README.md) |
+| 인증번호·가입·복구 정책은? | [인증 정책](../../../decisions/authentication-policy.md) |
+| 인증 코드 흐름과 설계 이유는? | [V1 구현 해설](../../../architecture/auth-v1-implementation.md) |
+| 의도적으로 실패하는 11개 테스트는? | [보안 테스트](../../../testing/auth-security-tests.md) |
+| 다음 단계에서 무엇을 구현하는가? | [로드맵](../roadmap.md) |
 
 ## 4. decisions/README.md의 상태표
 

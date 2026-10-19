@@ -2,6 +2,8 @@ package com.ovengers.slotkey.member.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ovengers.slotkey.global.config.SecurityConfig;
+import com.ovengers.slotkey.global.config.ClockConfig;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.global.error.GlobalExceptionHandler;
 import com.ovengers.slotkey.global.security.jwt.JwtProvider;
 import com.ovengers.slotkey.global.security.jwt.JwtUtil;
@@ -45,7 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(AdminMemberController.class)
 @ActiveProfiles("test")
-@Import({SecurityConfig.class, JwtProvider.class, MemberAuthorizationService.class, GlobalExceptionHandler.class})
+@Import({SecurityConfig.class, ClockConfig.class, JwtProvider.class, MemberAuthorizationService.class, GlobalExceptionHandler.class})
 @DisplayName("관리자 회원 컨트롤러 웹 계층 테스트")
 class AdminMemberControllerTest {
 
@@ -58,6 +60,15 @@ class AdminMemberControllerTest {
     @MockBean
     private AdminMemberService adminMemberService;
 
+    @MockBean
+    private AuthSessionService authSessionService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void allowTestSession() {
+        org.mockito.BDDMockito.given(authSessionService.validate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong()))
+                .willReturn(AuthSessionService.ValidationResult.VALID);
+    }
+
     @Value("${custom.jwt.secret-key}")
     private String secretKey;
 
@@ -68,7 +79,8 @@ class AdminMemberControllerTest {
                 Map.of(
                         "id", id,
                         "email", email,
-                        "role", role.name()
+                        "role", role.name(),
+                        "sid", "test-session"
                 )
         );
     }

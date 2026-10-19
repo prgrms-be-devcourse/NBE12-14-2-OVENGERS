@@ -9,6 +9,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ovengers.slotkey.auth.dto.internal.LoginResult;
+import com.ovengers.slotkey.auth.dto.internal.RefreshResult;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
 import com.ovengers.slotkey.auth.entity.LocalCredential;
@@ -52,24 +53,39 @@ public class AuthService {
             throw new BusinessException(ErrorCode.ACCOUNT_INACTIVE);
         }
         // 액세스 토큰 생성
-        String accessToken = jwtProvider.genAccessToken(member);
-
         // 리프레시 토큰 생성 및 DB 저장
-        String refreshToken = refreshTokenService.issueRefreshToken(member);
+        var issuedRefreshToken = refreshTokenService.issueRefreshToken(member);
+        String accessToken = jwtProvider.genAccessToken(
+                member,
+                issuedRefreshToken.sessionId(),
+                issuedRefreshToken.sessionExpiresAt()
+        );
 
         // 두 토큰을 컨트롤러에 전달
-        return new LoginResult(accessToken, refreshToken);
+        return new LoginResult(
+                accessToken,
+                issuedRefreshToken.rawToken(),
+                issuedRefreshToken.sessionExpiresAt()
+        );
     }
 
     //리프레시 토큰을 이용해 엑세스 토큰을 갱신하기
-    @Transactional
-    public String refresh(String rawRefreshToken) {
-        // 리프레시가 유효한지 확인하고 회원을 받음
-        Member member = refreshTokenService
-                .validateRefreshToken(rawRefreshToken);
+    public RefreshResult refresh(String rawRefreshToken) {
+        RefreshTokenService.RotationResult rotation = refreshTokenService.rotate(rawRefreshToken);
+        if (rotation.reused()) {
+            throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
+        }
 
-        // 검증된 회원의 새 액세스 토큰 발급
-        return jwtProvider.genAccessToken(member);
+        String accessToken = jwtProvider.genAccessToken(
+                rotation.member(),
+                rotation.session().getId(),
+                rotation.session().getExpiresAt()
+        );
+        return new RefreshResult(
+                accessToken,
+                rotation.rawToken(),
+                rotation.session().getExpiresAt()
+        );
     }
     
     //로그아웃 메서드, 리프레시 토큰에 값을 넣어 로그아웃

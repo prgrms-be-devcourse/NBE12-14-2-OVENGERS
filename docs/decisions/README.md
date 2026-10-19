@@ -6,6 +6,7 @@
 | 파일 | 유형 | 한 줄 요약 | 상태 |
 |---|---|---|---|
 | [`access-key-policy.md`](access-key-policy.md) | 정책 | 출입 토큰은 예약당 활성 1개로 DB 제약으로 수렴시키고, 최초 체크인은 `[start, start+15분]`으로 제한한다. | 채택 |
+| [`authentication-policy.md`](authentication-policy.md) | 정책 | 이메일 인증번호·grant 기반 가입/복구, 단계별 차단·정지, 로그인 토큰 생명주기의 V1 적용 정책과 V2·V3 방향을 정리한다. 예약 소유권 등 인가는 `authorization-policy.md`가 담당한다. | V1 적용 / V2·V3 방향 포함 / 세부 미결정 항목 존재 |
 | [`authorization-policy.md`](authorization-policy.md) | 정책 | 인증·인가를 인증·역할·소유권·상태·감사 다섯 축으로 나누고, 무상태 JWT의 즉시 차단 한계는 별도 과제로 분리한다. | 채택 |
 | [`member-withdrawal-policy.md`](member-withdrawal-policy.md) | 정책 | 본인 회원탈퇴의 진행 예약·잔여 크레딧·출입 권한 처리와 재가입 기준을 확정한다. | 채택 |
 | [`reservation-concurrency.md`](reservation-concurrency.md) | 기술 선택 | `Space → Reservation` 잠금 순서와 조건부 UPDATE로 결제·연장·취소 경합을 막는다. | 채택 |
@@ -21,6 +22,7 @@
 | 파일 | 근거 |
 |---|---|
 | `access-key-policy.md` | 상태 표기 없음. 2026-09-15 갱신으로 `core-domain-decisions.md` §8 확정 내용을 반영했고, "선택 및 근거"가 확정 서술이며 검증 방법이 통합 테스트로 특정됨. |
+| `authentication-policy.md` | 서두 "문서 성격: V1 적용 정책 + V2·V3 확정 방향 + 미결정 정책의 목록"(구현 기준 PR #302, dev 병합 `46526a5`). 미결정 항목(관리자 자동 잠금 예외, RT 재사용 폐기 범위, 요청 제한 수치 등)이 본문에 명시됨. |
 | `authorization-policy.md` | 상태 표기 없음. 구현된 다섯 축을 표로 확정하고 실존 테스트(`AuthControllerTest#t15`)를 근거로 든다. |
 | `member-withdrawal-policy.md` | 서두에 "상태: **정책 확정**" 명기 (2026-09-29). |
 | `reservation-concurrency.md` | "2026-09-24 최신화 — 현재 백엔드 소스에 전면 구현되어 있다" + 단위·다중 스레드 통합 테스트 클래스명 명시. |

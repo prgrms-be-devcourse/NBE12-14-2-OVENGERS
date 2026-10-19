@@ -1,6 +1,7 @@
 package com.ovengers.slotkey.notification;
 
-import com.ovengers.slotkey.global.security.jwt.JwtUtil;
+import com.ovengers.slotkey.global.security.jwt.JwtProvider;
+import com.ovengers.slotkey.member.repository.MemberRepository;
 import com.ovengers.slotkey.support.ReservationIntegrationTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,7 +11,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -19,7 +19,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class NotificationReadIntegrationTest extends ReservationIntegrationTestSupport {
     @Autowired private MockMvc mvc;
-    @Value("${custom.jwt.secret-key}") private String secretKey;
+    @Autowired private JwtProvider jwtProvider;
+    @Autowired private MemberRepository memberRepository;
 
     @Test
     void readsOnlyMyUnreadAndKeepsExistingReadTime() throws Exception {
@@ -32,8 +33,8 @@ class NotificationReadIntegrationTest extends ReservationIntegrationTestSupport 
         insert(other, "other", null);
         Long upToId = jdbcTemplate.queryForObject("SELECT MAX(id) FROM notification", Long.class);
         insert(me, "newer", null);
-        String token = JwtUtil.createToken(secretKey, 300_000L,
-                Map.of("id", me, "email", "read@slotkey.test", "role", "USER"));
+        String token = issueSessionBoundAccessToken(
+                memberRepository.findById(me).orElseThrow(), jwtProvider);
 
         mvc.perform(post("/api/v1/notifications/read-all").param("upToId", upToId.toString()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.updatedCount").value(2));

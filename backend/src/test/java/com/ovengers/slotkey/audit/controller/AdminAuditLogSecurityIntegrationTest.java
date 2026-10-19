@@ -77,8 +77,8 @@ class AdminAuditLogSecurityIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("이미 발급된 ADMIN Access Token은 회원 DB 상태가 비활성(SUSPENDED, WITHDRAWN)으로 변경되어도 만료 전까지 관리자 감사 로그를 정상 조회할 수 있다 (#208 무조회 계약)")
-    void getAuditLogs_inactiveAdmin_validJwt_returns200() throws Exception {
+    @DisplayName("ADMIN 정지 또는 탈퇴 후에는 기존 Access Token으로 감사 로그를 조회할 수 없다")
+    void getAuditLogs_inactiveAdmin_existingToken_returns401() throws Exception {
         for (MemberStatus status : new MemberStatus[]{MemberStatus.SUSPENDED, MemberStatus.WITHDRAWN}) {
             // 1. ACTIVE 상태의 ADMIN 생성 및 저장
             Member admin = saveMember(MemberRole.ADMIN, MemberStatus.ACTIVE);
@@ -91,12 +91,12 @@ class AdminAuditLogSecurityIntegrationTest extends IntegrationTestSupport {
             memberRepository.saveAndFlush(admin);
             entityManager.clear();
 
-            // 4. 상태 변경 전 발급받은 동일한 토큰으로 조회 시 200 OK 검증
+            // 4. 기존 세션에 연결된 토큰도 현재 회원 상태가 비활성이면 거부한다.
             mockMvc.perform(get(ADMIN_AUDIT_LOGS_PATH)
                             .header(HttpHeaders.AUTHORIZATION, token)
                             .contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.status").value("SUCCESS"));
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
         }
     }
 
@@ -148,6 +148,6 @@ class AdminAuditLogSecurityIntegrationTest extends IntegrationTestSupport {
     }
 
     private String bearerToken(Member member) {
-        return "Bearer " + jwtProvider.genAccessToken(member);
+        return "Bearer " + issueSessionBoundAccessToken(member, jwtProvider);
     }
 }

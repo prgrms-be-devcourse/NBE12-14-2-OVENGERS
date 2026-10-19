@@ -5,12 +5,14 @@ import com.ovengers.slotkey.auth.dto.request.SignupRequest;
 import com.ovengers.slotkey.auth.dto.request.PasswordResetRequest;
 import com.ovengers.slotkey.auth.dto.response.LoginResponse;
 import com.ovengers.slotkey.auth.dto.response.SignupResponse;
+import com.ovengers.slotkey.auth.ratelimit.LoginRateLimitService;
 import com.ovengers.slotkey.auth.service.AuthService;
+import com.ovengers.slotkey.auth.service.PasswordResetService;
 import com.ovengers.slotkey.member.dto.request.MemberWithdrawalRequest;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.service.MemberService;
 import com.ovengers.slotkey.member.service.MemberWithdrawalService;
-import com.ovengers.slotkey.auth.service.PasswordResetService;
+import com.ovengers.slotkey.global.error.ErrorCode;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,9 @@ import org.springframework.web.bind.annotation.*;
 import com.ovengers.slotkey.auth.dto.internal.LoginResult;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import com.ovengers.slotkey.global.common.response.ApiResponse;
 import org.springframework.beans.factory.annotation.Value;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,6 +45,8 @@ public class AuthController {
     private final AuthService authService;
     private final MemberWithdrawalService memberWithdrawalService;
     private final PasswordResetService passwordResetService;
+    private final LoginRateLimitService loginRateLimitService;
+    private final Clock clock;
 
     @Value("${app.auth.cookie.secure}")
     private boolean cookieSecure;
@@ -159,6 +166,14 @@ public class AuthController {
     public ResponseEntity<ApiResponse<LoginResponse>> login(
             @RequestBody @Valid LoginRequest request
     ){
+        var attempt = loginRateLimitService.acquire(request.email());
+        if (!attempt.allowed()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header(HttpHeaders.RETRY_AFTER,
+                            Long.toString(attempt.retryAfterSeconds()))
+                    .body(ApiResponse.fail(ErrorCode.LOGIN_RATE_LIMITED));
+        }
+
         // 1. 로그인 처리 후 액세스·리프레시 토큰을 받음
         LoginResult result = authService.login(
                 request.email(),
@@ -166,14 +181,9 @@ public class AuthController {
         );
 
         // 2. 리프레시 토큰을 담은 쿠키 구성
-        ResponseCookie refreshCookie = ResponseCookie
-                .from("refreshToken", result.refreshToken())
-                .httpOnly(true)
-                .secure(cookieSecure)
-                .sameSite(cookieSameSite)
-                .path("/api/v1/auth")
-                .maxAge(60L * 60 * 24) // 1일, 초 단위
-                .build();
+        ResponseCookie refreshCookie = refreshCookie(
+                result.refreshToken(), result.sessionExpiresAt()
+        );
 
         // 3. 리프레시는 쿠키로, 액세스는 응답 본문으로 전달
         return ResponseEntity.ok()
@@ -229,12 +239,31 @@ public class AuthController {
             @CookieValue(name = "refreshToken", required = false)
             String rawRefreshToken
     ) {
-        String accessToken = authService.refresh(rawRefreshToken);
+        var result = authService.refresh(rawRefreshToken);
+        ResponseCookie refreshCookie = refreshCookie(
+                result.refreshToken(), result.sessionExpiresAt()
+        );
 
         return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
                 .body(ApiResponse.success(
-                        new LoginResponse(accessToken)
+                        new LoginResponse(result.accessToken())
                 ));
+    }
+
+    private ResponseCookie refreshCookie(String rawToken, LocalDateTime expiresAt) {
+        long remainingSeconds = Math.max(
+                0,
+                Duration.between(LocalDateTime.now(clock), expiresAt).getSeconds()
+        );
+        return ResponseCookie
+                .from("refreshToken", rawToken)
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite(cookieSameSite)
+                .path("/api/v1/auth")
+                .maxAge(remainingSeconds)
+                .build();
     }
 
     // 로그아웃 메서드

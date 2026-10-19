@@ -1,3 +1,4 @@
+
 package com.ovengers.slotkey.member.service;
 
 import com.ovengers.slotkey.audit.entity.AuditAction;
@@ -7,6 +8,7 @@ import com.ovengers.slotkey.audit.repository.AuditLogRepository;
 import com.ovengers.slotkey.audit.service.AuditLogService;
 import com.ovengers.slotkey.auth.service.VerificationGuardService;
 import com.ovengers.slotkey.credit.repository.CreditTransactionRepository;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.credit.service.CreditGrantService;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
@@ -46,6 +48,7 @@ public class AdminMemberService {
     private final ReservationRepository reservationRepository;
     private final CreditTransactionRepository creditTransactionRepository;
     private final SpaceRepository spaceRepository;
+    private final AuthSessionService authSessionService;
 
     @Transactional(readOnly = true)
     public Page<AdminMemberResponse> getMembers(MemberStatus status, String keyword, Pageable pageable) {
@@ -264,6 +267,10 @@ public class AdminMemberService {
         member.updateStatus(targetStatus);
 
         LocalDateTime changedAt = LocalDateTime.now(clock);
+
+        if (targetStatus == MemberStatus.SUSPENDED) {
+            authSessionService.revokeAllForMember(memberId, changedAt);
+        }
 
         // 감사 로그 기록
         auditLogService.log(

@@ -2,6 +2,8 @@ package com.ovengers.slotkey.waitlist.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ovengers.slotkey.global.config.SecurityConfig;
+import com.ovengers.slotkey.global.config.ClockConfig;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.global.config.WebMvcConfig;
 import com.ovengers.slotkey.global.error.BusinessException;
 import com.ovengers.slotkey.global.error.ErrorCode;
@@ -15,6 +17,7 @@ import com.ovengers.slotkey.waitlist.dto.response.WaitlistEntryResponse;
 import com.ovengers.slotkey.waitlist.entity.WaitlistStatus;
 import com.ovengers.slotkey.waitlist.service.WaitlistService;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,7 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(WaitlistController.class)
 @ActiveProfiles("test")
-@Import({SecurityConfig.class, JwtProvider.class, WebMvcConfig.class, CurrentMemberArgumentResolver.class,
+@Import({SecurityConfig.class, ClockConfig.class, JwtProvider.class, WebMvcConfig.class, CurrentMemberArgumentResolver.class,
         GlobalExceptionHandler.class})
 @DisplayName("대기 신청 컨트롤러 웹 계층 테스트")
 class WaitlistControllerTest {
@@ -64,12 +67,21 @@ class WaitlistControllerTest {
     @MockBean
     private WaitlistService waitlistService;
 
+    @MockBean
+    private AuthSessionService authSessionService;
+
+    @BeforeEach
+    void allowTestSession() {
+        org.mockito.BDDMockito.given(authSessionService.validate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong()))
+                .willReturn(AuthSessionService.ValidationResult.VALID);
+    }
+
     @Value("${custom.jwt.secret-key}")
     private String secretKey;
 
     private String userToken() {
         return JwtUtil.createToken(secretKey, 300_000L,
-                Map.of("id", MEMBER_ID, "email", "user@slotkey.test", "role", MemberRole.USER.name()));
+                Map.of("id", MEMBER_ID, "email", "user@slotkey.test", "role", MemberRole.USER.name(), "sid", "test-session"));
     }
 
     private WaitlistEntryResponse response(Long id, long position) {

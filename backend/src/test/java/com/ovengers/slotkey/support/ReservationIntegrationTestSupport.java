@@ -80,6 +80,9 @@ public abstract class ReservationIntegrationTestSupport extends IntegrationTestS
         jdbcTemplate.update("DELETE FROM notification WHERE member_id IN (" + members + ")");
         jdbcTemplate.update("DELETE FROM audit_logs WHERE actor_member_id IN (" + members + ")");
         jdbcTemplate.update("DELETE FROM spaces WHERE id IN (" + spaces + ")");
+        jdbcTemplate.update("DELETE FROM refresh_token WHERE auth_session_id IN ("
+                + "SELECT id FROM auth_session WHERE member_id IN (" + members + "))");
+        jdbcTemplate.update("DELETE FROM auth_session WHERE member_id IN (" + members + ")");
         jdbcTemplate.update("DELETE FROM member WHERE id IN (" + members + ")");
     }
 

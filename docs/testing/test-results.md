@@ -4,9 +4,64 @@
 >
 > **2026-10-18 안내 (`16b9ead`)**: 아래 2026-09-24/09-22 수치와 제약·“PG 미도입/문의 테스트 부재” 설명은 당시 실행의 스냅샷이다. 이후 PG 충전·관리자 문의 HTTP 테스트 등이 추가됐으며 현재 소스 대응표는 [Kotlin 전환 테스트 기준선](../plans/kotlin-migration/01-test-baseline.md)을 참조한다. 이번 문서 정비에서는 빌드·테스트를 재실행하지 않았고 새 통과 수를 추가하지 않았다. 현재 전체 통과 여부는 새 날짜/커밋의 실행 기록 확보 전까지 검증 보류다.
 
+> **현재 HEAD 실행 결과: 미확인** — 2026-10-18 기준 dev HEAD(`16b9ead`)의 전체 테스트 실행 결과는 이 문서에 기록되어 있지 않다. 아래 수치는 모두 기록 시점의 결과이며, 이 문서를 갱신하면서 테스트를 다시 실행하지 않았다.
+
 ---
 
-## 1. 최신 로컬 전체 테스트 실행 결과 (2026-09-24)
+## 0-1. V2 1번 이슈 실행 기록 (2026-10-18, 로컬)
+
+> 구현은 이후 브랜치 `auth/improvement/v2`의 커밋 `e671c475be90c90804712a1866e708bc7d145432`로 고정됐다(로컬 커밋 완료, 미Push·미병합·미배포). 아래는 커밋 전 작업 트리(기준 `16b9ead` + V2 1번 변경)에서 Codex가 실행한 결과를 리뷰어가 JUnit XML로 다시 집계한 것이다. dev HEAD의 결과가 아니며, 이 문서 갱신 중에 재실행하지 않았다. 원시 결과는 임시 디렉터리에 있어 영구 보관되지 않는다.
+
+| 실행 | 시각 (KST) | 전체 | 통과 | 실패 | 오류 | 건너뜀 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 수정 전 첫 전체 실행 | 15:27:54~15:34:11 | 995 | 936 | 49 | 0 | 10 |
+| 최종 전체 실행 | 15:37:25~15:43:38 | 995 | 985 | 0 | 0 | 10 |
+| UTC 선택 실행 (5개 클래스, 테스트 JVM `user.timezone=UTC`) | 16:01:12~16:01:36 | 68 | 68 | 0 | 0 | 0 |
+| 마지막 보완 이후 `AuthControllerTest` 선택 실행 | 16:10:16 | 25 | 25 | 0 | 0 | 0 |
+| **2번 이슈** 관련 6개 클래스 선택 실행 (미커밋 작업 트리) | 16:44:20~16:44:56 | 37 | 33 | 0 | 0 | 4 |
+| **2번 이슈** 전체 실행 (126개 스위트, 미커밋 작업 트리) | 16:45:20~16:51:52 | 999 | 995 | 0 | 0 | 4 |
+| **3번 이슈** 관련 5개 클래스 선택 실행 (미커밋 작업 트리) | 17:25:26~17:26:13 | 47 | 46 | 0 | 0 | 1 |
+| **3번 이슈** 마이그레이션 테스트 수정 후 `AuthSessionMigrationIntegrationTest` (미커밋 작업 트리) | 17:36:53 | 2 | 2 | 0 | 0 | 0 |
+| **4번 이슈** 선택 실행 (`LoginRateLimitIntegrationTest` 7, `AuthSessionMigrationIntegrationTest` 2, `AuthControllerTest` 3개 메서드, `V2SecurityRedTest` 1개 메서드; 미커밋 작업 트리) | 17:55:25~17:56:02 | 13 | 13 | 0 | 0 | 0 |
+| **4번 이슈** 영향 클래스 전체 실행 (`AuthControllerTest` 25, `V2SecurityRedTest` 15, `PasswordResetControllerTest` 1; 미커밋 작업 트리) | 18:04:04~18:04:28 | 41 | 41 | 0 | 0 | 0 |
+
+- 집계 기준: XML `tests`에 건너뜀이 포함된다(통과 = tests − failures − errors − skipped).
+- 첫 실행의 실패 49개: `AdminStatsControllerIntegrationTest` 35, `ReservationSearchSecurityIntegrationTest` 9, `StatsControllerIntegrationTest` 5.
+- 건너뜀 10개는 모두 `V2SecurityRedTest`의 `@Disabled`(V2 2~4번 이슈 범위). 상세는 [인증 보안 테스트](auth-security-tests.md).
+- 그 전에 보고된 987/871/116/10 실행은 아티팩트가 없어 확인하지 못했다.
+- UTC 선택 실행은 `JwtProviderTest`가 출력한 `AUTH_TEST_JVM_ZONE_ID=UTC`로 테스트 JVM 시간대를 확인했다. 전체 실행 이후 테스트 4개의 이름·주석·시간대 기록이 바뀌었고, 그중 `AdminSpaceSecurityIntegrationTest`(이름만 변경)는 바뀐 뒤 다시 실행되지 않았다.
+- 995개 전체 실행과 UTC 68개 선택 실행은 마지막 예외 처리 보완(`TransactionException`) **이전** 코드 기준이다. 보완 이후에는 `AuthControllerTest` 25개 선택 실행만 통과했다(2026-10-18 16:10 KST, 커밋 직전 작업 트리). 보완 이후 전체 실행은 없다.
+- 2번 이슈 두 실행은 1번 커밋 위의 미커밋 2번 변경 기준이며, 마지막 소스 수정(16:43:39) 이후 실행이다(파일 시각 기준). 남은 `@Disabled` 4개: RT 재사용 불가·RT Rotation 후 계속 갱신·동일 RT 동시 사용 1회 성공(3번 이슈), 반복 로그인 실패 429(4번 이슈).
+- 3번 이슈 실행은 마지막 소스 수정(17:24:32) 이후다. 남은 `@Disabled` 1개는 반복 로그인 실패 429(4번 이슈). `AuthSessionMigrationIntegrationTest`의 Flyway 버전 단언 차단 사항은 수정 후 단독 실행(2개 통과)으로 해결됐다. 두 3번 실행은 별도 선택 실행이며 합쳐서 전체 회귀 통과로 보지 않는다. `V2SecurityRedTest`는 이후 표시 이름·주석만 바뀌고 다시 실행되지 않았다. **3번 변경 이후 전체 테스트는 실행하지 않았다.**
+- V2 4번 이슈는 로컬 구현 커밋 `ee39f91`(미Push·미병합·미배포)으로 고정됐다. 첫 실행은 메서드 단위 선택 실행이었고, 이후 영향 클래스 3개를 클래스 전체로 실행해 41개 통과했다(마지막 소스 수정 17:55:03 이후). 두 실행은 별도 기록이다. `V2SecurityRedTest` 15개 전체 통과는 이 클래스의 결과이며, **4번 변경 뒤 전체 백엔드 테스트는 실행하지 않았다.** 테스트 소스에 남은 `@Disabled`는 없다.
+- 이 결과는 로컬 테스트 근거이며 실제 배포 환경 검증과는 별개다.
+
+---
+
+## 0. V1 인증 고도화 PR 실행 기록 (2026-10-15, CI)
+
+> 출처: [인증 보안 테스트](auth-security-tests.md) §2, [V1 인증 문서 지도](../plans/auth/README.md) §5. 테스트별 의미와 V2 통과 기준은 `auth-security-tests.md`를 단일 기준으로 둔다.
+
+| 항목 | 기록 |
+| --- | --- |
+| 대상 | PR #302 head, 브랜치 `auth/v1-frontend-integration`, 커밋 `5c60fa444dfc427016954fdacc44d3dfd293c004` |
+| 실행 | GitHub Actions 백엔드 CI — [실행 #38684148319](https://github.com/prgrms-be-devcourse/NBE12-14-2-OVENGERS/actions/runs/38684148319) |
+| 결과 | 전체 694 / 통과 682 / **실패 11** / 건너뜀 1 |
+| 실패 내용 | 11개 모두 `com.ovengers.slotkey.auth.controller.V2SecurityRedTest`의 의도적 보안 단언 실패(로그아웃·재설정·정지·탈퇴 후 기존 토큰 거부, RT 재사용·회전·동시 사용, 반복 로그인 실패 429). 일반 회귀 실패는 기록되지 않음 |
+| 함께 기록된 V1 회귀 | `PasswordResetIntegrationTest` 5개 통과, `EmailSignupIntegrationTest`·`VerificationMemberStatusIntegrationTest`는 실패 목록에 없음 |
+
+**당시 실행과 현재 설정의 구분**
+
+| 구분 | 커밋 | `V2SecurityRedTest` 11개 |
+| --- | --- | --- |
+| 위 CI 실행 | PR head `5c60fa4` | `@Disabled` 없음 → 11개 실패 |
+| 현재 소스 | dev 병합본 `46526a5` 이후 (HEAD `16b9ead`까지 확인) | 11개 모두 `@Disabled("V2 구현 전까지 CI에서 비활성화")` → 실행 시 건너뜀으로 집계 |
+
+병합 후의 전체 실행 수치는 기능별 결정 문서에 기록돼 있다(예: [outbox-kafka.md](../decisions/outbox-kafka.md)의 `./gradlew cleanTest test` 814 tests, 실패 0, 건너뜀 11 — 11건은 `V2SecurityRedTest`의 `@Disabled`). 이 기록들은 각 기능 작업 시점의 결과이며 현재 HEAD 결과가 아니다. 따라서 694/682/11/1을 현재 결과로 쓰지 않는다.
+
+---
+
+## 1. 로컬 전체 테스트 실행 결과 (2026-09-24 기록)
 
 - **실행 일시**: 2026-09-24 12:16 KST
 - **실행 명령**:
@@ -33,7 +88,7 @@
 | **access** | 5 | 33 | 출입 토큰 발급/검증/폐기, 시간 경계(시작 15분 전/후), 소유권 인가, 동시 발급 경합 |
 | **audit** | 6 | 25 | 감사 로그 단위 기록(`AuditLogServiceTest`), `MANDATORY` 트랜잭션 전파(`AuditLogServiceTransactionTest`), 관리자 감사 로그 페이징 조회 API, 보안 인가 체인, 필터 쿼리 (※ 회원 상태·크레딧 동반 커밋 및 감사 실패 시 비즈니스 롤백은 `member` 패키지의 `AdminMemberServiceIntegrationTest`에서 검증, 비즈니스 예외 시 선행 감사 롤백은 미작성) |
 | **credit** | 3 | 22 | 관리자 크레딧 지급, 크레딧 거래 단위 생성(`balanceAfter` 검증), 회원 상태 변경과 크레딧 증가 동시 경합 시 최신 잔액 보존 (동시 차감 경합 및 SUM 무결성 DB 검증은 미구현) |
-| **auth** | 2 | 19 | 로그인/로그아웃, Refresh 재발급, 정지 계정 토큰 만료 전 API 허용 및 재발급 차단 |
+| **auth** | 2 | 19 | 로그인/로그아웃, Refresh 재발급, 정지 계정 토큰 만료 전 API 허용 및 재발급 차단 (2026-09-24 시점. V1 이메일 인증 테스트는 이후 PR #302에서 추가 — §0) |
 | **member** | 2 | 16 | 관리자 회원 목록/상세 조회, 상태 변경(ACTIVE/SUSPENDED), 자기 자신 크레딧 지급 거절(`SELF_GRANT_NOT_ALLOWED`), 인가 필터, 회원 변경·크레딧 지급과 감사 로그 동반 커밋 및 감사 저장 실패(SpyBean 예외 주입) 시 비즈니스 롤백 실 DB 검증(`AdminMemberServiceIntegrationTest`) |
 | **global** | 3 | 3 | CORS 설정, JPA Auditing, JwtProvider 토큰 생성 및 파싱 |
 | **합계** | **57** | **354** | **실패 0 / 에러 0 / 스킵 0** |

@@ -1,6 +1,7 @@
 package com.ovengers.slotkey.space.controller;
 
 import com.ovengers.slotkey.global.security.jwt.JwtProvider;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.member.entity.Member;
 import com.ovengers.slotkey.member.entity.MemberRole;
 import com.ovengers.slotkey.member.entity.MemberStatus;
@@ -48,6 +49,9 @@ class AdminSpaceImageMultipartLimitIntegrationTest {
     @Autowired
     private JwtProvider jwtProvider;
 
+    @Autowired
+    private AuthSessionService authSessionService;
+
     @Test
     @DisplayName("5MB 초과 multipart 요청 시 실제 서블릿 multipart 파서가 MaxUploadSizeExceededException을 발생시키고 413 IMAGE_SIZE_EXCEEDED를 반환한다")
     void uploadSpaceImage_exceedsServletMultipartLimit_returns413() {
@@ -70,7 +74,9 @@ class AdminSpaceImageMultipartLimitIntegrationTest {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-        headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + jwtProvider.genAccessToken(admin));
+        var session = authSessionService.create(admin);
+        headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + jwtProvider.genAccessToken(
+                admin, session.getId(), session.getExpiresAt()));
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("file", resource);

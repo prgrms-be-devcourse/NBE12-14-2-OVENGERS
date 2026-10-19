@@ -115,8 +115,8 @@ class AdminSpaceSecurityIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("발급 후 정지 및 탈퇴한 ADMIN의 기존 토큰은 공간 등록 권한을 유지한다")
-    void createSpace_statusChangedAfterIssue_keepsTokenAuthority() throws Exception {
+    @DisplayName("현재 회원 상태가 정지 또는 탈퇴인 ADMIN은 기존 AT로 공간을 등록할 수 없다")
+    void createSpace_statusChangedAfterIssue_rejectsInactiveMember() throws Exception {
         for (MemberStatus memberStatus : new MemberStatus[]{
                 MemberStatus.SUSPENDED,
                 MemberStatus.WITHDRAWN
@@ -136,16 +136,16 @@ class AdminSpaceSecurityIntegrationTest extends IntegrationTestSupport {
                             .header(HttpHeaders.AUTHORIZATION, token)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(validCreateRequest()))
-                    .andExpect(status().isCreated());
+                    .andExpect(status().isUnauthorized());
 
-            assertThat(spaceRepository.count()).isEqualTo(spacesBefore + 1);
-            assertThat(auditLogRepository.count()).isEqualTo(auditsBefore + 1);
+            assertThat(spaceRepository.count()).isEqualTo(spacesBefore);
+            assertThat(auditLogRepository.count()).isEqualTo(auditsBefore);
         }
     }
 
     @Test
-    @DisplayName("발급 후 정지 및 탈퇴한 ADMIN의 기존 토큰은 공간 상세 조회 권한을 유지한다")
-    void getSpaceDetail_statusChangedAfterIssue_keepsTokenAuthority() throws Exception {
+    @DisplayName("현재 회원 상태가 정지 또는 탈퇴인 ADMIN은 기존 AT로 공간 상세를 조회할 수 없다")
+    void getSpaceDetail_statusChangedAfterIssue_rejectsInactiveMember() throws Exception {
         Space space = saveSpace(SpaceStatus.ACTIVE);
 
         for (MemberStatus memberStatus : new MemberStatus[]{
@@ -160,7 +160,7 @@ class AdminSpaceSecurityIntegrationTest extends IntegrationTestSupport {
 
             mockMvc.perform(get(ADMIN_SPACES_PATH + "/{spaceId}", space.getId())
                             .header(HttpHeaders.AUTHORIZATION, token))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isUnauthorized());
         }
     }
 
@@ -311,7 +311,7 @@ class AdminSpaceSecurityIntegrationTest extends IntegrationTestSupport {
     }
 
     private String bearerToken(Member member) {
-        return "Bearer " + jwtProvider.genAccessToken(member);
+        return "Bearer " + issueSessionBoundAccessToken(member, jwtProvider);
     }
 
     private String validCreateRequest() {

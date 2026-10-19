@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.HexFormat;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -43,6 +44,9 @@ public class RefreshTokenServiceTest {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private Clock clock;
+
     @Test
     @DisplayName("리프레시 토큰의 DB 만료 시각은 발급 시점부터 약 24시간이다")
     void t1() throws Exception {
@@ -55,12 +59,12 @@ public class RefreshTokenServiceTest {
         );
 
         // 2. 발급 직전과 직후의 시각 기록
-        LocalDateTime beforeIssue = LocalDateTime.now();
+        LocalDateTime beforeIssue = LocalDateTime.now(clock);
 
-        String rawToken =
-                refreshTokenService.issueRefreshToken(member);
+        var issued = refreshTokenService.issueRefreshToken(member);
+        String rawToken = issued.rawToken();
 
-        LocalDateTime afterIssue = LocalDateTime.now();
+        LocalDateTime afterIssue = LocalDateTime.now(clock);
 
         assertThat(rawToken).isNotBlank();
 
@@ -84,5 +88,6 @@ public class RefreshTokenServiceTest {
                 beforeIssue.plusHours(24).minusSeconds(1),
                 afterIssue.plusHours(24).plusSeconds(1)
         );
+        assertThat(savedToken.getAuthSession().getId()).isEqualTo(issued.sessionId());
     }
 }

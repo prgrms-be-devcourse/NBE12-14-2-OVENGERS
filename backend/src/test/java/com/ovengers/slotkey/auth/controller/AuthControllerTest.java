@@ -37,13 +37,19 @@ import jakarta.servlet.http.Cookie;
 import org.springframework.test.web.servlet.MvcResult;
 import com.ovengers.slotkey.global.security.jwt.JwtUtil;
 import jakarta.persistence.EntityManager;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.transaction.annotation.Propagation;
 
 import com.ovengers.slotkey.auth.entity.LocalCredential;
 import com.ovengers.slotkey.auth.repository.LocalCredentialRepository;
+import com.ovengers.slotkey.auth.repository.AuthSessionRepository;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.*;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -79,6 +85,10 @@ public class AuthControllerTest {
     private VerificationMailSender mailSender;
     @Autowired
     private EntityManager entityManager;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @SpyBean
+    private AuthSessionRepository authSessionRepository;
     @Test
     @DisplayName("회원가입 성공 시 일반 회원으로 저장하고 비밀번호를 해시한다")
     void t1() throws Exception {
@@ -231,6 +241,8 @@ public class AuthControllerTest {
 
         String accessToken = extractAccessToken(result);
         assertThat(accessToken).isNotBlank();
+        assertThat(JwtUtil.payloadOrNull(accessToken, secretKey))
+                .containsKey("sid");
 
         Cookie refreshCookie = result.getResponse()
                 .getCookie("refreshToken");
@@ -239,13 +251,13 @@ public class AuthControllerTest {
         assertThat(refreshCookie.getValue()).isNotBlank();
         assertThat(refreshCookie.isHttpOnly()).isTrue();
         assertThat(refreshCookie.getPath()).isEqualTo("/api/v1/auth");
-        assertThat(refreshCookie.getMaxAge()).isEqualTo(86_400);
+        assertThat(refreshCookie.getMaxAge()).isBetween(86_399, 86_400);
     }
 
     @Test
     @DisplayName("비밀번호가 틀리면 로그인을 거절하고 쿠키를 발급하지 않는다")
     void t5() throws Exception {
-        String email = "login-failure@example.com";
+        String email = "login-failure-" + java.util.UUID.randomUUID() + "@example.com";
 
         memberRepository.save(
                 new Member(
@@ -416,6 +428,106 @@ public class AuthControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
     }
+
+    @Test
+    @DisplayName("V1 세션 정보가 없는 기존 Access Token은 보호 API에서 거부한다")
+    void legacyAccessTokenWithoutSessionIsRejected() throws Exception {
+        String email = "legacy-access@example.com";
+        loginForTest(email);
+        Member member = memberRepository.findByEmail(email).orElseThrow();
+        String legacyToken = JwtUtil.createToken(
+                secretKey,
+                300_000L,
+                Map.of(
+                        "id", member.getId(),
+                        "email", member.getEmail(),
+                        "role", member.getRole().name()
+                )
+        );
+
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + legacyToken))
+                .andExpect(status().isUnauthorized());
+    }
+    @Test
+    @DisplayName("JWT 회원 ID와 세션 소유 회원이 다르면 보호 API를 거부한다")
+    void sessionOwnedByAnotherMemberIsRejected() throws Exception {
+        MvcResult loginResult = loginForTest("session-owner@example.com");
+        String accessToken = extractAccessToken(loginResult);
+        Map<String, Object> claims = JwtUtil.payloadOrNull(accessToken, secretKey);
+        String sessionId = (String) claims.get("sid");
+        Long otherMemberId = ((Number) claims.get("id")).longValue() + 100_000L;
+        String mismatchedToken = JwtUtil.createToken(secretKey, 300_000L, Map.of(
+                "id", otherMemberId, "email", "other-session-owner@example.com",
+                "role", "USER", "sid", sessionId
+        ));
+
+        mvc.perform(get("/api/v1/members/me").header("Authorization", "Bearer " + mismatchedToken))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 세션 ID를 가진 Access Token은 거부한다")
+    void unknownSessionIsRejected() throws Exception {
+        String email = "unknown-session@example.com";
+        loginForTest(email);
+        Member member = memberRepository.findByEmail(email).orElseThrow();
+        String token = JwtUtil.createToken(secretKey, 300_000L, Map.of(
+                "id", member.getId(), "email", email, "role", "USER", "sid", "missing-session"
+        ));
+
+        mvc.perform(get("/api/v1/members/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
+    }
+
+    @Test
+    @DisplayName("만료된 DB 세션은 아직 만료되지 않은 Access Token도 거부한다")
+    void expiredSessionRejectsAccessToken() throws Exception {
+        MvcResult loginResult = loginForTest("expired-session@example.com");
+        String accessToken = extractAccessToken(loginResult);
+        String sessionId = (String) JwtUtil.payloadOrNull(accessToken, secretKey).get("sid");
+        jdbcTemplate.update("UPDATE auth_session SET expires_at = '2000-01-01 00:00:00' WHERE id = ?", sessionId);
+        entityManager.clear();
+
+        mvc.perform(get("/api/v1/members/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
+    }
+
+    @Test
+    @DisplayName("세션 저장소 장애 시 인증을 허용하지 않고 공통 503 응답을 반환한다")
+    void sessionStoreFailureFailsClosedWithServiceUnavailable() throws Exception {
+        MvcResult loginResult = loginForTest("session-store-failure@example.com");
+        String accessToken = extractAccessToken(loginResult);
+        doThrow(new DataAccessResourceFailureException("sensitive-db-detail"))
+                .when(authSessionRepository).isUsable(anyString(), anyLong(), any(), any());
+
+        mvc.perform(get("/api/v1/members/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.status").value("FAIL"))
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_SERVICE_UNAVAILABLE"))
+                .andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                        .doesNotContain("sensitive-db-detail", accessToken));
+    }
+
+    @Test
+    @DisplayName("세션 조회 트랜잭션을 시작할 수 없으면 인증을 허용하지 않고 공통 503 응답을 반환한다")
+    void sessionTransactionStartFailureFailsClosedWithServiceUnavailable() throws Exception {
+        MvcResult loginResult = loginForTest("session-transaction-failure@example.com");
+        String accessToken = extractAccessToken(loginResult);
+        doThrow(new CannotCreateTransactionException("sensitive-db-detail"))
+                .when(authSessionRepository).isUsable(anyString(), anyLong(), any(), any());
+
+        mvc.perform(get("/api/v1/members/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.status").value("FAIL"))
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_SERVICE_UNAVAILABLE"))
+                .andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                        .doesNotContain("sensitive-db-detail", accessToken));
+    }
+
     @Test
     @DisplayName("만료된 액세스 토큰으로 내 정보를 조회하면 401을 반환한다")
     void t12() throws Exception {
@@ -519,7 +631,7 @@ public class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("로그인 후 정지되어도 기존 액세스 토큰은 유효하지만 재발급은 거절된다")
+    @DisplayName("로그인 후 정지되면 기존 액세스 토큰과 재발급이 거절된다")
     void t15() throws Exception {
         String email = "suspended-member@example.com";
         MvcResult loginResult = loginForTest(email);
@@ -541,13 +653,13 @@ public class AuthControllerTest {
 
         entityManager.clear();
 
-        // 기존 액세스 토큰은 만료 전까지 사용할 수 있다.
+        // 보호 API는 현재 회원 상태를 확인해 정지 회원의 토큰을 거절한다.
         mvc.perform(
                         get("/api/v1/members/me")
                                 .header("Authorization", "Bearer " + accessToken)
                 )
                 .andDo(print())
-                .andExpect(status().isOk());
+                .andExpect(status().isUnauthorized());
 
 // 정지된 회원은 리프레시 토큰으로 새 토큰을 발급받을 수 없다.
         mvc.perform(
@@ -620,9 +732,9 @@ public class AuthControllerTest {
 
     }
     @Test
-    @DisplayName("로그아웃 후에도 만료되지 않은 액세스 토큰은 사용할 수 있다")
+    @DisplayName("로그아웃 후 기존 액세스 토큰은 즉시 사용할 수 없다")
     void t17() throws Exception {
-        String email = "access-after-logout@example.com";
+        String email = "access-after-logout-" + java.util.UUID.randomUUID() + "@example.com";
 
         // 1. 실제 로그인으로 두 토큰 발급
         MvcResult loginResult = loginForTest(email);
@@ -642,16 +754,45 @@ public class AuthControllerTest {
                 .andExpect(status().isNoContent());
 
         // 3. 로그아웃 전에 보관한 액세스 토큰으로 요청
-        // 현재 정책은 액세스 토큰을 즉시 무효화하지 않는다.
         mvc.perform(
                         get("/api/v1/members/me")
                                 .header("Authorization", "Bearer " + accessToken)
                 )
                 .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.email").value(email));
+                .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    @DisplayName("로그아웃은 같은 회원의 다른 로그인 세션에는 영향을 주지 않는다")
+    void logoutRevokesOnlyTheSessionFromItsRefreshCookie() throws Exception {
+        String email = "separate-login-sessions-" + java.util.UUID.randomUUID() + "@example.com";
+        MvcResult firstLogin = loginForTest(email);
+        MvcResult secondLogin = mvc.perform(
+                        post("/api/v1/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {"email":"%s","password":"Test1234!"}
+                                        """.formatted(email)))
+                .andExpect(status().isOk())
+                .andReturn();
+        String firstAccessToken = extractAccessToken(firstLogin);
+        String secondAccessToken = extractAccessToken(secondLogin);
+
+        mvc.perform(post("/api/v1/auth/logout")
+                        .cookie(firstLogin.getResponse().getCookie("refreshToken")))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + firstAccessToken))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/members/me")
+                        .header("Authorization", "Bearer " + secondAccessToken))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .cookie(secondLogin.getResponse().getCookie("refreshToken")))
+                .andExpect(status().isOk());
+    }
+
     @Test
     @DisplayName("사전 중복 검사를 통과해도 DB에서 이메일이 중복되면 409를 반환한다")
     @Transactional(propagation = Propagation.NOT_SUPPORTED)

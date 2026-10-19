@@ -2,7 +2,8 @@
 
 > 작성일: 2026-10-15 (KST)  
 > 구현 기준: PR #302 / `auth/v1-frontend-integration` / `5c60fa444dfc427016954fdacc44d3dfd293c004`  
-> 상태: V1 구현 검토 기준 문서. V2·V3는 계획이며, PR은 작성 시점에 dev에 병합되지 않았다.
+> 상태: V1 구현 검토 기준 문서. V2·V3는 계획이며, PR은 작성 시점에 dev에 병합되지 않았다.  
+> 2026-10-18 정리: PR #302는 이후 dev에 `46526a5`(squash)로 병합됐다. 병합본에는 `V2SecurityRedTest` 11개의 `@Disabled("V2 구현 전까지 CI에서 비활성화")`가 포함되어 있어, 아래 694/682/11/1 수치는 PR head `5c60fa4`의 CI 기록이다. 로컬·운영 메일은 이후 #318에서 Gmail SMTP로 전환됐다.
 
 ## 1. 이 작업의 목표
 
@@ -17,15 +18,17 @@ SlotKey의 이메일 기반 가입과 복구 절차를 명확히 하고, 로그�
 | V1·V2·V3는 각각 무엇을 완성하는가? | [로드맵](roadmap.md) |
 | 인증번호를 몇 번 틀리면 어떤 조치가 발생하는가? | [인증 정책](../../decisions/authentication-policy.md) |
 | 가입과 비밀번호 재설정이 실제로 어떤 코드를 거치는가? | [V1 구현 해설](../../architecture/auth-v1-implementation.md) |
+| V2 로그인 세션은 어떻게 구현됐는가? | [V2 구현 해설](../../architecture/auth-v2-implementation.md) (1번 이슈, 로컬 커밋 `e671c47` 기준, 미병합) |
 | 왜 테스트 11개가 실패하며, 무엇이 통과 조건인가? | [보안 테스트](../../testing/auth-security-tests.md) |
 | V2를 어떤 순서로 개발하고 무엇을 먼저 결정해야 하는가? | [V2 계획](v2-plan.md) |
 | Redis로 무엇을 옮기며 장애·유실에 어떻게 대응할 것인가? | [V3 설계 초안](v3-redis-design.md) |
-| API 요청·응답의 정확한 형식은? | 저장소의 `docs/api/api-spec.md` |
-| 전체 DB 테이블과 관계는? | 저장소의 `docs/architecture/erd.md` |
-| 예약 소유권과 관리자 권한은? | 저장소의 `docs/decisions/authorization-policy.md` |
-| 전체 테스트 실행 결과는? | 저장소의 `docs/testing/test-results.md` |
+| 인증 메일(Gmail SMTP)은 어떻게 설정·운영하는가? | [Gmail SMTP 설정](../../operations/gmail-smtp-setup.md) |
+| API 요청·응답의 정확한 형식은? | [REST API 명세](../../api/api-spec.md) |
+| 전체 DB 테이블과 관계는? | [ERD](../../architecture/erd.md) |
+| 예약 소유권과 관리자 권한은? | [인가 정책](../../decisions/authorization-policy.md) |
+| 전체 테스트 실행 결과는? | [테스트 결과](../../testing/test-results.md) |
 
-마지막 네 문서는 프로젝트 공통 문서다. 이 인증 문서 묶음은 해당 파일을 덮어쓰지 않는다. 프로젝트 문서 이동이 완료된 경로를 기준으로 표기했으며, 반영 단계에서 경로를 확인한다.
+API 명세·ERD·인가 정책·테스트 결과는 프로젝트 공통 문서다. 이 인증 문서 묶음은 해당 파일을 덮어쓰지 않는다. V1 인증 API·테이블·과거 실행 기록은 2026-10-18에 각 공통 문서에 반영했다(현재 구현 기준, V2 모델은 미포함).
 
 ## 3. 권장 읽기 순서
 
@@ -56,8 +59,8 @@ SlotKey의 이메일 기반 가입과 복구 절차를 명확히 하고, 로그�
 - [백엔드 CI 실행](https://github.com/prgrms-be-devcourse/NBE12-14-2-OVENGERS/actions/runs/38684148319)
 - 검토한 백엔드 결과: 전체 694개, 통과 682개, 실패 11개, 건너뜀 1개.
 - 실패 11개는 모두 `V2SecurityRedTest`의 보안 동작 단언이다.
-- 의도적 실패를 기본 테스트에 유지하는 것이 현재 프로젝트의 선택이다. CI 실패를 숨기거나 자동으로 성공 처리하지 않는다.
-- 문서 작성 과정에서 테스트를 다시 실행한 것은 아니다. 위 수치는 검토한 CI 실행의 기록이다.
+- 작성 시점(PR head)에는 의도적 실패를 기본 테스트에 포함했다. 이후 병합본(`46526a5`)과 현재 dev 소스에서는 11개 모두 `@Disabled`로 기본 실행에서 제외된다. V2 구현 시 해당 테스트의 `@Disabled`를 해제해 수용 기준으로 사용한다. 자세한 구분은 [보안 테스트](../../testing/auth-security-tests.md)를 따른다.
+- 문서 작성·정리 과정에서 테스트를 다시 실행한 것은 아니다. 위 수치는 검토한 CI 실행의 기록이다.
 
 ## 6. 문서별 원본 책임
 
@@ -74,3 +77,10 @@ V1 구현 문서는 V2 이후에도 비교 근거로 보존한다. 다만 “현
 - 과거의 `21b3a13`, `auth-v1-baseline` 표기는 당시 기록이다. 원격 태그 존재와 재현 가능성은 별도 확인하며, 현재 소스 기준은 위 전체 커밋 SHA다.
 - 레드 테스트는 발표용 개선 전후 증거이면서 V2의 수용 기준이다. 실패 개수를 유지하려고 올바른 구현을 되돌리지 않는다.
 - 로컬 ZIP, PR head, dev, 운영 배포 상태를 서로 같은 것으로 간주하지 않는다.
+
+## 8. 보관 자료
+
+아래는 현재 실행 계획이 아니라 과거 배경·대안 검토 기록이다.
+
+- [초기 Redis 검토 묶음](archive/redis-initial-plan/01-redis-adoption-scope.md) — V1→V2→V3 계획 이전의 Redis 우선 검토(도입 범위, jti 기반 설계 초안, 초기 단계 계획). 현재 기준은 [로드맵](roadmap.md)과 [V3 설계 초안](v3-redis-design.md).
+- [인증 문서 반영 안내](archive/INTEGRATION_GUIDE.md) — 2026-10-15 문서 묶음 반영 안내와 2026-10-18 반영 현황.

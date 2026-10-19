@@ -1,3 +1,4 @@
+
 package com.ovengers.slotkey.member.service;
 
 import com.ovengers.slotkey.audit.entity.AuditAction;
@@ -6,6 +7,7 @@ import com.ovengers.slotkey.audit.entity.AuditTargetType;
 import com.ovengers.slotkey.audit.repository.AuditLogRepository;
 import com.ovengers.slotkey.audit.service.AuditLogService;
 import com.ovengers.slotkey.auth.service.VerificationGuardService;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.credit.entity.CreditTransaction;
 import com.ovengers.slotkey.credit.entity.CreditTransactionType;
 import com.ovengers.slotkey.credit.repository.CreditTransactionRepository;
@@ -78,6 +80,9 @@ class AdminMemberDetailServiceTest {
     @Mock
     private SpaceRepository spaceRepository;
 
+    @Mock
+    private AuthSessionService authSessionService;
+
     private Clock clock;
     private AdminMemberService adminMemberService;
 
@@ -97,7 +102,8 @@ class AdminMemberDetailServiceTest {
                 verificationGuardService,
                 reservationRepository,
                 creditTransactionRepository,
-                spaceRepository
+                spaceRepository,
+                authSessionService
         );
     }
 

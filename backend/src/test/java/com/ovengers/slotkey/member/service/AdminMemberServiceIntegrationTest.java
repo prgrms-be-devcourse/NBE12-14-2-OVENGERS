@@ -4,6 +4,11 @@ import com.ovengers.slotkey.audit.entity.AuditAction;
 import com.ovengers.slotkey.audit.entity.AuditLog;
 import com.ovengers.slotkey.audit.entity.AuditTargetType;
 import com.ovengers.slotkey.audit.repository.AuditLogRepository;
+import com.ovengers.slotkey.auth.entity.AuthSession;
+import com.ovengers.slotkey.auth.entity.RefreshToken;
+import com.ovengers.slotkey.auth.repository.AuthSessionRepository;
+import com.ovengers.slotkey.auth.repository.RefreshTokenRepository;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.credit.entity.CreditTransaction;
 import com.ovengers.slotkey.credit.entity.CreditTransactionType;
 import com.ovengers.slotkey.credit.repository.CreditTransactionRepository;
@@ -38,6 +43,15 @@ class AdminMemberServiceIntegrationTest extends IntegrationTestSupport {
     private MemberRepository memberRepository;
 
     @Autowired
+    private AuthSessionService authSessionService;
+
+    @Autowired
+    private AuthSessionRepository authSessionRepository;
+
+    @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
     private CreditTransactionRepository creditTransactionRepository;
 
     @Autowired
@@ -63,6 +77,8 @@ class AdminMemberServiceIntegrationTest extends IntegrationTestSupport {
 
     @BeforeEach
     void setUp() {
+        refreshTokenRepository.deleteAllInBatch();
+        authSessionRepository.deleteAllInBatch();
         auditLogRepository.deleteAllInBatch();
         creditTransactionRepository.deleteAllInBatch();
         doorAccessTokenRepository.deleteAllInBatch();
@@ -82,6 +98,15 @@ class AdminMemberServiceIntegrationTest extends IntegrationTestSupport {
     @DisplayName("회원 정지 도중 감사 로그 저장이 실패하면 회원 상태 변경이 롤백되어 ACTIVE를 유지한다")
     void suspend_auditLogFails_rollsBackMemberStatus() {
         // given
+        AuthSession session = authSessionService.create(userMember);
+        String tokenHash = "a".repeat(64);
+        refreshTokenRepository.saveAndFlush(new RefreshToken(
+                userMember,
+                session,
+                tokenHash,
+                FixedClockConfig.FIXED_DATE_TIME.plusHours(24)
+        ));
+
         doThrow(new RuntimeException("Audit DB failure"))
                 .when(auditLogRepository).save(any());
 
@@ -93,6 +118,10 @@ class AdminMemberServiceIntegrationTest extends IntegrationTestSupport {
         // DB 재조회로 롤백 검증 (@Transactional 없이 독립 트랜잭션으로 조회)
         Member reloaded = memberRepository.findById(userMember.getId()).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(MemberStatus.ACTIVE);
+        assertThat(authSessionRepository.findById(session.getId()).orElseThrow().getRevokedAt())
+                .isNull();
+        assertThat(refreshTokenRepository.findByTokenHash(tokenHash).orElseThrow().getRevokedAt())
+                .isNull();
         assertThat(auditLogRepository.count()).isZero();
     }
 

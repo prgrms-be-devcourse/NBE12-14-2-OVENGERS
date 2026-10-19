@@ -55,7 +55,7 @@ class PasswordResetControllerTest {
     private VerificationMailSender mailSender;
 
     @Test
-    void 비로그인_비밀번호_재설정_API가_동작하고_V1에서는_기존_AT가_즉시_폐기되지_않는다()
+    void 비로그인_비밀번호_재설정_API가_동작하고_기존_AT는_폐기된다()
             throws Exception {
         String email = "reset-http-" + UUID.randomUUID() + "@example.com";
         String signupGrant = issueGrant(email, VerificationPurpose.SIGNUP);
@@ -78,7 +78,7 @@ class PasswordResetControllerTest {
 
         mvc.perform(get("/api/v1/members/me")
                         .header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isOk());
+                .andExpect(status().isUnauthorized());
     }
 
     private String login(String email, String password) throws Exception {

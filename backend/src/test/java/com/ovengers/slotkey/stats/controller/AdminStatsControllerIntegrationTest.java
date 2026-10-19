@@ -60,11 +60,13 @@ class AdminStatsControllerIntegrationTest extends IntegrationTestSupport {
     private SettableClock settableClock;
 
     private String adminToken;
+    private Member adminMember;
 
     @BeforeEach
     void setUp() {
         settableClock.set(ZonedDateTime.of(2026, 10, 16, 10, 0, 0, 0, SettableClockConfig.KST));
-        adminToken = bearer(saveMember(MemberRole.ADMIN));
+        adminMember = saveMember(MemberRole.ADMIN);
+        adminToken = bearer(adminMember);
     }
 
     // ---------- 인증·인가 ----------
@@ -163,7 +165,9 @@ class AdminStatsControllerIntegrationTest extends IntegrationTestSupport {
         snap(RankingPeriodType.DAILY, LocalDate.of(2026, 10, 15), a, "판교", 100, 1, 1);
         snap(RankingPeriodType.DAILY, LocalDate.of(2026, 10, 16), a, "판교", 5000, 3, 6);
 
-        settableClock.set(ZonedDateTime.of(2026, 10, 17, 10, 0, 0, 0, SettableClockConfig.KST));
+        // 통계 기준 시각을 다음 날로 옮긴 뒤, 만료되지 않는 세션을 다시 발급해 통계 응답을 검증한다.
+        settableClock.set(ZonedDateTime.of(2026, 10, 17, 9, 59, 0, 0, SettableClockConfig.KST));
+        adminToken = bearer(adminMember);
         spaceRanking("period", "DAILY", "date", "2026-10-16")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("CONFIRMED"))
@@ -307,7 +311,7 @@ class AdminStatsControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     private String bearer(Member member) {
-        return "Bearer " + jwtProvider.genAccessToken(member);
+        return "Bearer " + issueSessionBoundAccessToken(member, jwtProvider);
     }
 
     private Long saveSpace(String name, String location) {

@@ -48,7 +48,7 @@ class AdminReservationSecurityIntegrationTest extends IntegrationTestSupport {
     @DisplayName("일반 회원(USER)이 관리자 예약 목록을 요청하면 403 Forbidden과 ACCESS_DENIED를 반환한다")
     void getReservations_userRole_returns403() throws Exception {
         Member user = memberRepository.save(new Member("user@slotkey.test",  "일반회원"));
-        String token = jwtProvider.genAccessToken(user);
+        String token = issueSessionBoundAccessToken(user, jwtProvider);
 
         mockMvc.perform(get(ADMIN_RESERVATIONS_PATH)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -64,7 +64,7 @@ class AdminReservationSecurityIntegrationTest extends IntegrationTestSupport {
         Member admin = new Member("admin@slotkey.test",  "관리자");
         ReflectionTestUtils.setField(admin, "role", MemberRole.ADMIN);
         admin = memberRepository.save(admin);
-        String token = jwtProvider.genAccessToken(admin);
+        String token = issueSessionBoundAccessToken(admin, jwtProvider);
 
         mockMvc.perform(get(ADMIN_RESERVATIONS_PATH)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)

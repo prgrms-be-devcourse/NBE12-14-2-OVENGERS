@@ -1,6 +1,8 @@
 package com.ovengers.slotkey.notification;
 
 import com.ovengers.slotkey.global.config.SecurityConfig;
+import com.ovengers.slotkey.global.config.ClockConfig;
+import com.ovengers.slotkey.auth.service.AuthSessionService;
 import com.ovengers.slotkey.global.config.WebMvcConfig;
 import com.ovengers.slotkey.global.error.GlobalExceptionHandler;
 import com.ovengers.slotkey.global.security.CurrentMemberArgumentResolver;
@@ -11,6 +13,7 @@ import com.ovengers.slotkey.notification.controller.NotificationController;
 import com.ovengers.slotkey.notification.dto.response.NotificationResponse;
 import com.ovengers.slotkey.notification.service.NotificationQueryService;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,7 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /** 알림 조회 API 웹 계층: 토큰의 회원 id로만 조회하는지(본인 것만 보이는 출발점)와 인증 강제를 검증한다. */
 @WebMvcTest(NotificationController.class)
 @ActiveProfiles("test")
-@Import({SecurityConfig.class, JwtProvider.class, WebMvcConfig.class, CurrentMemberArgumentResolver.class,
+@Import({SecurityConfig.class, ClockConfig.class, JwtProvider.class, WebMvcConfig.class, CurrentMemberArgumentResolver.class,
         GlobalExceptionHandler.class})
 class NotificationControllerTest {
 
@@ -47,12 +50,20 @@ class NotificationControllerTest {
     private MockMvc mockMvc;
     @MockBean
     private NotificationQueryService service;
+    @MockBean
+    private AuthSessionService authSessionService;
+
+    @BeforeEach
+    void allowTestSession() {
+        org.mockito.BDDMockito.given(authSessionService.validate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong()))
+                .willReturn(AuthSessionService.ValidationResult.VALID);
+    }
     @Value("${custom.jwt.secret-key}")
     private String secretKey;
 
     private String userToken() {
         return JwtUtil.createToken(secretKey, 300_000L,
-                Map.of("id", MEMBER_ID, "email", "user@slotkey.test", "role", MemberRole.USER.name()));
+                Map.of("id", MEMBER_ID, "email", "user@slotkey.test", "role", MemberRole.USER.name(), "sid", "test-session"));
     }
 
     @Test

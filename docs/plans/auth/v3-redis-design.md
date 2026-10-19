@@ -184,6 +184,6 @@ denylist만 쓰면 키 부재가 “폐기되지 않음”인지 “폐기 기�
 
 ## 14. 기존 문서와의 관계
 
-기존 docs/authorization-improvement-plan/01-redis-adoption-scope.md와 02-redis-auth-design.md의 범위·책임·장애·재사용 논점을 통합한 초안이다. 과거의 “AT jti 차단부터 바로 Redis 도입” 순서는 현재 로드맵의 선행 단계가 아니다.
+초기 Redis 검토 문서 [01-redis-adoption-scope.md](archive/redis-initial-plan/01-redis-adoption-scope.md)와 [02-redis-auth-design.md](archive/redis-initial-plan/02-redis-auth-design.md)의 범위·책임·장애·재사용 논점을 통합한 초안이다. 과거의 “AT jti 차단부터 바로 Redis 도입” 순서는 현재 로드맵의 선행 단계가 아니다.
 
-원본 문서를 이동·삭제하기 전에는 외부 링크와 팀 문서 참조를 확인한다. 이 문서 작성만으로 Redis 설계가 최종 승인되거나 구현된 것은 아니다.
+원본 문서는 2026-10-18에 `archive/redis-initial-plan/`으로 옮겨 과거 검토 기록으로 보존했다. 그 문서의 jti denylist 등은 과거 대안이며 구현 요구사항이 아니다. 이 문서 작성만으로 Redis 설계가 최종 승인되거나 구현된 것은 아니다.

@@ -22,6 +22,10 @@ public class RefreshToken {
         @JoinColumn(name = "member_id", nullable = false)
         private Member member;
 
+        @ManyToOne(fetch = FetchType.LAZY, optional = false)
+        @JoinColumn(name = "auth_session_id", nullable = false)
+        private AuthSession authSession;
+
         // 리프레시 토큰 원문을 해시한 값
         @Column(name = "token_hash", nullable = false, unique = true, length = 64)
         private String tokenHash;
@@ -33,6 +37,10 @@ public class RefreshToken {
         // 폐기 시각: null이면 아직 폐기하지 않은 토큰
         @Column(name = "revoked_at")
         private LocalDateTime revokedAt;
+
+        // 사용 완료 시각은 해당 RT의 재사용 탐지 기간 동안 보존한다.
+        @Column(name = "consumed_at")
+        private LocalDateTime consumedAt;
 
         // 폐기 여부 확인
         public boolean isRevoked() {
@@ -46,12 +54,24 @@ public class RefreshToken {
             }
         }
 
+        public boolean isConsumed() {
+            return consumedAt != null;
+        }
+
+        public void consume(LocalDateTime now) {
+            if (consumedAt == null) {
+                consumedAt = now;
+            }
+        }
+
         public RefreshToken(
                 Member member,
+                AuthSession authSession,
                 String tokenHash,
                 LocalDateTime expiresAt
         ) {
             this.member = member;
+            this.authSession = authSession;
             this.tokenHash = tokenHash;
             this.expiresAt = expiresAt;
         }
