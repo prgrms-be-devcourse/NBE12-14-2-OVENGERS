@@ -1,14 +1,28 @@
+
 'use client';
 
 import Link from 'next/link';
 import { useCallback, useState } from 'react';
-import {changeMemberStatus, getAdminMemberDetail, getAdminMemberCreditTransactions, grantMemberCredit,} from '../../api/adminMemberApi';
+import {
+    changeMemberStatus,
+    getAdminMemberDetail,
+    getAdminMemberCreditTransactions,
+    grantMemberCredit,
+} from '../../api/adminMemberApi';
 import { useAction, useAsync } from '../../hooks/useApi';
 import { usePagination } from '../../hooks/usePagination';
 import { useRouteId } from '../../hooks/useRouteId';
 import { ROUTES } from '../../constants/routePaths';
-import {MEMBER_ROLE, MEMBER_ROLE_LABEL, MEMBER_STATUS,} from '../../constants/enums';
-import type {AdminMember, CreditTransactionType, Meta,} from '../../types/api';
+import {
+    MEMBER_ROLE,
+    MEMBER_ROLE_LABEL,
+    MEMBER_STATUS,
+} from '../../constants/enums';
+import type {
+    AdminMember,
+    CreditTransactionType,
+    Meta,
+} from '../../types/api';
 import MemberStatusBadge from '../../components/member/MemberStatusBadge';
 import MemberStatusChangeDialog from '../../components/member/MemberStatusChangeDialog';
 import CreditGrantDialog from '../../components/member/CreditGrantDialog';
@@ -70,11 +84,18 @@ function AdminMemberDetailContent({
         useState<MemberDetailTab>('credits');
 
     const [historyVersion, setHistoryVersion] = useState(0);
+
     const [statusTarget, setStatusTarget] =
         useState<AdminMember | null>(null);
+
     const [creditTarget, setCreditTarget] =
         useState<AdminMember | null>(null);
+
     const [toast, setToast] = useState<string | null>(null);
+
+    // 변경 API 성공 후 최신 데이터 조회 상태
+    const [refreshPending, setRefreshPending] = useState(false);
+    const [refreshFailed, setRefreshFailed] = useState(false);
 
     // 크레딧 거래 내역 페이지네이션
     const { page, size, setPage } = usePagination({
@@ -117,29 +138,43 @@ function AdminMemberDetailContent({
 
     // 회원 정지 및 복구
     const change = useAction(async (reason: string) => {
-        if (!statusTarget) return;
+        if (!statusTarget || refreshPending || refreshFailed) return;
 
         const nextStatus =
             statusTarget.status === MEMBER_STATUS.ACTIVE
                 ? MEMBER_STATUS.SUSPENDED
                 : MEMBER_STATUS.ACTIVE;
 
+        // 1. 실제 회원 상태 변경
+        // 이 요청이 실패하면 아래 성공 처리로 진행하지 않음
         await changeMemberStatus(statusTarget.memberId, {
             status: nextStatus,
             reason,
         });
 
+        // 2. 변경 API 성공 확정
         setStatusTarget(null);
-
-        // 회원 정보 및 상태 변경 이력 갱신
-        await reloadMember();
-        setHistoryVersion((version) => version + 1);
 
         setToast(
             nextStatus === MEMBER_STATUS.SUSPENDED
                 ? '회원을 정지했습니다.'
                 : '회원을 복구했습니다.',
         );
+
+        // 3. 변경 이력 탭도 최신 데이터를 조회하도록 갱신
+        setHistoryVersion((version) => version + 1);
+
+        // 4. 회원 상세 정보 재조회
+        // 조회 실패는 이미 성공한 정지/복구 작업과 분리
+        setRefreshPending(true);
+
+        try {
+            await reloadMember();
+        } catch {
+            setRefreshFailed(true);
+        } finally {
+            setRefreshPending(false);
+        }
     });
 
     // 관리자 크레딧 지급
@@ -151,21 +186,36 @@ function AdminMemberDetailContent({
             amount: number;
             reason: string;
         }) => {
-            if (!creditTarget) return;
+            if (!creditTarget || refreshPending || refreshFailed) return;
 
+            // 1. 실제 크레딧 지급
             await grantMemberCredit(creditTarget.memberId, {
                 amount,
                 reason,
             });
 
+            // 2. 지급 API 성공 확정
             setCreditTarget(null);
-
-            await Promise.all([
-                reloadMember(),
-                reloadTransactions(),
-            ]);
-
             setToast(`${formatCredit(amount)}을 지급했습니다.`);
+
+            // 3. 회원 잔액 및 거래 내역 재조회
+            setRefreshPending(true);
+
+            try {
+                const results = await Promise.allSettled([
+                    reloadMember(),
+                    reloadTransactions(),
+                ]);
+
+                // 둘 중 하나라도 실패하면 최신 화면을 보장할 수 없음
+                if (results.some(
+                    (result) => result.status === 'rejected',
+                )) {
+                    setRefreshFailed(true);
+                }
+            } finally {
+                setRefreshPending(false);
+            }
         },
     );
 
@@ -219,7 +269,10 @@ function AdminMemberDetailContent({
     const member = detail.member;
     const transactionsList = transactions?.content ?? [];
 
+    // 최신 데이터가 확인되지 않으면 추가 관리 작업 차단
     const canManage =
+        !refreshPending &&
+        !refreshFailed &&
         member.role !== MEMBER_ROLE.ADMIN &&
         member.status !== MEMBER_STATUS.WITHDRAWN;
 
@@ -252,7 +305,9 @@ function AdminMemberDetailContent({
 
                 {canManage && (
                     <div className="row wrap">
-                        <Button onClick={() => setCreditTarget(member)}>
+                        <Button
+                            onClick={() => setCreditTarget(member)}
+                        >
                             크레딧 지급
                         </Button>
 
@@ -272,6 +327,41 @@ function AdminMemberDetailContent({
                 )}
             </div>
 
+            {/* 변경 후 재조회 진행 안내 */}
+            {refreshPending && (
+                <p className="muted" role="status">
+                    변경 사항을 반영한 최신 정보를 불러오는 중입니다…
+                </p>
+            )}
+
+            {/* 변경 성공 후 재조회 실패 안내 */}
+            {refreshFailed && (
+                <div
+                    className="form-error"
+                    role="alert"
+                    style={{ marginBottom: 20 }}
+                >
+                    <p>
+                        변경 작업은 완료됐지만 최신 정보를
+                        불러오지 못했습니다.
+                        중복 작업을 방지하기 위해 관리 버튼을
+                        일시적으로 숨겼습니다.
+                    </p>
+
+                    <div
+                        className="actions"
+                        style={{ marginTop: 12 }}
+                    >
+                        <Button
+                            size="small"
+                            onClick={() => window.location.reload()}
+                        >
+                            새로고침
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             {/* 요약 통계 */}
             <div className={`grid3 ${styles.summaryGrid}`}>
                 <section className={`panel ${styles.summaryCard}`}>
@@ -279,7 +369,9 @@ function AdminMemberDetailContent({
                     <p className="price">
                         {formatCredit(member.balance)}
                     </p>
-                    <p className="muted">현재 크레딧 잔액</p>
+                    <p className="muted">
+                        현재 크레딧 잔액
+                    </p>
                 </section>
 
                 <section className={`panel ${styles.summaryCard}`}>
@@ -459,61 +551,82 @@ function AdminMemberDetailContent({
                                         <caption className="sr-only">
                                             회원 크레딧 거래 내역
                                         </caption>
+
                                         <thead>
                                         <tr>
-                                            <th scope="col">거래 번호</th>
-                                            <th scope="col">거래 일시</th>
-                                            <th scope="col">거래 유형</th>
-                                            <th scope="col">변동 금액</th>
-                                            <th scope="col">거래 후 잔액</th>
-                                            <th scope="col">사유</th>
+                                            <th scope="col">
+                                                거래 번호
+                                            </th>
+                                            <th scope="col">
+                                                거래 일시
+                                            </th>
+                                            <th scope="col">
+                                                거래 유형
+                                            </th>
+                                            <th scope="col">
+                                                변동 금액
+                                            </th>
+                                            <th scope="col">
+                                                거래 후 잔액
+                                            </th>
+                                            <th scope="col">
+                                                사유
+                                            </th>
                                         </tr>
                                         </thead>
+
                                         <tbody>
-                                        {transactionsList.map((transaction) => (
-                                            <tr key={transaction.transactionId}>
-                                                <td>
-                                                    #{transaction.transactionId}
-                                                </td>
-                                                <td>
-                                                    {formatDateTime(
-                                                        transaction.createdAt,
-                                                    ) || '-'}
-                                                </td>
-                                                <td>
-                                                    <MetaBadge
-                                                        meta={
-                                                            TRANSACTION_META[
-                                                                transaction.type
-                                                                ]
-                                                        }
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <MetaBadge
-                                                        meta={{
-                                                            label: formatTransactionAmount(
-                                                                transaction.amount,
-                                                            ),
-                                                            tone:
-                                                                transaction.amount > 0
-                                                                    ? 'green'
-                                                                    : transaction.amount < 0
-                                                                        ? 'red'
-                                                                        : 'gray',
-                                                        }}
-                                                    />
-                                                </td>
-                                                <td>
-                                                    {formatCredit(
-                                                        transaction.balanceAfter,
-                                                    )}
-                                                </td>
-                                                <td>
-                                                    {transaction.reason || '-'}
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {transactionsList.map(
+                                            (transaction) => (
+                                                <tr
+                                                    key={
+                                                        transaction.transactionId
+                                                    }
+                                                >
+                                                    <td>
+                                                        #{transaction.transactionId}
+                                                    </td>
+                                                    <td>
+                                                        {formatDateTime(
+                                                            transaction.createdAt,
+                                                        ) || '-'}
+                                                    </td>
+                                                    <td>
+                                                        <MetaBadge
+                                                            meta={
+                                                                TRANSACTION_META[
+                                                                    transaction.type
+                                                                    ]
+                                                            }
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <MetaBadge
+                                                            meta={{
+                                                                label:
+                                                                    formatTransactionAmount(
+                                                                        transaction.amount,
+                                                                    ),
+                                                                tone:
+                                                                    transaction.amount > 0
+                                                                        ? 'green'
+                                                                        : transaction.amount < 0
+                                                                            ? 'red'
+                                                                            : 'gray',
+                                                            }}
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        {formatCredit(
+                                                            transaction.balanceAfter,
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        {transaction.reason || '-'}
+                                                    </td>
+                                                </tr>
+                                            ),
+                                        )}
                                         </tbody>
                                     </table>
                                 </div>

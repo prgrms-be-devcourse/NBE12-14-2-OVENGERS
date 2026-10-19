@@ -422,6 +422,10 @@ Authorization: Bearer {accessToken}
 | 관리자 | `GET` | `/admin/reservations/{reservationId}` | 관리자 예약 상세 및 출입 이력 조회 |
 | 관리자 | `POST` | `/admin/reservations/{reservationId}/force-cancel` | 사유를 기록한 예약 강제 취소 (전액 환불) |
 | 관리자 | `GET` | `/admin/members` | 전체 회원 목록 조회 |
+| 관리자 | `GET` | `/admin/members/{memberId}` | 회원 상세 정보 및 전체 예약·정지 기록 건수 조회 |
+| 관리자 | `GET` | `/admin/members/{memberId}/credit-transactions` | 회원 크레딧 거래 내역 최신순 페이징 조회 |
+| 관리자 | `GET` | `/admin/members/{memberId}/reservations` | 회원 전체 예약 내역 페이징 조회 (취소·만료 포함) |
+| 관리자 | `GET` | `/admin/members/{memberId}/status-history` | 회원 정지·복구 및 인증 잠금 이력 최신순 페이징 조회 |
 | 관리자 | `PATCH` | `/admin/members/{memberId}/suspend` | 일반 회원 계정 정지 (사유 필수) |
 | 관리자 | `PATCH` | `/admin/members/{memberId}/restore` | 정지 회원 계정 정상 복구 |
 | 관리자 | `POST` | `/admin/members/{memberId}/credits` | 회원 크레딧 수동 지급 (본인 지급 불가) |
