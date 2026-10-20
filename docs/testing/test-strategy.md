@@ -4,7 +4,7 @@
 >
 > 본 문서는 [`docs/core-domain-decisions.md`](../core-domain-decisions.md) 및 세부 결정 문서들의 정책이 백엔드/프론트엔드 어디에서 어떻게 검증되고 있는지, 그리고 현재 구현되지 않은 미검증 영역이 무엇인지 실행 가능한 기준으로 매핑한 테스트 전략 문서다.
 >
-> **2026-10-18 부분 대조 (`16b9ead`)**: Kotlin 전환 준비에 필요한 문의·충전 원장 설명을 정정했다. 기존 표의 줄 번호·기타 gap·과거 통과 수는 전체 재검증 결과가 아니다. 추가된 인증·PG/웹훅·Outbox/알림·통계의 기존 테스트/보강 대응표는 [마이그레이션 테스트 기준선](../plans/kotlin-migration/01-test-baseline.md)에 있으며, 실제 실행 성공은 [날짜별 결과](test-results.md)로 구분한다.
+> **2026-10-20 기준선 (`d1a15ec`)**: 기능 동결 커밋에서 전체 `clean build`를 실행해 **135개 스위트·1,048개 테스트 전원 통과**(실패 0·오류 0·스킵 0, `@Disabled` 0)를 확인했다. 아래 표의 과거 통과 수·줄 번호·gap은 전체 재검증 결과가 아니며, 새 기준선 수치는 [날짜별 결과](test-results.md) §0-0에 있다. Kotlin 전환 준비 대응표는 [마이그레이션 테스트 기준선](../plans/kotlin-migration/01-test-baseline.md)을 따른다.
 
 ---
 
@@ -81,8 +81,11 @@
 | 5-2 | 관리자 계정의 일반 취소/도어 토큰 발급 경로 소유권 우회 불가 여부 | 일반 취소/출입 로직에서 회원 ID 불일치로 거절 (`FORBIDDEN_NOT_OWNER`, 관리자 강제 취소 전용 경로 외 소유권 우회 불가 구조) (※ 관리자 토큰으로 일반 사용자 경로를 직접 호출하는 컨트롤러 테스트는 미작성·보강 대상) | 구현상 `loginMemberId == reservation.memberId` 단순 일치 검증으로 방어 (단위 테스트는 5-1 회원 ID 불일치 검증에 의존) |
 | 5-3 | 일반 회원이 관리자 전용 공간 API 호출 시 인가 거절 | `ROLE_USER` 권한으로 관리자 공간 등록/조회 API 호출 시 403 Forbidden (`ACCESS_DENIED`) 확인 (※ 관리자 크레딧 지급 경로 `POST /api/v1/admin/members/{memberId}/credits` 등에 대한 일반 회원 403 차단 테스트는 별도 부재·보강 대상) | [`AdminSpaceSecurityIntegrationTest`](../../backend/src/test/java/com/ovengers/slotkey/space/controller/AdminSpaceSecurityIntegrationTest.java) (`createSpace_userRole_returns403WithoutSideEffects`, L89~L103; `getSpaceDetail_userRole_returns403`, L107~L115) |
 | 5-4 | 관리자가 자기 자신에게 크레딧 지급 시도 | 거절(`SELF_GRANT_NOT_ALLOWED`) | [`AdminMemberServiceTest`](../../backend/src/test/java/com/ovengers/slotkey/member/service/AdminMemberServiceTest.java) (`grantCredit_selfGrant_throwsException`, L455~L476) |
-| 5-5 | 정지된 계정이 만료 전 기존 Access Token으로 보호 API 호출 | 허용 (JWT 클레임 stateless 인증, DB 재조회 없음) | [`AuthControllerTest`](../../backend/src/test/java/com/ovengers/slotkey/auth/controller/AuthControllerTest.java) |
+| 5-5 | 만료 전 기존 Access Token으로 보호 API 호출 | `sid` 세션 검증 결과에 따라 허용/거절한다. Auth V2는 세션을 DB에서 확인하므로 "stateless 인증, DB 재조회 없음"으로 표현하지 않는다. 세션 만료·폐기·조회 불가는 401이다. | [`V2SecurityRedTest`](../../backend/src/test/java/com/ovengers/slotkey/auth/controller/V2SecurityRedTest.java), [`AuthControllerTest`](../../backend/src/test/java/com/ovengers/slotkey/auth/controller/AuthControllerTest.java), [`CustomAuthenticationFilter`](../../backend/src/main/java/com/ovengers/slotkey/global/security/CustomAuthenticationFilter.java) |
 | 5-6 | 정지된 계정이 리프레시 토큰으로 재발급(`/auth/refresh`) 시도 | 403 거절(`ACCOUNT_INACTIVE`, DB 상태 검증 수행) | [`AuthControllerTest`](../../backend/src/test/java/com/ovengers/slotkey/auth/controller/AuthControllerTest.java) |
+| 5-7 | 같은 이메일로 10회/15분 초과 로그인 시도 | HTTP 429 `LOGIN_RATE_LIMITED`와 `Retry-After`(초) 반환. 시도 카운트는 `REQUIRES_NEW`로 인증 실패 롤백과 분리된다. | [`LoginRateLimitIntegrationTest`](../../backend/src/test/java/com/ovengers/slotkey/auth/ratelimit/LoginRateLimitIntegrationTest.java), [`AuthControllerTest`](../../backend/src/test/java/com/ovengers/slotkey/auth/controller/AuthControllerTest.java) |
+| 5-8 | 이미 소비된 리프레시 토큰 재사용 | 해당 세션과 세션의 모든 RT를 폐기하고 refresh를 거절한다. `consumed_at`·`revoked_at`을 DB에서 확인한다. | [`RefreshTokenServiceTest`](../../backend/src/test/java/com/ovengers/slotkey/auth/service/RefreshTokenServiceTest.java), [`AuthSessionMigrationIntegrationTest`](../../backend/src/test/java/com/ovengers/slotkey/auth/migration/AuthSessionMigrationIntegrationTest.java) |
+| 5-9 | 비활성 회원의 출입 시도 | 출입을 거절하고 `REQUIRES_NEW` 거절 로그를 남긴다. 로그 저장이 본 응답·트랜잭션을 바꾸지 않는다. | [`InactiveMemberAccessIntegrationTest`](../../backend/src/test/java/com/ovengers/slotkey/access/service/InactiveMemberAccessIntegrationTest.java), [`InactiveMemberAccessFilterTest`](../../backend/src/test/java/com/ovengers/slotkey/global/security/InactiveMemberAccessFilterTest.java) |
 
 ---
 
@@ -122,13 +125,13 @@
 
 ## 9. 현재 미구현 및 미검증 영역 (Gap Analysis)
 
-과거 미검증 목록을 바탕으로 하되 2026-10-18에는 아래 문의·충전 항목을 부분 대조했다. 나머지 항목은 신규 작업 전 현재 소스와 재대조하며 “테스트 부재”를 그대로 신규 작성 지시로 쓰지 않는다. 소스 존재와 실행 성공은 구분한다.
+과거 미검증 목록을 바탕으로 하되 2026-10-20 기준선(`d1a15ec`, 1,048/1,048)과 현재 소스를 대조했다. 나머지 항목은 신규 작업 전 현재 소스와 재대조하며 “테스트 부재”를 그대로 신규 작성 지시로 쓰지 않는다. 소스 존재와 실행 성공은 구분한다.
 
 1. **프론트엔드 자동화 테스트의 범위와 한계**:
    - **과거 실행 기록**: 2026-09-24 기록의 Node 테스트 14개 통과는 당시 결과다. 현재 테스트 목록/케이스 수는 `node --test tests/*.cjs`로 새로 집계한다. 기존 예약 카드·검색·문의·관리자 대시보드 정적 검증과 이후 추가된 테스트를 구분한다.
    - **미구현 영역**: Jest/Vitest 통합 테스트 러너 환경, Playwright/Cypress 브라우저 E2E 테스트, 실제 브라우저 DOM 렌더링 및 클릭·입력 상호작용 자동화 테스트는 부재함.
 2. **문의의 회원·서비스/DB 검증 보강**:
-   - [`AdminInquiryControllerTest`](../../backend/src/test/java/com/ovengers/slotkey/inquiry/controller/AdminInquiryControllerTest.java)에 11개 테스트가 있다. 실제 SecurityFilterChain을 포함한 WebMvcTest로 목록의 관리자/일반 회원/미인증, 필터/기본 페이징·상세/404·답변 성공 JSON/위임을 확인한다. 서비스는 MockBean이므로 회원 소유권·수정·답변의 실제 저장/상태 전이와 거절 부작용 부재는 별도 보강 대상이다. 이번에는 재실행하지 않았다.
+   - [`AdminInquiryControllerTest`](../../backend/src/test/java/com/ovengers/slotkey/inquiry/controller/AdminInquiryControllerTest.java)에 11개 테스트가 있다. 실제 SecurityFilterChain을 포함한 WebMvcTest로 목록의 관리자/일반 회원/미인증, 필터/기본 페이징·상세/404·답변 성공 JSON/위임을 확인한다. **2026-10-20 기준선에서 이 클래스를 포함한 전체 1,048건이 통과했지만**, 서비스는 MockBean이므로 회원 소유권·수정·답변의 실제 저장/상태 전이와 거절 부작용 부재는 별도 보강 대상이다.
 3. **크레딧 동시 차감 및 복합 원장 흐름 보강**:
    - `CreditBalanceConcurrencyIntegrationTest`는 크레딧 증가/회원 상태 변경 경합이다. [`ChargeOrderConfirmIntegrationTest`](../../backend/src/test/java/com/ovengers/slotkey/credit/service/ChargeOrderConfirmIntegrationTest.java)의 `assertBalanceInvariant`는 실제 DB의 회원 잔액과 원장 SUM을 비교한다. 다만 PG 충전 경로의 assertion을 모든 예약 차감·환불·위약금 조합의 검증 완료로 확대하지 않는다. 서로 다른 예약의 잔액 초과 동시 차감 등은 [금전·경합 계획](../plans/kotlin-migration/02-money-and-concurrency.md)에 따라 누락을 대조·보강한다.
 4. **상태 전이 6종 전수 매트릭스 및 노쇼 크레딧 미환불 DB 검증 부재**:

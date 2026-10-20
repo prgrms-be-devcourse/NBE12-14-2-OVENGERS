@@ -2,9 +2,48 @@
 
 > **문서 목적**: 로컬 및 CI 환경에서 실행된 백엔드 자동화 테스트의 실측 결과를 기록하고, 도메인별 검증 현황과 미실행/미검증 범위를 명확히 추적한다.
 >
-> **2026-10-18 안내 (`16b9ead`)**: 아래 2026-09-24/09-22 수치와 제약·“PG 미도입/문의 테스트 부재” 설명은 당시 실행의 스냅샷이다. 이후 PG 충전·관리자 문의 HTTP 테스트 등이 추가됐으며 현재 소스 대응표는 [Kotlin 전환 테스트 기준선](../plans/kotlin-migration/01-test-baseline.md)을 참조한다. 이번 문서 정비에서는 빌드·테스트를 재실행하지 않았고 새 통과 수를 추가하지 않았다. 현재 전체 통과 여부는 새 날짜/커밋의 실행 기록 확보 전까지 검증 보류다.
+> **2026-10-18 안내 (`16b9ead`)**: 아래 2026-09-24/09-22 수치와 제약·“PG 미도입/문의 테스트 부재” 설명은 당시 실행의 스냅샷이다. 이후 PG 충전·관리자 문의 HTTP 테스트 등이 추가됐으며 현재 소스 대응표는 [Kotlin 전환 테스트 기준선](../plans/kotlin-migration/01-test-baseline.md)을 참조한다. 당시에는 빌드·테스트를 재실행하지 않았으나, 이후 2026-10-20 기능 동결 기준선 실행을 **§0-0**에 추가했다.
 
-> **현재 HEAD 실행 결과: 미확인** — 2026-10-18 기준 dev HEAD(`16b9ead`)의 전체 테스트 실행 결과는 이 문서에 기록되어 있지 않다. 아래 수치는 모두 기록 시점의 결과이며, 이 문서를 갱신하면서 테스트를 다시 실행하지 않았다.
+> **현재 HEAD 실행 결과: 2026-10-20 기준선 확인** — 기능 동결 커밋 `d1a15eca3228c8b1b1f9260fc7a686860d2b1e44`(짧은 해시 `d1a15ec`)에서 `./gradlew clean build`를 실행해 **1048개 테스트 전원 통과(실패 0 / 오류 0 / 스킵 0)**를 확인했다. 상세는 아래 **§0-0**을 참조한다. 2026-10-18의 "미확인" 안내와 아래 2026-09-24/09-22 수치는 당시 실행의 스냅샷이며 현재 HEAD 결과가 아니다.
+
+---
+
+## 0-0. 기능 동결 기준선 실행 기록 (2026-10-20, 로컬)
+
+> 화·수 계획과 목요일 혼용 빌드 시범 전의 **기능 동결(Feature Freeze) 기준선**이다. 아래 수치는 로컬 실측이며 실제 배포 환경 검증과 별개다. 이번 실행은 대단위 1 범위이며 Kotlin 코드·프로덕션 로직은 변경하지 않았다.
+
+| 항목 | 기록 |
+| --- | --- |
+| 실행 일시 | 2026-10-20 15:50~16:02 KST (테스트 단계) |
+| 대상 | `dev` 브랜치, 기능 동결 커밋 `d1a15eca3228c8b1b1f9260fc7a686860d2b1e44` (짧은 해시 `d1a15ec`) |
+| 실행 명령 | `env -u SPRING_MAIL_USERNAME -u SPRING_MAIL_PASSWORD -u VERIFICATION_MAIL_FROM -u SLOTKEY_KAFKA_ENABLED ./gradlew --no-daemon clean build` |
+| 실행 환경 | Linux, OpenJDK 21.0.12.1 (`/usr/lib/jvm/java-21-openjdk`), Gradle 8.10.2, Docker 29.8.2 + MySQL 8.4 Testcontainers |
+| 전체 빌드 | **`BUILD SUCCESSFUL in 11m 44s`**, 종료 코드 `0` |
+| 테스트 단계 소요 | 11분 19초 (XML 첫 타임스탬프 15:50:42 ~ 마지막 16:02:01 KST) |
+| 실행 테스트 클래스(스위트) | **135** |
+| 총 실행 테스트 메서드 | **1048** |
+| 통과 | **1048** |
+| 실패 | **0** |
+| 오류 | **0** |
+| 스킵 | **0** |
+| `@Disabled` | **0건** (테스트 소스 전체) |
+| 최종 판정 | **전원 통과 (ALL PASSED)** |
+
+### 기준선 해석과 이전 기록과의 차이
+
+- 테스트 소스 파일은 148개다. 이 중 실제 실행 스위트는 135개, `@Test`가 없는 빈 클래스 5개, 지원·픽스처 클래스 8개(`IntegrationTestSupport`, `ReservationIntegrationTestSupport`, `TestFixture`, `FakePgClient`, `FakeOutboxPublisher`, `FixedClockConfig`, `MySqlTestContainerConfig`, `SettableClockConfig`)다.
+- `V2SecurityRedTest`는 15개 테스트가 모두 활성 상태로 통과했고 `@Disabled`는 0건이다. 2026-10-15 CI에서 실패했던 11건은 현재 소스에서 활성 회귀 안전망으로 동작한다.
+- Auth V2 관련 실행 스위트는 `AuthControllerTest`(25), `V2SecurityRedTest`(15), `AuthSessionMigrationIntegrationTest`, `LoginRateLimitIntegrationTest`, `RefreshTokenServiceTest`, `PasswordResetIntegrationTest`, `EmailSignupIntegrationTest`, `VerificationFlowIntegrationTest`, `VerificationMemberStatusIntegrationTest` 등이다.
+- `16b9ead..d1a15ec` 사이 추가된 테스트 클래스는 10개다: `InactiveMemberAccessIntegrationTest`, `AuthSessionMigrationIntegrationTest`, `LoginRateLimitIntegrationTest`, `CreditTransactionRepositoryTest`, `GlobalExceptionHandlerTest`, `InactiveMemberAccessFilterTest`, `AdminMemberDetailControllerTest`, `AdminMemberDetailServiceTest`, `ReservationControllerTest`, `ReservationMemberCountRepositoryTest`. 같은 기간 `AuthControllerTest`, `V2SecurityRedTest`, `RefreshTokenServiceTest`, `AdminMemberControllerTest`, `AdminMemberServiceIntegrationTest` 등이 보강됐다.
+
+### 실행 환경 주의 (재현 조건)
+
+이 로컬 셸에는 로컬 기동용 `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `VERIFICATION_MAIL_FROM`, `SLOTKEY_KAFKA_ENABLED=true`가 내보내져 있었다. 이 값들은 테스트 프로필(`application-test.yml`)의 빈 SMTP 값과 `slotkey.kafka.enabled=false` 기본값을 덮어써 다음 두 유형의 실패를 만든다.
+
+1. `SmtpVerificationMailSender` 생성자의 `VERIFICATION_MAIL_FROM must match SPRING_MAIL_USERNAME` 위반으로 444건 컨텍스트 로드 실패.
+2. `KafkaConsumerDisabledTest`, `OutboxRelayDisabledTest`의 "기본 비활성" 빈 부재 단언 실패 2건.
+
+따라서 **테스트 기준선은 위 네 환경 변수를 해제한 뒤 실행**해야 한다. 처음 두 실행에서 관측한 실패는 소스 회귀가 아니라 실행 셸 환경 변수에 의한 것이며, 해제 후 전체 1048건이 통과했다. 테스트 프로필이 외부 SMTP·Kafka 환경 변수에 영향받지 않도록 격리하는 후속 개선은 이번 기준선 범위 밖이다.
 
 ---
 
