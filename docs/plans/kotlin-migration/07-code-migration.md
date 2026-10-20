@@ -1,12 +1,44 @@
 # 07. 단계별 Kotlin 전환과 정리
 
-**목적:** P0/P1 검증을 통과한 뒤 코드를 작은 도메인 단위로 옮기고, Java 상호 운용 설정을 마지막에 정리한다. [상위 계획](00-kotlin-migration-plan.md)의 P2 작업이다. 2026-10-18 / `16b9ead`의 도메인 범위를 반영했으며 실제 전환 착수·완료 기록은 아니다.
+**목적:** P0/P1 검증을 통과한 뒤 코드를 작은 도메인 단위로 옮기고, Java 상호 운용 설정을 마지막에 정리한다. [상위 계획](00-kotlin-migration-plan.md)의 P2 작업이다. 2026-10-20 / `d1a15ec`의 도메인 범위와 기준선(1,048/1,048)을 반영했으며 실제 전환 착수·완료 기록은 아니다.
+
+## 레포지토리 범위
+
+- **현 레포(`NBE12-14-2-OVENGERS`)**: 목요일 혼용 빌드 준비 PR(`kotlin-migration/step-0-mixed-build`)과 순수 정책·유틸 시범 PR(`step-1`)까지만 수행한다.
+- **3차 새 레포**: `step-2` 이후 DTO·서비스·컨트롤러·엔티티 본 전환을 진행한다. 현 레포의 기준선·계약·테스트를 출발점으로 사용하되, 이 문서의 단계 ID와 롤백 경계를 유지한다.
+
+## 첫 전환 PR 범위 (지시 4번)
+
+`step-0`은 혼용 빌드와 `ReservationRefundPolicy` 시범 전환까지 수행한다. 이어 `step-1`에서 나머지 순수 정책을 한 PR에 하나씩 전환한다.
+
+| 순서 | 대상 | 의존·호출부 | 대응 테스트 | 주의점 |
+| --- | --- | --- | --- | --- |
+| 1 (step-0) | [`ReservationRefundPolicy`](../../../backend/src/main/java/com/ovengers/slotkey/reservation/policy/ReservationRefundPolicy.java) (32줄) | Spring/JPA/Lombok 없음. 정적 `calculatePenaltyAmount` 1개, [`ReservationCancelService`](../../../backend/src/main/java/com/ovengers/slotkey/reservation/service/ReservationCancelService.java) 1곳 호출 | **`ReservationRefundPolicyTest` 신규 추가**, `ReservationCancelServiceTest`, `ReservationCancelConcurrencyTest`, `ReservationCancelConcurrencyIntegrationTest` | 정확히 1시간 전=전액, 그 직후=50%, 시작 정각=50%. `totalAmount * 50 / 100`의 정수 나눗셈(홀수 금액)을 그대로 보존한다. Java 정적 호출은 `object`+`@JvmStatic` 또는 호출부 수정. |
+| 2 (step-1) | [`ReservationTimePolicy`](../../../backend/src/main/java/com/ovengers/slotkey/reservation/policy/ReservationTimePolicy.java) (76줄) | Spring/JPA/Lombok 없음. 정적 `validate`·`validateExtension` | `ReservationTimePolicyTest`(14) | 30분 정렬·같은 날짜·운영시간·과거 시각 오류 코드를 유지한다. |
+| 3 (step-1) | [`DoorAccessTimePolicy`](../../../backend/src/main/java/com/ovengers/slotkey/access/policy/DoorAccessTimePolicy.java) (90줄) | `@Component` 인스턴스 메서드, `AccessDenyReason` enum 의존 | `DoorAccessTimePolicyTest`(9) | 최초 체크인 `[start, start+15m]`, 재입장 `(checkedInAt, end)` 경계와 `Optional<AccessDenyReason>` 반환을 유지한다. |
+| 4 (step-1) | [`SpaceOperatingHoursPolicy`](../../../backend/src/main/java/com/ovengers/slotkey/space/policy/SpaceOperatingHoursPolicy.java) (82줄) | `@Component` 인스턴스 메서드, 중첩 `record SlotWindow` | `SpaceOperatingHoursPolicyTest`(5) | `SlotWindow.start()`/`end()` Java record 접근자를 유지해야 한다. `@JvmRecord data class`로 바꾸거나 record를 별도 Java 파일로 분리한다. `SpaceSlotAvailabilityService` 호출부를 같은 PR에서 컴파일한다. |
+
+**롤백 경계:** 각 PR은 스키마·공개 API·직렬화·메시지 형식을 바꾸지 않으므로 단일 revert로 Java 원본을 복구한다. 한 PR에 두 정책 이상을 섞지 않아 revert 범위를 좁게 유지한다. `ReservationRefundPolicy`에는 기존 전용 단위 테스트가 없으므로, 전환 전에 경계값 테스트를 먼저 추가해 실패/통과를 확인한 뒤 Kotlin으로 옮긴다.
+
+## `kotlin-migration/step-N` 검증 체크리스트 (지시 5번)
+
+| 단계 ID | 범위·대상 파일 | 필수 테스트 명령 | 정적/계약 확인 | 롤백 기준 |
+| --- | --- | --- | --- | --- |
+| `step-0` 혼용 빌드+시범 | `backend/build.gradle`, `src/main/kotlin`, `src/test/kotlin`, `ReservationRefundPolicy.kt`+테스트 | `./gradlew clean compileKotlin compileJava test bootJar` → `./gradlew clean build` | `bootJar`에 Kotlin stdlib·`kotlin-reflect`·Jackson Kotlin 모듈 포함. Java↔Kotlin 양방향 컴파일. Flyway V1~V26. `.java`/`.kt` 동명 클래스 없음. | PR 단일 revert. 배포까지 갔다면 직전 Java JAR로 재배포. |
+| `step-1` 순수 정책·유틸 | `ReservationTimePolicy`, `DoorAccessTimePolicy`, `SpaceOperatingHoursPolicy` | `./gradlew test --tests '*PolicyTest'` → `clean build` | `javap`로 정적 메서드·`SlotWindow.start()/end()` 접근자 확인. Java 호출부 컴파일. | 정책별 PR 단일 revert. |
+| `step-2` DTO·비영속 서비스 | [03](03-api-contract.md)의 DTO, 비영속 서비스 | 관련 `*ControllerTest`/`*ServiceTest` → `clean build` → `cd frontend && node --test tests/*.cjs && npx tsc --noEmit` | JSON 골든 표본(필드명·null 생략·날짜/enum), Bean Validation 위치, Jackson 직렬화. | PR revert. 공개 계약 변경은 언어 전환과 분리. |
+| `step-3` 컨트롤러·설정 | 컨트롤러, 보안 필터, `@ConfigurationProperties` | `*SecurityIntegrationTest`, `*ControllerTest`, 프로필 기동 테스트 → `clean build` | 401/403/429·`Retry-After`·쿠키 속성, `@ModelAttribute`/`Pageable` 기본값, 프로필별 바인딩. | PR revert. 쿠키·오류 코드 변경은 별도 계약 PR. |
+| `step-4` 엔티티·JPA/JDBC | 비핵심 엔티티(`WaitlistEntry`, `Notification`, `SpaceRankingSnapshot` 등), JDBC 저장소 | `./gradlew test --tests '*RepositoryTest' --tests '*IntegrationTest'` → `clean build` | `EntityManager` save/flush/clear/재조회, LAZY 프록시, Auditing, MapsId·nullable, `javap`로 엔티티 open 확인. Flyway V1~V26. | 스키마 변경이 없을 때만 revert. 있으면 forward-compatible migration 선행. |
+| `step-5` 핵심 도메인 | 인증(`AuthSession`/`RefreshToken`/rate limit), PG 충전, 예약·출입, Outbox·알림, 통계 | 도메인 동시성·통합 테스트 → `clean build` | 금액·원장·잠금 순서, RT 재사용·세션 폐기, `REQUIRES_NEW` 경계, Outbox payload 호환, proxy open. | 스키마·메시지 호환 유지 시 PR revert. 데이터 변경은 별도 롤백 계획. |
+| `step-6` 마무리 | 남은 Java/Lombok, 혼용 플러그인·annotation processor | `./gradlew clean build` + `bootRun`(local) + 프론트 검증 + 배포 JAR/systemd 로그 | 전체 Flyway V1~V26, 인증→충전→예약 결제→출입→취소→Outbox/알림, 통계 조회/확정. 남은 Java 목록·이유. | 정리 PR revert. Java 폴백은 전체 검증 전까지 유지. |
+
+각 단계는 **하나의 PR = 하나의 정책 또는 밀접한 파일 묶음**이다. 위 명령은 최소값이며, 변경 파일에 따라 관련 테스트를 추가한다. CI `build`와 `dev`의 `clean build -x test`·systemd 기동 로그는 서로 다른 증거로 기록한다.
 
 ## 전환 순서
 
 | 순서 | 후보와 수정 방법 | 필수 검증 |
 | --- | --- | --- |
-| 1. 순수 정책·유틸 | [`ReservationRefundPolicy`](../../../backend/src/main/java/com/ovengers/slotkey/reservation/policy/ReservationRefundPolicy.java), [`ReservationTimePolicy`](../../../backend/src/main/java/com/ovengers/slotkey/reservation/policy/ReservationTimePolicy.java), [`SpaceOperatingHoursPolicy`](../../../backend/src/main/java/com/ovengers/slotkey/space/policy/SpaceOperatingHoursPolicy.java)처럼 DB·Spring 의존이 작은 파일을 선택한다. Java 정적 호출은 `object`/`@JvmStatic` 또는 호출부 변경으로 맞춘다. | 기존 경계값 테스트, Java 호출부 컴파일. |
+| 1. 순수 정책·유틸 | [`ReservationRefundPolicy`](../../../backend/src/main/java/com/ovengers/slotkey/reservation/policy/ReservationRefundPolicy.java), [`ReservationTimePolicy`](../../../backend/src/main/java/com/ovengers/slotkey/reservation/policy/ReservationTimePolicy.java), [`DoorAccessTimePolicy`](../../../backend/src/main/java/com/ovengers/slotkey/access/policy/DoorAccessTimePolicy.java), [`SpaceOperatingHoursPolicy`](../../../backend/src/main/java/com/ovengers/slotkey/space/policy/SpaceOperatingHoursPolicy.java)처럼 DB 의존이 작은 파일을 선택한다. Java 정적 호출은 `object`/`@JvmStatic` 또는 호출부 변경으로 맞춘다. | 기존 경계값 테스트, Java 호출부 컴파일, `javap` 접근자 확인. |
 | 2. DTO와 비영속 서비스 | [03 API 계약](03-api-contract.md)이 고정된 DTO부터 파일별로 바꾼다. Java `record` 접근자·Lombok builder 사용 지점을 같은 PR에서 수정한다. 서비스는 Kotlin 주 생성자 주입과 기존 `@Transactional` 위치를 유지한다. | MockMvc JSON·검증, Java/Kotlin 컴파일, 서비스 테스트. |
 | 3. 컨트롤러·설정 | `@CurrentMember`, `@Valid`, `@ModelAttribute`, `Pageable` 기본값, `@Value`/`@ConfigurationProperties`를 요청·기동 테스트로 확인한다. | 권한, 쿠키, 오류 코드, 프로필별 기동. |
 | 4. 엔티티·JPA/JDBC | [06](06-jpa-and-proxies.md)의 매핑/프록시 검증을 갖춘 도메인부터 바꾼다. 아래 묶음별로 [02](02-money-and-concurrency.md)의 금전·이벤트 불변식과 JDBC 결과를 확인한다. | 저장/재조회, Auditing, MapsId/LAZY/nullable, JDBC, 조건부 UPDATE/잠금·동시성. |
@@ -18,7 +50,7 @@
 
 | 묶음 | 보존할 경계 | 회귀 검증 |
 | --- | --- | --- |
-| 인증·회원 | LocalCredential 공유 PK/LAZY, guard 잠금·증표 만료/소비·가입/재설정 동반 롤백, 탈퇴/잔액 소멸·토큰 폐기. | `VerificationFlowIntegrationTest`, `EmailSignupIntegrationTest`, `PasswordResetIntegrationTest`, `VerificationMemberStatusIntegrationTest`, `MemberWithdrawalHoldConcurrencyIntegrationTest`와 회원 HTTP 테스트. |
+| 인증·회원 | LocalCredential 공유 PK/LAZY, guard 잠금·증표 만료/소비·가입/재설정 동반 롤백, 탈퇴/잔액 소멸·토큰 폐기. `AuthSession`의 `sid` 검증·만료/폐기, `RefreshToken.authSession` LAZY·`consumed_at` 재사용 감지·세션 전체 폐기, 로그인 시도 `REQUIRES_NEW` 경계를 유지한다. | `VerificationFlowIntegrationTest`, `EmailSignupIntegrationTest`, `PasswordResetIntegrationTest`, `VerificationMemberStatusIntegrationTest`, `AuthControllerTest`, `V2SecurityRedTest`, `AuthSessionMigrationIntegrationTest`, `LoginRateLimitIntegrationTest`, `RefreshTokenServiceTest`, `AdminMemberDetailControllerTest`, `AdminMemberDetailServiceTest`, `InactiveMemberAccessIntegrationTest`, `MemberWithdrawalHoldConcurrencyIntegrationTest`와 회원 HTTP 테스트. |
 | PG 충전·복구·웹훅 | DB 준비/PG 호출/DB 확정의 빈 분리, 주문→회원 잠금, TOP_UP 1회·멱등 응답, CONFIRMING 복구·웹훅 재조회. | `ChargeOrderConfirmIntegrationTest`, `ChargeOrderRecoveryProcessorIntegrationTest`, `TossWebhookIntegrationTest`, `PgWebhookEventProcessorIntegrationTest`. Fake 결과와 샌드박스 실행을 구분한다. |
 | 예약·크레딧·출입 | HELD 취소 무환불, CONFIRMED 취소/연장/HOLD의 잠금 순서·환불/위약금·시간 경계·토큰 처리. | 기존 예약/출입 테스트와 `ReservationCancelConcurrencyIntegrationTest`, `ReservationExtendHoldConcurrencyIntegrationTest`, [02](02-money-and-concurrency.md)의 빠진 원장/상태 검증. |
 | Outbox·대기·알림 | 취소/만료와 Outbox 동반 저장, 트랜잭션 밖 Kafka 전송, processed_event·notification 동반 롤백, 기존 payload 호환, active=null·DynamicUpdate. | `OutboxRecordIntegrationTest`, `OutboxRelayIntegrationTest`, `SlotReleasedListenerTest`, `SlotReleasedHandlerConcurrencyTest`, `WaitlistEntryLostUpdateTest`, `NotificationReadIntegrationTest` 등. OFF/ON 및 브로커 실행 여부를 구분한다. |
@@ -38,5 +70,5 @@
 ## 완료 판단
 
 - 매 PR은 도메인 테스트·전체 클린 빌드·관련 프론트 검증을 통과한다. [01](01-test-baseline.md)의 기존 테스트 재실행과 필요한 보강을 마치며 위 묶음의 실제 DB 경합·롤백·계약을 확인한다.
-- 전체 완료 시 착수 커밋의 Flyway 전체(현재 V1~V23)와 [04](04-mixed-build.md)의 프로필 기동을 확인한다. 인증→충전→예약 결제→출입→취소→Outbox/알림, 통계 조회/확정을 재검증하고 [`테스트 결과`](../../testing/test-results.md)에 새 날짜/커밋/실행 명령/실패·스킵/외부 검증 범위를 남긴다.
+- 전체 완료 시 착수 커밋의 Flyway 전체(**V1~V26**)와 [04](04-mixed-build.md)의 프로필 기동을 확인한다. 인증→충전→예약 결제→출입→취소→Outbox/알림, 통계 조회/확정을 재검증하고 [`테스트 결과`](../../testing/test-results.md)에 새 날짜/커밋/실행 명령/실패·스킵/외부 검증 범위를 남긴다.
 - 남은 Java 파일과 Lombok/혼용 플러그인은 의도와 근거가 문서화되어 있다. 불필요한 설정은 별도 정리 변경에서 제거한다.

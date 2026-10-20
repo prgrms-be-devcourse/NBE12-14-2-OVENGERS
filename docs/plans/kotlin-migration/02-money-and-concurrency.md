@@ -1,6 +1,6 @@
 # 02. 금전·예약 동시성 검증
 
-**목적:** 언어 전환 전후에 금액·예약·이벤트가 같은 방식으로 확정되도록 실 MySQL 회귀 검증을 갖춘다. [상위 계획](00-kotlin-migration-plan.md)의 두 번째 P0 작업이다. 현재 근거는 2026-10-18 / `16b9ead`의 소스이며 테스트 실행 결과는 아니다.
+**목적:** 언어 전환 전후에 금액·예약·이벤트가 같은 방식으로 확정되도록 실 MySQL 회귀 검증을 갖춘다. [상위 계획](00-kotlin-migration-plan.md)의 두 번째 P0 작업이다. 현재 근거는 2026-10-20 / `d1a15ec`의 소스와 2026-10-20 기준선 실행(1,048/1,048 통과)이며, 아래 금전·경합 보강은 아직 완료되지 않았다.
 
 ## 우선 확인할 코드
 
@@ -10,7 +10,19 @@
 - [`ReservationCancelService`](../../../backend/src/main/java/com/ovengers/slotkey/reservation/service/ReservationCancelService.java): CONFIRMED 취소는 환불·위약금, HELD 취소는 금전 변경 없이 슬롯을 반환하며 양쪽 모두 Outbox를 같은 트랜잭션에 기록한다.
 - [`ChargeOrderConfirmService`](../../../backend/src/main/java/com/ovengers/slotkey/credit/service/ChargeOrderConfirmService.java), [`ChargeOrderConfirmTransactionService`](../../../backend/src/main/java/com/ovengers/slotkey/credit/service/ChargeOrderConfirmTransactionService.java): DB 준비 → 트랜잭션 밖 PG 호출 → DB 확정의 분리된 빈 경계다. [`ChargeOrderRecoveryProcessor`](../../../backend/src/main/java/com/ovengers/slotkey/credit/scheduler/ChargeOrderRecoveryProcessor.java)와 [`PgWebhookEventProcessor`](../../../backend/src/main/java/com/ovengers/slotkey/credit/webhook/PgWebhookEventProcessor.java)도 같은 확정 경로를 사용한다.
 - [`SlotReleasedRecorder`](../../../backend/src/main/java/com/ovengers/slotkey/outbox/SlotReleasedRecorder.java), [`OutboxRelay`](../../../backend/src/main/java/com/ovengers/slotkey/outbox/OutboxRelay.java), [`SlotReleasedHandler`](../../../backend/src/main/java/com/ovengers/slotkey/notification/consumer/SlotReleasedHandler.java): Outbox 저장/전송/알림 소비의 서로 다른 트랜잭션 경계다.
-- 기존 테스트: [`ReservationPaymentConcurrencyTest`](../../../backend/src/test/java/com/ovengers/slotkey/reservation/service/ReservationPaymentConcurrencyTest.java), [`ReservationCancelConcurrencyTest`](../../../backend/src/test/java/com/ovengers/slotkey/reservation/service/ReservationCancelConcurrencyTest.java), [`CreditBalanceConcurrencyIntegrationTest`](../../../backend/src/test/java/com/ovengers/slotkey/credit/CreditBalanceConcurrencyIntegrationTest.java). 이미 검증되는 시나리오는 중복 작성하지 않는다.
+- [`JdbcLoginAttemptStore`](../../../backend/src/main/java/com/ovengers/slotkey/auth/ratelimit/JdbcLoginAttemptStore.java): `JdbcTemplate`으로 로그인 시도 버킷을 갱신하며 `Propagation.REQUIRES_NEW`, `ON DUPLICATE KEY UPDATE`, `SELECT ... FOR UPDATE`를 사용한다. 로그인 실패/차단 카운트가 본 인증 트랜잭션 롤백과 함께 사라지면 안 된다.
+- [`InactiveMemberAccessLogService`](../../../backend/src/main/java/com/ovengers/slotkey/access/service/InactiveMemberAccessLogService.java): 비활성 회원 출입 거절 로그를 `Propagation.REQUIRES_NEW`로 기록한다. 출입 거절 응답과 로그 저장이 서로의 롤백에 영향을 주지 않아야 한다.
+- 기존 테스트: [`ReservationPaymentConcurrencyTest`](../../../backend/src/test/java/com/ovengers/slotkey/reservation/service/ReservationPaymentConcurrencyTest.java), [`ReservationCancelConcurrencyTest`](../../../backend/src/test/java/com/ovengers/slotkey/reservation/service/ReservationCancelConcurrencyTest.java), [`CreditBalanceConcurrencyIntegrationTest`](../../../backend/src/test/java/com/ovengers/slotkey/credit/CreditBalanceConcurrencyIntegrationTest.java), [`InactiveMemberAccessIntegrationTest`](../../../backend/src/test/java/com/ovengers/slotkey/access/service/InactiveMemberAccessIntegrationTest.java). 이미 검증되는 시나리오는 중복 작성하지 않는다.
+
+## 인증·출입 로그의 독립 트랜잭션 경계
+
+금전 흐름은 아니지만 같은 커밋에 추가된 `REQUIRES_NEW` 경계다. Kotlin 전환 시 `@Transactional` 위치·전파·프록시 호출 경로가 바뀌면 카운트·로그가 유실되거나 본 트랜잭션을 오염시킬 수 있으므로 함께 고정한다.
+
+| 경계 | 보존할 불변식 | 확인할 테스트·방법 |
+| --- | --- | --- |
+| 로그인 시도 | 시도 버킷 증가·잠금 조회는 `REQUIRES_NEW`다. 인증 실패가 본 트랜잭션을 롤백해도 시도 횟수는 남고, 10회/15분 초과 시 429 `Retry-After`가 유지된다. | `LoginRateLimitIntegrationTest`, `AuthControllerTest`, `JdbcLoginAttemptStore` 프록시 경유 호출. |
+| 비활성 출입 로그 | 출입 거절과 무관하게 로그는 별도 트랜잭션으로 커밋된다. 로그 저장 실패가 출입 거절 응답을 성공으로 바꾸지 않는다. | `InactiveMemberAccessIntegrationTest`, `InactiveMemberAccessFilterTest`, 실패 주입 시 응답·DB 확인. |
+| 프록시 경계 | 같은 클래스 내부 self-invocation으로 `REQUIRES_NEW`가 무시되지 않는다. Kotlin `final`/`open`·`@Transactional` 위치를 실제 Spring 빈으로 검증한다. | 통합 테스트에서 커밋/롤백 후 별도 커넥션으로 재조회. |
 
 ## 예약·원장 검증 순서
 

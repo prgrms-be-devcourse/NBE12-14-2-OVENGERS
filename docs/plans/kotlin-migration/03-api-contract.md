@@ -1,6 +1,6 @@
 # 03. API 계약 고정
 
-**목적:** Java `record`와 Lombok DTO를 Kotlin 클래스로 옮겨도 HTTP·PG·저장된 이벤트의 계약을 유지한다. [상위 계획](00-kotlin-migration-plan.md)의 세 번째 P0 작업이다. 소스 대조 기준은 2026-10-18 / `16b9ead`다.
+**목적:** Java `record`와 Lombok DTO를 Kotlin 클래스로 옮겨도 HTTP·PG·저장된 이벤트의 계약을 유지한다. [상위 계획](00-kotlin-migration-plan.md)의 세 번째 P0 작업이다. 소스 대조 기준은 2026-10-20 / `d1a15ec`이며, 2026-10-20 기준선(1,048/1,048)은 계약 보강의 출발점이지 계약 검증 완료를 뜻하지 않는다.
 
 ## 계약의 기준 파일
 
@@ -18,6 +18,10 @@
 | 조회 쿼리 | `@ModelAttribute` 검색 조건의 생략/null, 날짜 범위, `Pageable` 기본 크기와 페이지 번호를 실제 MockMvc 요청으로 확인한다. |
 | 문의 | 회원 문의 생성·목록·수정과 관리자 답변의 필드명 및 검증 오류를 [01 문서](01-test-baseline.md)의 테스트와 공유한다. |
 | 인증·회원 | 인증번호 발급/확인, 가입의 `passwordConfirm/grant`, 비밀번호 재설정, 내 정보 수정·탈퇴의 필수/누락/null·오류를 고정한다. grant의 목적·이메일·만료·재사용 거절과 회원 상태도 포함한다. |
+| Auth V2·세션 | 액세스 토큰의 `sid` 클레임과 `AuthSessionService.validate` 결과(유효/만료·폐기/조회 불가)를 구분한다. RT 회전 시 `consumed_at`을 남기고 이미 소비된 RT 재사용은 해당 세션과 세션의 모든 RT를 폐기한다. 로그아웃·탈퇴의 쿠키·폐기 결과도 고정한다. 검증은 `AuthControllerTest`(25), `V2SecurityRedTest`(15), `AuthSessionMigrationIntegrationTest`, `RefreshTokenServiceTest`. |
+| 로그인 제한 | 같은 이메일의 10회/15분 초과 시 HTTP **429**, `LOGIN_RATE_LIMITED`, `Retry-After`(초) 헤더를 반환한다. 시도 기록은 `REQUIRES_NEW`로 본 인증 실패와 분리된다. 계정 제한(`ACCOUNT_INACTIVE`, `MEMBER_SUSPENDED`, `MEMBER_NOT_ACTIVE`, `VERIFICATION_ADMIN_LOCKED`) 안내의 고객지원 이메일은 프론트 `ErrorMessage` 계약이며 서버 응답 코드는 바꾸지 않는다. 검증은 `LoginRateLimitIntegrationTest`, `AuthControllerTest`, `frontend/tests`와 [`account-support-email`](../../decisions/account-support-email.md). |
+| 관리자 회원 상세·이력 | `GET /api/v1/admin/members/{memberId}`, `/credit-transactions`, `/reservations`, `/status-history`의 필드·정렬·페이징과 404/403을 고정한다. `PATCH .../suspend`, `/restore`, `POST .../credits`의 상태·감사 로그 동반 커밋도 유지한다. 검증은 `AdminMemberDetailControllerTest`, `AdminMemberDetailServiceTest`, `AdminMemberControllerTest`, `AdminMemberServiceIntegrationTest`. |
+| 비활성 회원 출입 로그 | 비활성 회원의 출입 시도는 거절 응답과 함께 거절 사유 로그를 남긴다. 로그 저장은 `REQUIRES_NEW`이며 응답 코드·본 트랜잭션을 바꾸지 않는다. 검증은 `InactiveMemberAccessIntegrationTest`, `InactiveMemberAccessFilterTest`, `InactiveMemberAccessLogService`. |
 | 충전 주문·내역 | `/api/v1/credits/charge-orders`의 생성/목록/상세·`/confirm`의 금액(long)·상태·멱등 키와 nullable 결제수단/실패 필드를 고정한다. 예약 `/pay`의 크레딧 차감과 PG TOP_UP을 구분한다. |
 | 대기·알림 | `/api/v1/waitlist` 신청·`/me` 목록·본인 취소, `/api/v1/notifications` 목록·미읽음 수·읽음 일괄 처리의 필드와 소유권/페이징을 고정한다. 대기 취소는 **빈 본문 204**이며 일괄 읽음은 POST `/read-all`이다. |
 | 통계 | `/api/v1/stats/*`와 `/api/v1/admin/stats/*`의 기간·지표·조회 조건·정렬/동률, long 순매출과 int 건수, 일반/관리자 노출 필드·권한을 각각 고정한다. 일반 경로의 실제 인증 요구도 보안 필터 기준으로 확인한다. |
