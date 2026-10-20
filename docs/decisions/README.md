@@ -15,7 +15,13 @@
 | [`outbox-kafka.md`](outbox-kafka.md) | 기술 선택 | 도메인 사실을 outbox에 적고 Kafka로 전달해 대기열·알림·감사가 받아 쓰게 한다. 10/21 범위: 폴링 Outbox, `SlotReleased` 1종, 멱등 컨슈머. | 제안 (10/21 범위 결정 반영, 구현 전) |
 | [`waitlist.md`](waitlist.md) | 기능 | 예약 대기열을 만든다. 10/21 범위는 빈자리 이벤트 시 대기자 전원 알림(선착순)이고, 1순위 HOLD 제안은 3차다. | 제안 (10/21 범위 결정 반영, 구현 전) |
 | [`space-ranking.md`](space-ranking.md) | 기능 | 베스트 공간 랭킹은 끝난 기간만 매일 00:01에 확정값으로 저장하고, 매출은 환불을 환불일에 반영하는 현금주의로 센다. | 구현 완료 (사용자 화면 확인 전, 자기검증) |
+| [`kotlin-plugin-version.md`](kotlin-plugin-version.md) | 기술 선택 | Spring Boot 3.3.4 BOM과 맞춰 Kotlin 플러그인·stdlib·reflect를 `1.9.25`로 고정하고, Gradle 8.10.2 호환성 리스크는 `step-0`에서 검증한다. | 채택 (구현 전) |
+| [`kotlin-lombok-boundary.md`](kotlin-lombok-boundary.md) | 기술 선택 | Kotlin Lombok 컴파일러 플러그인 없이 전환 파일과 Kotlin 호출 경계만 delombok하고, 미전환 Java 내부는 전환 시점까지 Lombok을 유지한다. | 채택 (구현 전) |
+| [`kotlin-jpa-entity-open.md`](kotlin-jpa-entity-open.md) | 기술 선택 | `kotlin-jpa` no-arg와 JPA 애노테이션 `allOpen`으로 엔티티를 열고, `@Entity`/`@MappedSuperclass`에는 `data class`를 쓰지 않는다. | 채택 (구현 전) |
+| [`kotlin-data-class-scope.md`](kotlin-data-class-scope.md) | 기술 선택 | `data class`는 DTO·이벤트 페이로드·불변 값 객체에 한정하고, Java record 접근자 경계는 `@JvmRecord` 또는 같은 PR의 호출부 전환으로 맞춘다. | 채택 (구현 전) |
 | [`step-up-auth.md`](step-up-auth.md) | 기능 | 크레딧 사용·계정 변경 같은 고위험 행위에 2차 비밀번호 재인증을 요구한다. | 3차 범위 |
+
+> Kotlin 마이그레이션 결정 4건은 [Kotlin 마이그레이션 계획](../plans/kotlin-migration/00-kotlin-migration-plan.md)의 P1~P5와 연결되며, 모두 `status: 채택`·"구현 전"이다. 검증 게이트는 각 문서의 5~6번과 [코드 전환 계획](../plans/kotlin-migration/07-code-migration.md)의 `step-0`~`step-6`에 있다.
 
 ## 상태 판단 근거
 
