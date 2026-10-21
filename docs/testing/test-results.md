@@ -47,6 +47,90 @@
 
 ---
 
+## 0-V3. V3 Redis 실험 브랜치 실행 기록 (2026-10-20~21, 로컬, dev 미병합)
+
+> 아래는 로컬 실험 브랜치 `auth/improvement/v3`에서 실행한 기록이며 dev와 배포 코드의 결과가 아니다. **2026-10-21 최종 판단으로 V2 운영을 유지하고 V3는 실험 구현으로 보존하며 도입을 보류했다.** 결과 요약, 성능 비교와 판단 근거는 [V3 인증 실험 결과](auth-v3-experiment-results.md)에 있다. 각 기록은 당시 기준으로 보존하며 서로 합산하지 않는다. `/tmp` 아래 XML 위치는 당시 리뷰어가 직접 집계한 경로이며 이후 재부팅으로 사라졌다.
+
+### V3-4. V3 전체 회귀와 실패 테스트 보완 (2026-10-21, 로컬) — 최종 전체 회귀 통과
+
+> 브랜치 `auth/improvement/v3`, HEAD `04437f1acf3b40b85de47bf7dde69d3a95a348eb`(코드 기준 `229517c`)의 작업 트리에 테스트 6개 보완이 포함됐고, 해당 테스트 변경은 이후 커밋 `27262ab`로 고정됐다. 전체 회귀는 커밋 생성 전 작업 트리에서 실행된 것으로 커밋 단독 결과가 아니다. 리뷰어는 재실행하지 않았다. 아래 세 기록은 별개이며 합산하지 않는다(73 + 1,065로 더하지 않는다). 로컬 실행이며 미Push, 미병합, 미배포다.
+
+| 실행 | 시각 (KST) | 전체 | 통과 | 실패 | 오류 | 건너뜀 | 근거 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 최초 V3 전체 백엔드 회귀 | 2026-10-21 (보고 기준) | 1,065 | 1,019 | 46 | — | — | 구현 보고. 보고된 아티팩트 `/tmp/v3-final-regression-20261021-003448/`가 리뷰 시점에 없어 직접 집계하지 못함 |
+| 보완 후 실패 클래스 선택 실행 | 09:52:24~09:53:00 | 73 | 73 | 0 | 0 | 0 | `backend/build/test-results/test`의 XML 6개를 리뷰어가 직접 집계(보고된 `/tmp` 아티팩트는 없음). 같은 XML이 전체 실행 전에 `/Users/aaa/slotkey-test-artifacts/v3-full-regression-20261021-1006-kst/selected-73/xml/`로 보존돼 있음을 재확인 |
+| **최종 V3 전체 백엔드 회귀** (`./gradlew test` 1회) | 10:07:14~10:16:12 | 1,065 | 1,065 | 0 | 0 | 0 | `/Users/aaa/slotkey-test-artifacts/v3-full-regression-20261021-1006-kst/full-regression/xml/`의 XML 138개를 리뷰어가 직접 집계(스위트 타임스탬프 10:07:31~10:16:03). `gradle.log`에서 `> Task :test` 실행, `5 actionable tasks: 1 executed, 4 up-to-date`, `BUILD SUCCESSFUL in 8m 42s` 확인 |
+
+- 선택 실행 대상: `AdminStatsControllerIntegrationTest` 36, `StatsControllerIntegrationTest` 7, `AdminMemberServiceTest` 10, `AdminSpaceSecurityIntegrationTest` 11, `AdminAuditLogSecurityIntegrationTest` 4, `PasswordResetIntegrationTest` 5. 마지막 테스트 수정(09:52:01) 이후 실행됐다. 중간 선택 실행 실패 기록(보고상 00:50 UTC 무렵)도 아티팩트가 없어 확인하지 못했다.
+- 보완 내용(제품 코드 변경 없음, 테스트 6개):
+  - 통계 테스트 2개: 고정 시계(통계 기준일 2026-10-16, 17)로 세션을 만들면 Redis 절대 만료가 과거가 되어 키가 바로 사라졌다. 토큰 발급 동안만 시계를 실제 시각으로 바꾸고 `finally`에서 통계 기준 시각으로 되돌린다. 세션 만료 검증은 그대로이며, 기준일 이동 뒤 토큰을 다시 발급하던 단계는 없앴다.
+  - `AdminMemberServiceTest`: 복구 경로가 `findEmailById` → Guard 잠금 해제 → `findByIdForUpdate` 순서로 바뀐 것에 목을 맞췄다. 기존 상태, 감사 로그, `TARGET_IS_ADMIN` 단언은 유지된다.
+  - 관리자 공간, 감사 로그 보안 테스트: DB 상태를 직접 바꾸던 "비활성 ADMIN" 시나리오를 실제 `AdminMemberService.suspend()`로 정지한 USER의 기존 AT 시나리오로 바꿨다. 정지 상태와 `SUSPEND_MEMBER` 감사 로그를 확인하고, 요청이 401(인가 단계의 403이 아님)이며 공간, 감사 로그가 추가되지 않는지 확인한다. USER 403, ACTIVE ADMIN 200 테스트는 그대로 있다. 탈퇴(WITHDRAWN) 사례는 이 두 클래스에서 빠졌다.
+  - `PasswordResetIntegrationTest`: DB 세션 폐기 실패 시 비밀번호와 grant 소비가 롤백되고 DB 세션은 활성으로 남지만, 먼저 실행된 Redis generation 교체로 기존 AT는 401, RT는 `INVALID_REFRESH_TOKEN`이 되고 기존 비밀번호로 새 로그인은 된다는 V3 동작을 확인한다.
+- 최종 전체 회귀: 138개 스위트(중복 없음), `V2SecurityRedTest` 19개 통과. 컴파일 태스크는 UP-TO-DATE였고, 마지막 테스트 소스 수정(09:52:01) 이후 `backend/src`, `build.gradle`에 바뀐 파일이 없어 이전 컴파일 결과가 현재 소스와 일치한다.
+- 73개 선택 실행은 전체 회귀 통과의 근거가 아니며 별도 기록으로 둔다. 최초 실패 46개는 아티팩트가 없어 직접 확인하지 못했다.
+- 이 기록 시점에는 실제 perf 앱 기동, smoke, V2/V3 성능 비교, 운영 Redis 장애와 복구 검증을 실행하지 않았다. 성능 비교는 같은 날 이후 실행했고 결과는 [V3 인증 실험 결과](auth-v3-experiment-results.md)에 있다. 운영 장애와 복구 검증은 도입 보류로 수행하지 않았다.
+
+### V3-3. V3 3번 RT 상태, Rotation Redis 이전 실행 기록 (2026-10-20, 로컬)
+
+> 브랜치 `auth/improvement/v3`, 코드 커밋 `229517c` (로컬). 리뷰어가 아래 XML을 직접 집계했고 재실행하지 않았다. **아래 63개는 클래스별 최신 선택 실행을 모은 것이며 단일 전체 실행이 아니다.**
+
+| 클래스 | 최신 실행 (KST) | XML 위치 | 전체 | 통과 | 실패 | 오류 | 건너뜀 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `PasswordResetControllerTest` | 20:58:04 | `/tmp/v3-3-rt-redis-related-20261020` | 1 | 1 | 0 | 0 | 0 |
+| `AuthSessionRedisIntegrationTest` | 20:58:32 | 같은 위치 | 5 | 5 | 0 | 0 | 0 |
+| `RefreshTokenServiceTest` | 20:58:42 | 같은 위치 | 1 | 1 | 0 | 0 | 0 |
+| `VerificationMemberStatusIntegrationTest` | 20:58:53 | 같은 위치 | 5 | 5 | 0 | 0 | 0 |
+| `AuthControllerTest` | 20:59:38 | `/tmp/v3-3-auth-controller-green-20261020` | 25 | 25 | 0 | 0 | 0 |
+| `AdminMemberServiceIntegrationTest` | 21:01:20 | `/tmp/v3-3-admin-member-green-20261020` | 7 | 7 | 0 | 0 | 0 |
+| `V2SecurityRedTest` | 21:04:10 | `/tmp/v3-3-v2-security-final2-20261020` | 19 | 19 | 0 | 0 | 0 |
+| 합계(클래스별 최신) | | | 63 | 63 | 0 | 0 | 0 |
+
+- 대체된 실행: 같은 날 20:57:49 `AuthControllerTest`는 25개 중 1개 실패("DB에 저장된 리프레시 토큰이 만료되었으면 갱신을 거절한다")였고, 테스트 수정(20:59:16) 뒤 20:59:38에 25개 통과했다. 20:58:15 `V2SecurityRedTest` 17개는 21:04:10 실행으로 대체했다. 합산하지 않는다.
+- 소스 대조: `RedisAuthSessionStore` 20:53:23, `RefreshTokenService` 20:53:46 수정 뒤 모든 실행이 이뤄졌다. `AuthService`(21:01:51), `AuthController`(21:02:41)는 일부 실행 뒤 바뀌었지만 diff는 주석과 Swagger 설명뿐이라 동작 변경이 없다. 이 두 파일 수정 뒤 실행된 클래스는 `V2SecurityRedTest`뿐이다. 각 테스트 소스는 해당 실행 전에 마지막으로 수정됐다.
+- `V2SecurityRedTest` 변경(15 → 19): V2 테스트 1개 삭제(`replacement_insert_failure_rolls_back_consumption` — DB 새 RT 저장 실패 시 소비 롤백, V3에서는 DB RT 행이 없어 해당 없음), V3 테스트 5개 추가.
+  - `refresh_token_is_rotated_without_a_database_token_row` — 로그인 RT가 DB 행 없이 Redis에서 회전되는지.
+  - `database_only_legacy_refresh_token_is_not_accepted_after_namespace_change` — DB에만 남은 구형 RT가 새 Redis namespace에서 갱신되지 않는지.
+  - `logout_racing_refresh_cannot_leave_the_session_usable` — 로그아웃과 refresh 경합 뒤 세션과 두 RT가 모두 차단되는지.
+  - `suspension_racing_refresh_cannot_leave_the_session_usable` — 관리자 정지와 refresh 경합 뒤 토큰이 모두 차단되는지.
+  - `redis_rotation_response_failure_leaves_a_complete_atomic_state` — Redis 회전 반영 뒤 503이 나도 구 RT `CONSUMED`, 새 RT `ACTIVE`로 완전히 바뀌어 있고, 옛 RT 재시도는 재사용으로 세션을 폐기하는지.
+- 다른 회원 ID, sid에 임의 난수를 넣은 RT, 형식이 잘못된 RT에 대한 refresh, logout 테스트는 없다(코드 리뷰로만 확인). 전체 백엔드 회귀와 운영 복구 검증은 실행하지 않았다.
+
+### V3-2. V3 2번 Redis 세션 인증 전환 실행 기록 (2026-10-20, 로컬) — 코드 커밋 `cab2ad1`, 리뷰 완료
+
+> 브랜치 `auth/improvement/v3`, 코드 기준 커밋 `cab2ad1`. 리뷰어가 아래 XML을 직접 집계했고 재실행하지 않았다. 같은 클래스의 반복 실행은 합산하지 않는다.
+
+| 실행 (XML 위치) | 시각 (KST) | 대상 | 전체 | 통과 | 실패 | 오류 | 건너뜀 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1차 관련 실행 (`/tmp/v3-2-related-run-final`) | 17:44:45~17:46:09 | `AuthControllerTest` 25, `PasswordResetControllerTest` 1, `V2SecurityRedTest` 15, `AuthSessionRedisIntegrationTest` 5, `RefreshTokenServiceTest` 1, `VerificationMemberStatusIntegrationTest` 2, `AdminMemberServiceIntegrationTest` 7 | 56 | 56 | 0 | 0 | 0 |
+| 감사 로그 테스트 단독 (빌드 결과 디렉터리) | 17:47:04 | `InactiveMemberAccessIntegrationTest` 1 | 1 | 0 | 1 | 0 | 0 |
+| B1, B3 보완 후 (`/tmp/v3-2-b1-b3-related-20261020`) | 18:03:06~18:03:19 | `InactiveMemberAccessIntegrationTest` 1, `VerificationMemberStatusIntegrationTest` 3, `InactiveMemberAccessFilterTest` 7 | 11 | 11 | 0 | 0 | 0 |
+| B2 보완 후 세션, 관리자 (`/tmp/v3-2-b2-session-admin-20261020`) | 18:03:44~18:04:10 | `AuthControllerTest` 25, `AuthSessionRedisIntegrationTest` 5, `AdminMemberServiceIntegrationTest` 7 | 37 | 37 | 0 | 0 | 0 |
+| B1 테스트 단일 재실행 (`/tmp/v3-2-b1-final-20261020`) | 18:05:21 | `VerificationMemberStatusIntegrationTest`의 Redis 장애 테스트 1 | 1 | 1 | 0 | 0 | 0 |
+| **최종: 자동 정지 Redis 차단 재시도 후 9개 클래스** (`/tmp/v3-auto-suspension-final-9classes-20261020`) | 20:25:45~20:27:15 | `AuthControllerTest` 25, `PasswordResetControllerTest` 1, `V2SecurityRedTest` 15, `AuthSessionMigrationIntegrationTest` 2, `AuthSessionRedisIntegrationTest` 5, `RefreshTokenServiceTest` 1, `SessionRevocationRetryProcessorTest` 2, `VerificationMemberStatusIntegrationTest` 5, `AdminMemberServiceIntegrationTest` 7 | 63 | 63 | 0 | 0 | 0 |
+
+- 소스 변경 시점: 마지막 제품 코드, 설정 수정은 18:00:25, `run-app-perf.sh`는 18:04:26, `VerificationMemberStatusIntegrationTest` 소스는 18:04:59.
+- **최종 소스 기준 고유 통과는 48개**다(`InactiveMemberAccessIntegrationTest` 1, `InactiveMemberAccessFilterTest` 7, `VerificationMemberStatusIntegrationTest` 3, `AuthControllerTest` 25, `AuthSessionRedisIntegrationTest` 5, `AdminMemberServiceIntegrationTest` 7). 단일 재실행 1개는 중복이라 더하지 않는다. `VerificationMemberStatusIntegrationTest`의 나머지 2개는 테스트 소스 마지막 수정(18:04:59) 전에 실행됐다.
+- 1차 실행은 B1, B3 제품 코드 수정(17:58~17:59) 전이다. 그 뒤 `PasswordResetControllerTest`, `V2SecurityRedTest`, `RefreshTokenServiceTest`는 다시 실행하지 않았다.
+- 17:47:04 실패(`MEMBER_INACTIVE` 로그 0건)는 B3 보완 후 18:03:06 실행에서 테스트 기대를 바꾸지 않고 통과했다.
+- **최종 판정 근거는 마지막 행(63개)이다.** 마지막 소스 수정(제품 코드 20:23:22, 테스트 20:24:41) 이후 실행됐으며 앞선 실행과 합산하지 않는다. 관리자 복구 경합(C1), Redis 장애 중 자동 정지, 대기 행 커밋, 이전 namespace 대기 행, 완료 기록 실패 후 재실행, 다중 인스턴스 동시 처리 테스트를 포함한다.
+- 테스트 Redis는 별도 Testcontainers 컨테이너(`redis:7.4.11-alpine`, `MySqlTestContainerConfig`의 `@ServiceConnection`)이고 namespace는 `test`다. XML 출력에서 클래스별 컨테이너 기동을 확인했다. 테스트, 제품 코드에 `FLUSHDB`, `FLUSHALL` 사용은 없다. 재시도 스케줄러는 `test` 프로필에서 꺼져 있다.
+- `InactiveMemberAccessIntegrationTest`, `InactiveMemberAccessFilterTest`는 18:03 실행 뒤 다시 실행하지 않았다(그 뒤 `AuthSessionService`, `AuthSessionRepository` 변경). 2번 변경 뒤 전체 백엔드 테스트, 실제 프로필 앱 기동, 운영 복구 검증은 실행하지 않았다.
+
+### V3-1. V3 1번 Redis 연결 설정 실행 기록 (2026-10-20, 로컬)
+
+> 브랜치 `auth/improvement/v3`, 기준 HEAD `d1a15ec` + 미커밋 변경. 리뷰어가 `backend/build/test-results/test`의 XML을 직접 확인했고 재실행하지 않았다.
+
+| 실행 | 시각 (KST) | 전체 | 통과 | 실패 | 오류 | 건너뜀 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `RedisConnectionIntegrationTest` 단독 (Testcontainers `redis:7.4.11-alpine`) | 14:34:42 | 1 | 1 | 0 | 0 | 0 |
+
+- 저장, 조회, 만료(500ms TTL)를 별도 Redis 컨테이너로 확인했다. Spring Boot의 Redis 자동 설정, `application.yml` 바인딩은 이 테스트의 범위가 아니다.
+- 실행은 관련 소스 수정(14:33:55) 이후다. `.env.example`(주석)은 실행 뒤 14:35:12에 바뀌었다.
+- 스타터 추가 후 기존 `@SpringBootTest` 컨텍스트와 전체 백엔드 테스트는 실행하지 않았다. 인증은 아직 DB 기반이다.
+
+---
+
 ## 0-1. V2 1번 이슈 실행 기록 (2026-10-18, 로컬)
 
 > 구현은 이후 브랜치 `auth/improvement/v2`의 커밋 `e671c475be90c90804712a1866e708bc7d145432`로 고정됐다(로컬 커밋 완료, 미Push·미병합·미배포). 아래는 커밋 전 작업 트리(기준 `16b9ead` + V2 1번 변경)에서 Codex가 실행한 결과를 리뷰어가 JUnit XML로 다시 집계한 것이다. dev HEAD의 결과가 아니며, 이 문서 갱신 중에 재실행하지 않았다. 원시 결과는 임시 디렉터리에 있어 영구 보관되지 않는다.

@@ -6,7 +6,7 @@
 | 파일 | 유형 | 한 줄 요약 | 상태 |
 |---|---|---|---|
 | [`access-key-policy.md`](access-key-policy.md) | 정책 | 출입 토큰은 예약당 활성 1개로 DB 제약으로 수렴시키고, 최초 체크인은 `[start, start+15분]`으로 제한한다. | 채택 |
-| [`authentication-policy.md`](authentication-policy.md) | 정책 | 이메일 인증번호·grant 기반 가입/복구, 단계별 차단·정지, 로그인 토큰 생명주기의 V1 적용 정책과 V2·V3 방향을 정리한다. 예약 소유권 등 인가는 `authorization-policy.md`가 담당한다. | V1 적용 / V2·V3 방향 포함 / 세부 미결정 항목 존재 |
+| [`authentication-policy.md`](authentication-policy.md) | 정책 | 이메일 인증번호, grant 기반 가입/복구, 단계별 차단, 정지, 로그인 토큰 생명주기의 V1 적용 정책과 V2, V3 방향을 정리한다. 예약 소유권 등 인가는 `authorization-policy.md`가 담당한다. | V1, V2 적용 / V3 Redis 실험은 도입 보류(2026-10-21) / 세부 미결정 항목 존재 |
 | [`authorization-policy.md`](authorization-policy.md) | 정책 | 인증·인가를 인증·역할·소유권·상태·감사 다섯 축으로 나누고, 무상태 JWT의 즉시 차단 한계는 별도 과제로 분리한다. | 채택 |
 | [`member-withdrawal-policy.md`](member-withdrawal-policy.md) | 정책 | 본인 회원탈퇴의 진행 예약·잔여 크레딧·출입 권한 처리와 재가입 기준을 확정한다. | 채택 |
 | [`reservation-concurrency.md`](reservation-concurrency.md) | 기술 선택 | `Space → Reservation` 잠금 순서와 조건부 UPDATE로 결제·연장·취소 경합을 막는다. | 채택 |

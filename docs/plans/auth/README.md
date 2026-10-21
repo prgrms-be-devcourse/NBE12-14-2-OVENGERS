@@ -2,12 +2,12 @@
 
 > 작성일: 2026-10-15 (KST)  
 > 구현 기준: PR #302 / `auth/v1-frontend-integration` / `5c60fa444dfc427016954fdacc44d3dfd293c004`  
-> 상태: V1 구현 검토 기준 문서. V2·V3는 계획이며, PR은 작성 시점에 dev에 병합되지 않았다.  
+> 상태: V1 구현 검토 기준 문서로 시작했다. **2026-10-21 현재: V2(DB)는 dev에 병합돼(PR #350) 배포 기준으로 유지하고, V3(Redis)는 실험 구현으로 보존하며 도입을 보류했다.** 결과와 판단은 [V3 인증 실험 결과](../../testing/auth-v3-experiment-results.md).
 > 2026-10-18 정리: PR #302는 이후 dev에 `46526a5`(squash)로 병합됐다. 병합본에는 `V2SecurityRedTest` 11개의 `@Disabled("V2 구현 전까지 CI에서 비활성화")`가 포함되어 있어, 아래 694/682/11/1 수치는 PR head `5c60fa4`의 CI 기록이다. 로컬·운영 메일은 이후 #318에서 Gmail SMTP로 전환됐다.
 
 ## 1. 이 작업의 목표
 
-SlotKey의 이메일 기반 가입과 복구 절차를 명확히 하고, 로그인 이후 인증 수단의 수명과 폐기를 서버가 관리하도록 개선한다. 먼저 DB에서 보안 요구사항을 만족시킨 뒤, 같은 요구사항을 Redis로 구현하여 성능과 운영 복잡도를 비교한다.
+SlotKey의 이메일 기반 가입과 복구 절차를 명확히 하고, 로그인 이후 인증 수단의 수명과 폐기를 서버가 관리하도록 개선한다. 먼저 DB에서 보안 요구사항을 만족시킨 뒤(V2), V2가 추가한 인증용 DB 접근 비용을 줄이기 위해 보호 API 세션 검증과 RT 상태, Rotation을 Redis로 처리해 성능과 운영 복잡도를 비교했다(V3, 로그인 요청 제한과 이메일 인증 임시 상태는 DB 유지). 비교 결과 확인한 이득과 Redis 운영, 장애 복구의 복잡성을 고려해 V2를 유지하고 V3 도입을 보류했다(2026-10-21).
 
 개발 결과는 기능 목록만으로 설명하지 않는다. 각 변경을 “기존 동작 → 문제를 재현하는 테스트 → 선택한 설계 → 개선 결과 → 남는 비용과 한계”로 연결한다. 이 문서 묶음은 구현자와 리뷰어가 같은 기준으로 코드를 읽기 위한 자료다.
 
@@ -21,12 +21,13 @@ SlotKey의 이메일 기반 가입과 복구 절차를 명확히 하고, 로그�
 | V2 로그인 세션은 어떻게 구현됐는가? | [V2 구현 해설](../../architecture/auth-v2-implementation.md) (1번 이슈, 로컬 커밋 `e671c47` 기준, 미병합) |
 | 왜 테스트 11개가 실패하며, 무엇이 통과 조건인가? | [보안 테스트](../../testing/auth-security-tests.md) |
 | V2를 어떤 순서로 개발하고 무엇을 먼저 결정해야 하는가? | [V2 계획](v2-plan.md) |
-| Redis로 무엇을 옮기며 장애·유실에 어떻게 대응할 것인가? | [V3 설계 초안](v3-redis-design.md) |
+| Redis로 무엇을 옮겼고 장애, 유실에 어떻게 대응하도록 설계했는가? | [V3 설계와 실험 경과](v3-redis-design.md) |
 | 인증 메일(Gmail SMTP)은 어떻게 설정·운영하는가? | [Gmail SMTP 설정](../../operations/gmail-smtp-setup.md) |
 | API 요청·응답의 정확한 형식은? | [REST API 명세](../../api/api-spec.md) |
 | 전체 DB 테이블과 관계는? | [ERD](../../architecture/erd.md) |
 | 예약 소유권과 관리자 권한은? | [인가 정책](../../decisions/authorization-policy.md) |
 | 전체 테스트 실행 결과는? | [테스트 결과](../../testing/test-results.md) |
+| V3 실험 구현, 회귀, 성능 비교 결과와 도입 보류 판단은? | [V3 인증 저장소 이전 실험 결과](../../testing/auth-v3-experiment-results.md) |
 
 API 명세·ERD·인가 정책·테스트 결과는 프로젝트 공통 문서다. 이 인증 문서 묶음은 해당 파일을 덮어쓰지 않는다. V1 인증 API·테이블·과거 실행 기록은 2026-10-18에 각 공통 문서에 반영했다(현재 구현 기준, V2 모델은 미포함).
 
@@ -82,5 +83,5 @@ V1 구현 문서는 V2 이후에도 비교 근거로 보존한다. 다만 “현
 
 아래는 현재 실행 계획이 아니라 과거 배경·대안 검토 기록이다.
 
-- [초기 Redis 검토 묶음](archive/redis-initial-plan/01-redis-adoption-scope.md) — V1→V2→V3 계획 이전의 Redis 우선 검토(도입 범위, jti 기반 설계 초안, 초기 단계 계획). 현재 기준은 [로드맵](roadmap.md)과 [V3 설계 초안](v3-redis-design.md).
+- [초기 Redis 검토 묶음](archive/redis-initial-plan/01-redis-adoption-scope.md) — V1→V2→V3 계획 이전의 Redis 우선 검토(도입 범위, jti 기반 설계 초안, 초기 단계 계획). 현재 기준은 [로드맵](roadmap.md)과 [V3 인증 실험 결과](../../testing/auth-v3-experiment-results.md).
 - [인증 문서 반영 안내](archive/INTEGRATION_GUIDE.md) — 2026-10-15 문서 묶음 반영 안내와 2026-10-18 반영 현황.

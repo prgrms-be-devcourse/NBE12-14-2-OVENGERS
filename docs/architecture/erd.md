@@ -1,6 +1,7 @@
 # ERD 및 데이터 모델
 
 > 출처: 기획서 6-1, `데이터모델-아키텍처-결정.md`. 30분 슬롯 통일(항목 1), door_access_token 유니크 제약(항목 2), audit_logs 복합 인덱스(항목 4) 반영본.
+> **2026-10-21 확인 (V3 Redis 실험, 운영 미적용)**: 이 ERD는 V2 기준이다. V3 실험 브랜치에만 있는 V27 `auth_session_revocation_retry`와 Redis 키 구조는 dev와 운영 스키마가 아니므로 넣지 않았다. V3는 운영 도입을 보류했다. 구조는 [V3 설계](../plans/auth/v3-redis-design.md), 판단은 [V3 인증 실험 결과](../testing/auth-v3-experiment-results.md).
 > **2026-10-18 갱신 (V2 1번, dev 병합 전)**: 브랜치 `auth/improvement/v2`의 구현 커밋 `e671c47`(로컬 커밋 완료, 미Push·미병합·미배포)에 있는 `V24__create_auth_session_and_link_refresh_token.sql`과 엔티티를 대조해 `auth_session`과 `refresh_token.auth_session_id`를 **(V24, dev 병합 전)** 표시와 함께 반영했다. 병합 전까지 dev 스키마는 V23까지다. 동작 설명은 [V2 구현 해설](auth-v2-implementation.md).
 > **2026-10-18 갱신 (V1 인증)**: V14~V16(PR #302)과 현재 엔티티를 대조해 `member.password_hash` 제거·`local_credential` 분리, `member.email_verified_at`, `verification_guard`·`verification_challenge`·`verification_grant`를 반영했다. V2 로그인 세션 등 계획 중인 모델은 구현 전이므로 넣지 않았다([V2 계획](../plans/auth/v2-plan.md)).
 > **2026-10-16 갱신 (베스트 공간 랭킹)**: V22로 `space_ranking_snapshot` 테이블과 집계 인덱스 2개(`idx_reservation_status_start_space`, `idx_credit_transaction_type_created_reservation`)를 추가했다. `spaces.location`은 구조 변경 없이 판교·강남·하남만 쓰도록 요청 검증(`SpaceRegion`)으로 제한한다(DB 제약 아님).
